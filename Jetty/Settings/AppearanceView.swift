@@ -53,6 +53,29 @@ struct AppearanceView: View {
                 Toggle("Show name on hover", isOn: $preferences.showLabels)
             }
 
+            Section("Retro flourishes") {
+                Picker("Corner decoration", selection: $preferences.decorationStyle) {
+                    ForEach(DecorationStyle.allCases) { Text($0.label).tag($0) }
+                }
+                if preferences.decorationStyle != .none {
+                    Picker("Corner", selection: $preferences.decorationPosition) {
+                        ForEach(DecorationPosition.allCases) { Text($0.label).tag($0) }
+                    }
+                    slider("Decoration size", $preferences.decorationSize, 4...30, "pt")
+                    HStack {
+                        Text("Decoration opacity")
+                        Slider(value: $preferences.decorationOpacity, in: 0...1)
+                    }
+                }
+                Toggle("CRT scanlines", isOn: $preferences.crtEnabled)
+                if preferences.crtEnabled {
+                    HStack {
+                        Text("CRT intensity")
+                        Slider(value: $preferences.crtIntensity, in: 0...1)
+                    }
+                }
+            }
+
             Section("Presets") {
                 ForEach(AppearancePreset.builtIns) { preset in
                     HStack {
@@ -105,7 +128,10 @@ struct AppearanceView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)
-            let preset = try JSONDecoder().decode(AppearancePreset.self, from: data)
+            guard let preset = AppearancePreset.decode(from: data) else {
+                importError = "That file isn't a Jetty or Zap theme."
+                return
+            }
             preferences.apply(preset)
             importError = nil
         } catch {

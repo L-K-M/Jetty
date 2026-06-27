@@ -58,4 +58,40 @@ final class CodableModelTests: XCTestCase {
         XCTAssertFalse(AppearancePreset.builtIns.isEmpty)
         XCTAssertTrue(AppearancePreset.builtIns.contains { $0.name == "Tahoe Glass" })
     }
+
+    func testDecodePrefersJettyFormatRoundTrip() throws {
+        let preset = AppearancePreset.builtIns.first { $0.name == "Vapor" }!
+        let data = try JSONEncoder().encode(preset)
+        XCTAssertEqual(AppearancePreset.decode(from: data), preset)
+    }
+
+    func testImportsZapTheme() throws {
+        // A Zap-format theme (different field names) maps into a Jetty preset.
+        let zapJSON = Data("""
+        {
+          "name": "ZX Night",
+          "backgroundColorHex": "#0B0B1A",
+          "useGradientBackground": true,
+          "gradientColorHex": "#1A1140",
+          "gradientAngle": 20,
+          "decorationStyle": "zxSpectrum",
+          "decorationPosition": "topTrailing",
+          "crtEnabled": true,
+          "crtIntensity": 0.5,
+          "highlightColorHex": "#00AEEF",
+          "backgroundOpacity": 0.7,
+          "iconSize": 80,
+          "cornerRadius": 14,
+          "showAppName": true
+        }
+        """.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: zapJSON))
+        XCTAssertEqual(preset.material, .gradient)          // useGradientBackground → gradient
+        XCTAssertEqual(preset.tintHex, "#0B0B1A")           // backgroundColorHex → tint
+        XCTAssertEqual(preset.gradientHex, "#1A1140")
+        XCTAssertEqual(preset.decorationStyle, "zxSpectrum")
+        XCTAssertTrue(preset.crtEnabled)
+        XCTAssertEqual(preset.indicatorHex, "#00AEEF")      // highlightColorHex → indicator
+        XCTAssertEqual(preset.iconSize, 80, accuracy: 0.001)
+    }
 }

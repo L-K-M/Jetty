@@ -2,7 +2,8 @@ import Foundation
 
 /// A shareable bundle of Jetty's visual settings — exported/imported as a small
 /// `.json` file and applied with one click, plus a set of built-in themes. Mirrors
-/// Zap's preset model. Capturing/applying goes through `Preferences`. See PLAN.md §9.
+/// Zap's preset model and can also **import a Zap theme** (see `decode(from:)`), so
+/// looks can be shared across the two apps. See PLAN.md §9.
 struct AppearancePreset: Codable, Equatable, Identifiable {
     var name: String
     var material: DockMaterial
@@ -18,6 +19,13 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     var indicatorStyle: IndicatorStyle
     var indicatorHex: String
     var showLabels: Bool
+    // Retro flourishes (Zap parity)
+    var decorationStyle: String
+    var decorationPosition: String
+    var decorationOpacity: Double
+    var decorationSize: Double
+    var crtEnabled: Bool
+    var crtIntensity: Double
 
     var id: String { name }
 
@@ -34,7 +42,13 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
          magnification: Double,
          indicatorStyle: IndicatorStyle,
          indicatorHex: String,
-         showLabels: Bool) {
+         showLabels: Bool,
+         decorationStyle: String = "none",
+         decorationPosition: String = "topTrailing",
+         decorationOpacity: Double = 1,
+         decorationSize: Double = 12,
+         crtEnabled: Bool = false,
+         crtIntensity: Double = 0.5) {
         self.name = name
         self.material = material
         self.tintHex = tintHex
@@ -49,6 +63,12 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         self.indicatorStyle = indicatorStyle
         self.indicatorHex = indicatorHex
         self.showLabels = showLabels
+        self.decorationStyle = decorationStyle
+        self.decorationPosition = decorationPosition
+        self.decorationOpacity = decorationOpacity
+        self.decorationSize = decorationSize
+        self.crtEnabled = crtEnabled
+        self.crtIntensity = crtIntensity
     }
 
     init(from decoder: Decoder) throws {
@@ -68,15 +88,40 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         indicatorStyle = try c.decodeIfPresent(IndicatorStyle.self, forKey: .indicatorStyle) ?? d.indicatorStyle
         indicatorHex = try c.decodeIfPresent(String.self, forKey: .indicatorHex) ?? d.indicatorHex
         showLabels = try c.decodeIfPresent(Bool.self, forKey: .showLabels) ?? d.showLabels
+        decorationStyle = try c.decodeIfPresent(String.self, forKey: .decorationStyle) ?? d.decorationStyle.rawValue
+        decorationPosition = try c.decodeIfPresent(String.self, forKey: .decorationPosition) ?? d.decorationPosition.rawValue
+        decorationOpacity = try c.decodeIfPresent(Double.self, forKey: .decorationOpacity) ?? d.decorationOpacity
+        decorationSize = try c.decodeIfPresent(Double.self, forKey: .decorationSize) ?? d.decorationSize
+        crtEnabled = try c.decodeIfPresent(Bool.self, forKey: .crtEnabled) ?? d.crtEnabled
+        crtIntensity = try c.decodeIfPresent(Double.self, forKey: .crtIntensity) ?? d.crtIntensity
     }
 
     private enum CodingKeys: String, CodingKey {
         case name, material, tintHex, gradientHex, gradientAngle, backgroundOpacity
         case iconSize, tileSpacing, cornerRadius, magnificationEnabled, magnification
         case indicatorStyle, indicatorHex, showLabels
+        case decorationStyle, decorationPosition, decorationOpacity, decorationSize, crtEnabled, crtIntensity
     }
 
-    // MARK: Built-ins
+    // MARK: Import (Jetty or Zap format)
+
+    /// Decodes a theme from JSON, accepting both Jetty's own format and a **Zap**
+    /// theme file (its field names differ — `backgroundColorHex`, `useGradientBackground`,
+    /// `highlightColorHex`, `showAppName`, …). Since Jetty's own decoder is fully
+    /// tolerant (it never fails — defaults fill any gap), we sniff the raw keys to
+    /// tell the two formats apart and only fall back to Jetty otherwise.
+    static func decode(from data: Data) -> AppearancePreset? {
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let hasJettyKeys = obj["material"] != nil || obj["tintHex"] != nil || obj["indicatorStyle"] != nil
+            let hasZapKeys = obj["backgroundColorHex"] != nil || obj["useGradientBackground"] != nil || obj["showAppName"] != nil
+            if !hasJettyKeys, hasZapKeys, let zap = try? JSONDecoder().decode(ZapTheme.self, from: data) {
+                return zap.asJettyPreset
+            }
+        }
+        return try? JSONDecoder().decode(AppearancePreset.self, from: data)
+    }
+
+    // MARK: Built-in themes
 
     static let builtIns: [AppearancePreset] = [
         AppearancePreset(name: "Tahoe Glass", material: .liquidGlass, tintHex: "#0A7AFF",
@@ -98,6 +143,69 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
                          gradientHex: "#8795E8", gradientAngle: 60, backgroundOpacity: 0.7,
                          iconSize: 50, tileSpacing: 10, cornerRadius: 24,
                          magnificationEnabled: true, magnification: 1.6,
-                         indicatorStyle: .dot, indicatorHex: "#FFFFFF", showLabels: false),
+                         indicatorStyle: .dot, indicatorHex: "#FFFFFF", showLabels: false,
+                         decorationStyle: "vaporwave", decorationPosition: "topTrailing",
+                         decorationOpacity: 1, decorationSize: 12, crtEnabled: true, crtIntensity: 0.5),
+        AppearancePreset(name: "ZX Night", material: .gradient, tintHex: "#0B0B1A",
+                         gradientHex: "#1A1140", gradientAngle: 20, backgroundOpacity: 0.8,
+                         iconSize: 50, tileSpacing: 8, cornerRadius: 14,
+                         magnificationEnabled: true, magnification: 1.5,
+                         indicatorStyle: .dot, indicatorHex: "#00AEEF", showLabels: false,
+                         decorationStyle: "zxSpectrum", decorationPosition: "topTrailing",
+                         decorationOpacity: 1, decorationSize: 12, crtEnabled: true, crtIntensity: 0.5),
+        AppearancePreset(name: "Amiga", material: .solid, tintHex: "#1A1A1A",
+                         gradientHex: "#2C2C2C", gradientAngle: 0, backgroundOpacity: 0.6,
+                         iconSize: 52, tileSpacing: 8, cornerRadius: 16,
+                         magnificationEnabled: true, magnification: 1.5,
+                         indicatorStyle: .bar, indicatorHex: "#FF6F00", showLabels: false,
+                         decorationStyle: "amigaPixel", decorationPosition: "topTrailing",
+                         decorationOpacity: 1, decorationSize: 11, crtEnabled: true, crtIntensity: 0.7),
     ]
+}
+
+// MARK: - Zap theme interop
+
+/// The subset of a **Zap** appearance preset Jetty understands, so a `.json` theme
+/// exported from Zap can be imported here. Field names match Zap's `AppearancePreset`.
+private struct ZapTheme: Decodable {
+    var name: String?
+    var backgroundColorHex: String?
+    var useGradientBackground: Bool?
+    var gradientColorHex: String?
+    var gradientAngle: Double?
+    var decorationStyle: String?
+    var decorationPosition: String?
+    var decorationOpacity: Double?
+    var decorationSize: Double?
+    var crtEnabled: Bool?
+    var crtIntensity: Double?
+    var highlightColorHex: String?
+    var backgroundOpacity: Double?
+    var iconSize: Double?
+    var cornerRadius: Double?
+    var showAppName: Bool?
+
+    var asJettyPreset: AppearancePreset {
+        AppearancePreset(
+            name: name ?? "Imported (Zap)",
+            material: (useGradientBackground == true) ? .gradient : .solid,
+            tintHex: backgroundColorHex ?? Preferences.Default.tintHex,
+            gradientHex: gradientColorHex ?? Preferences.Default.gradientHex,
+            gradientAngle: gradientAngle ?? 0,
+            backgroundOpacity: backgroundOpacity ?? Preferences.Default.backgroundOpacity,
+            iconSize: iconSize ?? Preferences.Default.iconSize,
+            tileSpacing: Preferences.Default.tileSpacing,
+            cornerRadius: cornerRadius ?? Preferences.Default.cornerRadius,
+            magnificationEnabled: Preferences.Default.magnificationEnabled,
+            magnification: Preferences.Default.magnification,
+            indicatorStyle: Preferences.Default.indicatorStyle,
+            indicatorHex: highlightColorHex ?? Preferences.Default.indicatorHex,
+            showLabels: showAppName ?? false,
+            decorationStyle: decorationStyle ?? "none",
+            decorationPosition: decorationPosition ?? "topTrailing",
+            decorationOpacity: decorationOpacity ?? 1,
+            decorationSize: decorationSize ?? 12,
+            crtEnabled: crtEnabled ?? false,
+            crtIntensity: crtIntensity ?? 0.5)
+    }
 }

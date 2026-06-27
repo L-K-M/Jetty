@@ -44,6 +44,13 @@ final class Preferences: ObservableObject {
         static let showRunningApps = true
         static let manageSystemDock = true
         static let animationMs = 180.0
+        // Decorations / CRT (Zap-style retro flourishes)
+        static let decorationStyle = DecorationStyle.none
+        static let decorationPosition = DecorationPosition.topTrailing
+        static let decorationOpacity = 1.0
+        static let decorationSize = 12.0
+        static let crtEnabled = false
+        static let crtIntensity = 0.5
         // Clock widget
         static let clockShowDate = true
         static let clockShowSeconds = false
@@ -77,6 +84,12 @@ final class Preferences: ObservableObject {
         static let showRunningApps = "showRunningApps"
         static let manageSystemDock = "manageSystemDock"
         static let animationMs = "animationMs"
+        static let decorationStyle = "decorationStyle"
+        static let decorationPosition = "decorationPosition"
+        static let decorationOpacity = "decorationOpacity"
+        static let decorationSize = "decorationSize"
+        static let crtEnabled = "crtEnabled"
+        static let crtIntensity = "crtIntensity"
         static let clockShowDate = "clockShowDate"
         static let clockShowSeconds = "clockShowSeconds"
         static let clockUse24Hour = "clockUse24Hour"
@@ -116,6 +129,15 @@ final class Preferences: ObservableObject {
     @Published var showRunningApps: Bool { didSet { defaults.set(showRunningApps, forKey: Key.showRunningApps) } }
     @Published var manageSystemDock: Bool { didSet { defaults.set(manageSystemDock, forKey: Key.manageSystemDock) } }
     @Published var animationMs: Double { didSet { defaults.set(animationMs, forKey: Key.animationMs) } }
+
+    // MARK: Decorations / CRT
+
+    @Published var decorationStyle: DecorationStyle { didSet { defaults.set(decorationStyle.rawValue, forKey: Key.decorationStyle) } }
+    @Published var decorationPosition: DecorationPosition { didSet { defaults.set(decorationPosition.rawValue, forKey: Key.decorationPosition) } }
+    @Published var decorationOpacity: Double { didSet { defaults.set(decorationOpacity, forKey: Key.decorationOpacity) } }
+    @Published var decorationSize: Double { didSet { defaults.set(decorationSize, forKey: Key.decorationSize) } }
+    @Published var crtEnabled: Bool { didSet { defaults.set(crtEnabled, forKey: Key.crtEnabled) } }
+    @Published var crtIntensity: Double { didSet { defaults.set(crtIntensity, forKey: Key.crtIntensity) } }
 
     // MARK: Clock widget
 
@@ -173,6 +195,12 @@ final class Preferences: ObservableObject {
         manageSystemDock = bool(Key.manageSystemDock, d.manageSystemDock)
         animationMs = Self.clamp(double(Key.animationMs, d.animationMs), 0, 600)
 
+        decorationStyle = DecorationStyle(rawValue: string(Key.decorationStyle, d.decorationStyle.rawValue)) ?? d.decorationStyle
+        decorationPosition = DecorationPosition(rawValue: string(Key.decorationPosition, d.decorationPosition.rawValue)) ?? d.decorationPosition
+        decorationOpacity = Self.clamp(double(Key.decorationOpacity, d.decorationOpacity), 0, 1)
+        decorationSize = Self.clamp(double(Key.decorationSize, d.decorationSize), 4, 30)
+        crtEnabled = bool(Key.crtEnabled, d.crtEnabled)
+        crtIntensity = Self.clamp(double(Key.crtIntensity, d.crtIntensity), 0, 1)
         clockShowDate = bool(Key.clockShowDate, d.clockShowDate)
         clockShowSeconds = bool(Key.clockShowSeconds, d.clockShowSeconds)
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
@@ -203,7 +231,10 @@ final class Preferences: ObservableObject {
                          gradientAngle: gradientAngle, backgroundOpacity: backgroundOpacity, iconSize: iconSize,
                          tileSpacing: tileSpacing, cornerRadius: cornerRadius, magnificationEnabled: magnificationEnabled,
                          magnification: magnification, indicatorStyle: indicatorStyle, indicatorHex: indicatorHex,
-                         showLabels: showLabels)
+                         showLabels: showLabels,
+                         decorationStyle: decorationStyle.rawValue, decorationPosition: decorationPosition.rawValue,
+                         decorationOpacity: decorationOpacity, decorationSize: decorationSize,
+                         crtEnabled: crtEnabled, crtIntensity: crtIntensity)
     }
 
     /// Applies a preset's appearance values (leaves position/behavior untouched).
@@ -221,6 +252,12 @@ final class Preferences: ObservableObject {
         indicatorStyle = preset.indicatorStyle
         indicatorHex = preset.indicatorHex
         showLabels = preset.showLabels
+        decorationStyle = DecorationStyle(rawValue: preset.decorationStyle) ?? .none
+        decorationPosition = DecorationPosition(rawValue: preset.decorationPosition) ?? .topTrailing
+        decorationOpacity = Self.clamp(preset.decorationOpacity, 0, 1)
+        decorationSize = Self.clamp(preset.decorationSize, 4, 30)
+        crtEnabled = preset.crtEnabled
+        crtIntensity = Self.clamp(preset.crtIntensity, 0, 1)
     }
 
     // MARK: Launch at login

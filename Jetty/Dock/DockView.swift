@@ -38,16 +38,44 @@ struct DockView: View {
 
     @ViewBuilder
     private func glassStrip(edge: DockEdge, thickness: CGFloat) -> some View {
+        let radius = CGFloat(preferences.cornerRadius)
         let bg = GlassBackground(material: preferences.material,
                                  tint: preferences.tintColor,
                                  gradientColor: preferences.gradientColor,
                                  gradientAngle: preferences.gradientAngle,
                                  opacity: preferences.backgroundOpacity,
-                                 cornerRadius: CGFloat(preferences.cornerRadius))
-        if edge.isHorizontal {
-            bg.frame(maxWidth: .infinity).frame(height: thickness)
-        } else {
-            bg.frame(maxHeight: .infinity).frame(width: thickness)
+                                 cornerRadius: radius)
+        let sized = Group {
+            if edge.isHorizontal {
+                bg.frame(maxWidth: .infinity).frame(height: thickness)
+            } else {
+                bg.frame(maxHeight: .infinity).frame(width: thickness)
+            }
+        }
+        sized
+            .overlay { decorations(cornerRadius: radius) }
+            .overlay { if preferences.crtEnabled { CRTScreenOverlay(intensity: preferences.crtIntensity, cornerRadius: radius) } }
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    /// The optional retro corner decoration (ZX stripes / Amiga boing ball), clipped
+    /// to the glass strip — Zap parity. See PLAN.md §9.
+    @ViewBuilder
+    private func decorations(cornerRadius: CGFloat) -> some View {
+        let style = preferences.decorationStyle
+        if style != .none {
+            Group {
+                if style.kind == .ball {
+                    BoingBallDecoration(position: preferences.decorationPosition,
+                                        cornerRadius: cornerRadius,
+                                        diameter: CGFloat(preferences.decorationSize) * 3,
+                                        pixelated: style == .amigaPixel)
+                } else {
+                    PanelDecoration(style: style, position: preferences.decorationPosition,
+                                    cornerRadius: cornerRadius, thickness: CGFloat(preferences.decorationSize))
+                }
+            }
+            .opacity(preferences.decorationOpacity)
         }
     }
 

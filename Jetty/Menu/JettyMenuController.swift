@@ -21,6 +21,7 @@ final class JettyMenuController {
 
     private var panel: KeyableMenuPanel?
     private var keyMonitor: Any?
+    private var resignObserver: Any?
     private weak var appToRestoreOnClose: NSRunningApplication?
     private(set) var isOpen = false
 
@@ -52,6 +53,7 @@ final class JettyMenuController {
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         installKeyMonitor()
+        installResignObserver(for: panel)
         isOpen = true
     }
 
@@ -59,6 +61,7 @@ final class JettyMenuController {
         guard isOpen else { return }
         isOpen = false
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver); self.resignObserver = nil }
         panel?.orderOut(nil)
         // Hand activation back so Jetty doesn't linger as the frontmost app.
         if let restore = appToRestoreOnClose { AppLauncher.activate(restore) }
@@ -102,6 +105,19 @@ final class JettyMenuController {
         }
         close()
         PowerCommandRunner.run(command)
+    }
+
+    /// Dismisses the menu when it stops being the key window — i.e. the user
+    /// clicked another app, ⌘-Tabbed away, or otherwise moved focus — matching how
+    /// Spotlight/Alfred/Raycast behave. Guards against the confirmation alert for a
+    /// destructive power command (which is itself modal) self-dismissing the menu.
+    private func installResignObserver(for panel: NSPanel) {
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+        ) { [weak self] _ in
+            guard NSApp.modalWindow == nil else { return }
+            self?.close()
+        }
     }
 
     // MARK: Keyboard

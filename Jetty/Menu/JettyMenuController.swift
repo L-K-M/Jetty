@@ -47,6 +47,9 @@ final class JettyMenuController {
         }
         model.onRunPower = { [weak self] command in self?.runPower(command) }
         model.onClose = { [weak self] in self?.close() }
+        model.onWebSearch = { [weak self] query in self?.webSearch(query) }
+        model.onRunCommand = { [weak self] command in self?.runCommand(command) }
+        CurrencyService.shared.ensureFresh()
 
         let panel = self.panel ?? makePanel()
         self.panel = panel
@@ -107,6 +110,21 @@ final class JettyMenuController {
         }
         close()
         PowerCommandRunner.run(command)
+    }
+
+    /// Opens a default-browser web search for `query`, then closes the menu (ND-9).
+    private func webSearch(_ query: String) {
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+            NSWorkspace.shared.open(url)
+        }
+        close()
+    }
+
+    /// Runs a quick-toggle command, then closes the menu (ND-9).
+    private func runCommand(_ command: MenuCommand) {
+        close()
+        MenuCommand.run(command)
     }
 
     /// Dismisses the menu when it stops being the key window — i.e. the user

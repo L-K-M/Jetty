@@ -12,6 +12,12 @@ final class JettyMenuModel: ObservableObject {
     /// An inline calculator result when the query is an arithmetic expression
     /// (e.g. `2+2`), else `nil`. See `ExpressionEvaluator` / improvement ND-1.
     @Published private(set) var calculation: ExpressionEvaluator.Result?
+    /// An inline unit conversion (e.g. `10 km in miles`), else `nil` (ND-9).
+    @Published private(set) var conversion: UnitConverter.Result?
+    /// An inline currency conversion (e.g. `100 usd to eur`), else `nil` (ND-9).
+    @Published private(set) var currency: String?
+    /// A matched quick toggle (e.g. typing "dark"), else `nil` (ND-9).
+    @Published private(set) var command: MenuCommand?
     @Published var selectedIndex: Int = 0
 
     let maxResults = 12
@@ -22,12 +28,22 @@ final class JettyMenuModel: ObservableObject {
     var onLaunch: ((AppSearchItem) -> Void)?
     var onRunPower: ((PowerCommand) -> Void)?
     var onClose: (() -> Void)?
+    /// Opens a web search for the query when there are no app results (ND-9).
+    var onWebSearch: ((String) -> Void)?
+    /// Runs a matched quick toggle (ND-9).
+    var onRunCommand: ((MenuCommand) -> Void)?
     /// Supplies recently-launched apps to surface first on an empty query (MF-5).
     var recentsProvider: (() -> [AppSearchItem])?
+
+    private var currencyCancellable: AnyCancellable?
 
     init(appIndex: AppIndex) {
         self.appIndex = appIndex
         cancellable = appIndex.$apps
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.recompute() }
+        // Recompute when currency rates arrive so a pending conversion fills in (ND-9).
+        currencyCancellable = CurrencyService.shared.$rates
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.recompute() }
         recompute()
@@ -35,9 +51,29 @@ final class JettyMenuModel: ObservableObject {
 
     func recompute() {
         calculation = ExpressionEvaluator.evaluate(query)
+        conversion = (calculation == nil) ? UnitConverter.convert(query) : nil
+        currency = computeCurrency()
+        command = MenuCommand.match(query)
         results = Array(Self.rankedResults(query: query, apps: appIndex.apps,
                                            recents: recentsProvider?() ?? []).prefix(maxResults))
         if selectedIndex >= results.count { selectedIndex = 0 }
+    }
+
+    /// A currency conversion result string, when the query parses as one and the
+    /// rates for both currencies are loaded (ND-9).
+    private func computeCurrency() -> String? {
+        guard calculation == nil, conversion == nil,
+              let parsed = CurrencyService.parseQuery(query),
+              CurrencyService.shared.known(parsed.from), CurrencyService.shared.known(parsed.to),
+              let value = CurrencyService.shared.convert(amount: parsed.amount, from: parsed.from, to: parsed.to)
+        else { return nil }
+        return "\(UnitConverter.format(value)) \(parsed.to)"
+    }
+
+    /// The trimmed query to offer as a web search (nil when empty).
+    var webSearchQuery: String? {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// Pure ranking: an empty query lists recents first (then the rest, de-duplicated);
@@ -68,8 +104,12 @@ final class JettyMenuModel: ObservableObject {
     }
 
     func activateSelection() {
-        guard results.indices.contains(selectedIndex) else { return }
-        onLaunch?(results[selectedIndex])
+        if results.indices.contains(selectedIndex) {
+            onLaunch?(results[selectedIndex])
+        } else if let query = webSearchQuery {
+            // No app results → Enter searches the web for the query (ND-9).
+            onWebSearch?(query)
+        }
     }
 
     func reset() {

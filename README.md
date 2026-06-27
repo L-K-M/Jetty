@@ -35,9 +35,11 @@ launcher).
   drag-a-file-onto-an-app to open it there, drag-to-pin and reorder, and a right-click
   menu (Show / Hide / Quit / Keep in Dock / Show in Finder).
 - **A date/time tile** right in the dock — 12/24-hour, seconds, weekday, date.
-- **The Jetty Menu** — a Windows-Start-style launcher with **instant app search**
-  (type to filter, ↑/↓, ⏎) and **power commands**: Sleep, Lock Screen, Log Out,
-  Restart, Shut Down, Empty Trash.
+- **The Jetty Menu** — a Windows-Start-style launcher and **command bar**: instant
+  app search (type to filter, ↑/↓, ⏎) and recents, an inline **calculator**,
+  **unit & currency conversion** (`10 km in miles`, `100 usd to eur`), a
+  **web-search** fallback, quick toggles (dark mode), and **power commands** (Sleep,
+  Lock Screen, Log Out, Restart, Shut Down, Empty Trash).
 - **Trash tile** — click to open, drop files to delete.
 - **Multi-monitor** aware, with placements that **restore after restart**, resolution
   change, and reconnection (keyed to a stable display identity).

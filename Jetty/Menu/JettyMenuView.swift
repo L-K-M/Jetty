@@ -16,8 +16,24 @@ struct JettyMenuView: View {
                 Divider().opacity(0.5)
                 calculationRow(calculation)
             }
+            if let conversion = model.conversion {
+                Divider().opacity(0.5)
+                copyRow(symbol: "ruler", value: conversion.value)
+            }
+            if let currency = model.currency {
+                Divider().opacity(0.5)
+                copyRow(symbol: "banknote", value: currency)
+            }
+            if let command = model.command {
+                Divider().opacity(0.5)
+                commandRow(command)
+            }
             Divider().opacity(0.5)
             results
+            if model.results.isEmpty, let query = model.webSearchQuery {
+                Divider().opacity(0.5)
+                webSearchRow(query)
+            }
             Divider().opacity(0.5)
             powerRow
         }
@@ -71,6 +87,55 @@ struct JettyMenuView: View {
             model.onClose?()
         }
         .help("Copy \(calculation.value) to the clipboard")
+    }
+
+    /// A unit/currency result row: shows the value, click to copy and close (ND-9).
+    private func copyRow(symbol: String, value: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(preferences.tintColor)
+            Text(value)
+                .font(.title3.weight(.semibold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Spacer()
+            Label("Copy", systemImage: "doc.on.doc")
+                .labelStyle(.titleAndIcon).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(value, forType: .string)
+            model.onClose?()
+        }
+        .help("Copy \(value) to the clipboard")
+    }
+
+    /// A quick-toggle command row (e.g. Toggle Dark Mode) — click to run (ND-9).
+    private func commandRow(_ command: MenuCommand) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: command.symbol).font(.title3).foregroundStyle(preferences.tintColor)
+            Text(command.title).font(.title3.weight(.semibold)).lineLimit(1)
+            Spacer()
+            Text("⏎ run").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { model.onRunCommand?(command) }
+        .help(command.title)
+    }
+
+    /// A web-search fallback shown when nothing matches — click (or ⏎) to search (ND-9).
+    private func webSearchRow(_ query: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(preferences.tintColor)
+            Text("Search the web for “\(query)”").lineLimit(1).truncationMode(.middle)
+            Spacer()
+            Text("⏎").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { model.onWebSearch?(query) }
+        .help("Search the web for \(query)")
     }
 
     private var results: some View {

@@ -9,6 +9,9 @@ final class JettyMenuModel: ObservableObject {
 
     @Published var query: String = "" { didSet { recompute() } }
     @Published private(set) var results: [AppSearchItem] = []
+    /// An inline calculator result when the query is an arithmetic expression
+    /// (e.g. `2+2`), else `nil`. See `ExpressionEvaluator` / improvement ND-1.
+    @Published private(set) var calculation: ExpressionEvaluator.Result?
     @Published var selectedIndex: Int = 0
 
     let maxResults = 12
@@ -29,6 +32,7 @@ final class JettyMenuModel: ObservableObject {
     }
 
     func recompute() {
+        calculation = ExpressionEvaluator.evaluate(query)
         results = Array(AppSearch.rank(query, in: appIndex.apps).prefix(maxResults))
         if selectedIndex >= results.count { selectedIndex = 0 }
     }

@@ -62,7 +62,27 @@ struct GeneralView: View {
                 .disabled(!preferences.autoHide)
                 Toggle("Show running apps that aren't pinned", isOn: $preferences.showRunningApps)
             }
+
+            Section("Shortcuts") {
+                hotkeyRow("Toggle the dock", binding: $preferences.toggleHotkey)
+                hotkeyRow("Open the Jetty Menu", binding: $preferences.menuHotkey)
+                Text("Global shortcuts work anywhere and need no permission. Turn one off with its switch, or click its button and press a new combination (with at least one modifier).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private func hotkeyRow(_ title: String, binding: Binding<HotkeyBinding>) -> some View {
+        HStack {
+            Toggle(title, isOn: Binding(get: { binding.wrappedValue.enabled },
+                                        set: { binding.wrappedValue.enabled = $0 }))
+            Spacer(minLength: 12)
+            HotkeyRecorder(binding: binding)
+                .frame(width: 150, height: 24)
+                .disabled(!binding.wrappedValue.enabled)
+                .opacity(binding.wrappedValue.enabled ? 1 : 0.4)
+        }
     }
 }

@@ -7,7 +7,7 @@ struct MenuView: View {
     var body: some View {
         Form {
             Section("Jetty Menu") {
-                Text("A fast launcher with app search and power commands. Open it from its dock tile, the menu-bar item, or the global shortcut ⌃⌥⌘Space.")
+                Text("A fast launcher with app search and power commands. Open it from its dock tile, the menu-bar item\(menuShortcutSuffix). Change the shortcut under General ▸ Shortcuts.")
                     .font(.callout).foregroundStyle(.secondary)
             }
 
@@ -37,5 +37,9 @@ struct MenuView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var menuShortcutSuffix: String {
+        preferences.menuHotkey.isValid ? ", or the global shortcut \(preferences.menuHotkey.displayString)" : ""
     }
 }

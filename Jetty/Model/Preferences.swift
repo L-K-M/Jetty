@@ -57,6 +57,9 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = false
         static let clockShowWeekday = false
         static let clockAnalog = false
+        // Hotkeys
+        static let toggleHotkey = HotkeyBinding.defaultToggle
+        static let menuHotkey = HotkeyBinding.defaultMenu
     }
 
     private enum Key {
@@ -96,6 +99,8 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = "clockUse24Hour"
         static let clockShowWeekday = "clockShowWeekday"
         static let clockAnalog = "clockAnalog"
+        static let toggleHotkey = "toggleHotkey"
+        static let menuHotkey = "menuHotkey"
     }
 
     // MARK: Appearance
@@ -148,6 +153,11 @@ final class Preferences: ObservableObject {
     @Published var clockUse24Hour: Bool { didSet { defaults.set(clockUse24Hour, forKey: Key.clockUse24Hour) } }
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
     @Published var clockAnalog: Bool { didSet { defaults.set(clockAnalog, forKey: Key.clockAnalog) } }
+
+    // MARK: Hotkeys
+
+    @Published var toggleHotkey: HotkeyBinding { didSet { defaults.set(toggleHotkey.jsonString, forKey: Key.toggleHotkey) } }
+    @Published var menuHotkey: HotkeyBinding { didSet { defaults.set(menuHotkey.jsonString, forKey: Key.menuHotkey) } }
 
     // MARK: Launch at login
 
@@ -209,6 +219,8 @@ final class Preferences: ObservableObject {
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
         clockShowWeekday = bool(Key.clockShowWeekday, d.clockShowWeekday)
         clockAnalog = bool(Key.clockAnalog, d.clockAnalog)
+        toggleHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.toggleHotkey), fallback: d.toggleHotkey)
+        menuHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.menuHotkey), fallback: d.menuHotkey)
 
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
     }

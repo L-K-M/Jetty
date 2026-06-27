@@ -25,7 +25,7 @@ final class DockController {
     /// does the work it actually needs: pure-appearance tweaks (opacity/tint/corner/
     /// magnification-magnitude…) flow to the views via `@ObservedObject` and touch no
     /// panels; only geometry/anchor/tile-set changes rebuild or reconcile (BUG-7).
-    private var prefSig: (reconcile: String, model: String, layout: String)?
+    private var prefSig: (reconcile: String, model: String, layout: String, hotkeys: String)?
 
     /// The Jetty Menu launcher (created on first use).
     private lazy var jettyMenu = JettyMenuController(preferences: preferences)
@@ -122,20 +122,22 @@ final class DockController {
         else if sig.model == previous.model && sig.layout != previous.layout {
             relayoutPanels()                                              // frame size only
         }
+        if sig.hotkeys != previous.hotkeys { registerHotkeys() }          // shortcut bindings
     }
 
     /// The subset of preferences that change the dock's structure, split by the work
     /// each tier needs: `reconcile` (which panels exist + their anchors), `model`
-    /// (the merged tile set), and `layout` (panel frame size). Anything not here is
-    /// pure appearance and needs no panel work.
-    private func preferenceSignatures() -> (reconcile: String, model: String, layout: String) {
+    /// (the merged tile set), `layout` (panel frame size), and `hotkeys` (the global
+    /// shortcut bindings). Anything not here is pure appearance and needs no work.
+    private func preferenceSignatures() -> (reconcile: String, model: String, layout: String, hotkeys: String) {
         let p = preferences
         return (
             reconcile: [p.edge.rawValue, p.alignment.rawValue, String(p.offset),
                         String(p.inset), p.displayScope.rawValue].joined(separator: "|"),
             model: String(p.showRunningApps),
             layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
-                     String(p.magnification), String(p.autoHide)].joined(separator: "|")
+                     String(p.magnification), String(p.autoHide)].joined(separator: "|"),
+            hotkeys: p.toggleHotkey.jsonString + "·" + p.menuHotkey.jsonString
         )
     }
 
@@ -347,12 +349,25 @@ final class DockController {
 
     // MARK: Hotkeys / menu
 
+    /// (Re)registers the user-configurable global hotkeys from preferences. A
+    /// disabled or modifier-less binding is unregistered rather than registered, so
+    /// the user can turn a shortcut off entirely (MF-6).
     private func registerHotkeys() {
-        let mods = KeyCode.Modifier.control | KeyCode.Modifier.option | KeyCode.Modifier.command
-        toggleHotkey.onPressed = { [weak self] in self?.toggleAllDocks() }
-        toggleHotkey.register(keyCode: KeyCode.d, modifiers: mods)
-        menuHotkey.onPressed = { [weak self] in self?.openJettyMenu() }
-        menuHotkey.register(keyCode: KeyCode.space, modifiers: mods)
+        let toggle = preferences.toggleHotkey
+        if toggle.isValid {
+            toggleHotkey.onPressed = { [weak self] in self?.toggleAllDocks() }
+            toggleHotkey.register(keyCode: toggle.keyCode, modifiers: toggle.modifiers)
+        } else {
+            toggleHotkey.unregister()
+        }
+
+        let menu = preferences.menuHotkey
+        if menu.isValid {
+            menuHotkey.onPressed = { [weak self] in self?.openJettyMenu() }
+            menuHotkey.register(keyCode: menu.keyCode, modifiers: menu.modifiers)
+        } else {
+            menuHotkey.unregister()
+        }
     }
 
     func toggleAllDocks() { panels.values.forEach { $0.toggle() } }

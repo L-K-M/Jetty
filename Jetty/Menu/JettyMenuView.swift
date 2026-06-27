@@ -12,6 +12,10 @@ struct JettyMenuView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
+            if let calculation = model.calculation {
+                Divider().opacity(0.5)
+                calculationRow(calculation)
+            }
             Divider().opacity(0.5)
             results
             Divider().opacity(0.5)
@@ -39,6 +43,34 @@ struct JettyMenuView: View {
                 .onAppear { searchFocused = true }
         }
         .padding(14)
+    }
+
+    /// The inline calculator banner shown when the query is an arithmetic
+    /// expression. Click (or tap) to copy the result and close the menu.
+    private func calculationRow(_ calculation: ExpressionEvaluator.Result) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "equal.circle.fill")
+                .font(.title3)
+                .foregroundStyle(preferences.tintColor)
+            Text(calculation.value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer()
+            Label("Copy", systemImage: "doc.on.doc")
+                .labelStyle(.titleAndIcon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(calculation.value, forType: .string)
+            model.onClose?()
+        }
+        .help("Copy \(calculation.value) to the clipboard")
     }
 
     private var results: some View {

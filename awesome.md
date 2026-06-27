@@ -1,57 +1,6 @@
 # awesome.md — a review of Jetty (and a pile of ideas)
 
-A thorough pass over the current Jetty codebase (~5k LOC of Swift, v0.1.0) looking for
-**bugs**, **general issues**, **missing features**, and **novel / cool / delightful /
-quirky** ideas. Each entry has a stable ID so PRs and commits can reference it.
-
-> **Method & caveat.** This review was done by reading the whole tree
-> (`Model/`, `Store/`, `Screens/`, `Dock/`, `Apps/`, `SystemDock/`, `Menu/`, `Widgets/`,
-> `Settings/`, `Updates/`, `Hotkeys/`, `Common/`, and the tests), cross-checked against
-> `PLAN.md` and `README.md`. It was written in a Linux environment with **no Swift/Xcode
-> toolchain**, so nothing here was locally compiled or run — the macOS CI
-> (`.github/workflows/ci.yml`, `macos-26` + Xcode 26) is the build/test oracle. Items
-> marked **▶ implementing** are being shipped on their own branches; the rest are
-> documented for the maintainers to triage.
-
-Overall: this is a genuinely well-structured codebase. The "keep the logic pure and
-unit-testable" discipline (`DockLayout`, `MagnificationCurve`, `ClockFormatter`,
-`AppSearch`, `DockModel.makeTiles`, `SemanticVersion`) is excellent, the Codable
-forward-compat is careful, and the permission-free design decision is respected
-throughout. The findings below are mostly polish, latent edge cases, and the gap between
-what `PLAN.md`/`README.md` advertise and what's wired up so far.
-
----
-
 ## 🐞 Bugs & correctness
-
-### BUG-1 — Variable-width tiles break panel sizing ▶ implementing
-`DockLayout.contentSize(tileCount:…)` (`Screens/DockLayout.swift:17`) assumes **every tile
-is `iconSize` wide**, but `DockTileView.tileWidth` (`Dock/DockTileView.swift:155`) is
-`baseSize * 1.6` for the clock tile and `12pt` for a horizontal separator. So on a
-horizontal dock the `NSPanel` is sized for the wrong width: a clock tile is under-counted
-by ~`0.6 × iconSize` (it gets **clipped** on the right), and separators are over-counted
-(extra empty glass). The default seeded dock happens to roughly cancel out (a separator's
-−40 vs the clock's +31), which is why it looks fine out of the box — but remove the
-separator, or build a clock-only / clock-heavy dock, and the clock clips by ~31pt.
-**Fix:** make `contentSize` sum *actual* per-tile along-axis extents instead of
-`n × iconSize`. (Vertical docks are unaffected — every tile is `baseSize` tall there.)
-
-### BUG-2 — The Jetty Menu doesn't dismiss when it loses focus ▶ implementing
-`JettyMenuController` (`Menu/JettyMenuController.swift`) installs a key monitor for
-↑/↓/⏎/Esc but never closes the panel when it **resigns key**. Every Spotlight-style
-launcher (Spotlight, Alfred, Raycast) vanishes the instant you click away or ⌘-Tab
-elsewhere; Jetty's stays floating on top until you Esc or re-toggle it. **Fix:** observe
-`NSWindow.didResignKeyNotification` for the panel and `close()` (guarded so a modal
-confirmation alert doesn't self-dismiss it).
-
-### BUG-3 — "Keep in Dock" pins without a bookmark; drag-to-pin doesn't dedupe ▶ implementing
-`DockController.pin(_:)` (`Dock/DockController.swift:276`) creates the item via
-`DockItem.application(at:)` with **no security-scoped bookmark**, unlike `ItemsView` and
-`DockController.makePinnedItem` which both capture one via `BookmarkResolver`. A pinned
-running app therefore won't track the app being moved/renamed (only the raw-URL fallback
-saves it). Separately, `handleDrop`'s default branch (`:206`) pins dropped files with **no
-duplicate check**, so dropping the same file twice creates two identical tiles. **Fix:**
-attach a bookmark in `pin`, and skip drag-pinning a URL that's already pinned.
 
 ### BUG-4 — Per-display anchor *edge* is ignored by the dock content
 The dock panel frame is computed from the per-display `anchor.edge`
@@ -191,12 +140,6 @@ custom icon. The model (`DockItem.displayName`) supports it; the editor doesn't.
 
 ## 🎉 Novel / cool / delightful / quirky ideas
 
-### ND-1 — Inline calculator in the Jetty Menu ▶ implementing
-Type `1920*1080`, `(12+3)/4`, `2^10`, `15%` and get the answer right above the app results,
-press ⏎ or click to copy it. This is the single most-loved Spotlight/Alfred/Raycast feature
-and the Jetty Menu is the perfect host. Implemented as a **pure, unit-tested**
-shunting-yard `ExpressionEvaluator` so it carries zero risk to the rest of the app.
-
 ### ND-2 — Continuous, pointer-tracking magnification
 Drive magnification from the live pointer x/y inside the dock (SwiftUI
 `.onContinuousHover`, available on macOS 13+) instead of the hovered tile index, so tiles
@@ -219,15 +162,6 @@ pop.
 When an item is removed (drag-out or context menu), play the nostalgic Dock *poof* cloud +
 fade. Pure delight, pure SwiftUI.
 
-### ND-6 — ⌘1…⌘9 quick-launch
-Launch the Nth pinned app with a chord, the way browsers switch tabs. Must stay
-permission-free (Carbon hotkeys, not an event tap), so scope carefully — but it's a power-
-user favorite.
-
-### ND-7 — Shareable theme deep links & a gallery
-Presets already import/export as JSON. Add a `jetty://theme/<base64>` URL so a look can be
-shared in a single clickable link (and seed a small built-in gallery beyond the current 4).
-
 ### ND-8 — Per-tile accent glow
 On hover or while active, bloom a soft glow behind the tile in the icon's **dominant
 color** (sampled once, cached). Cheap, gorgeous, very "Liquid Glass".
@@ -237,12 +171,25 @@ Once the calculator (ND-1) lands, the same surface naturally grows **unit/curren
 conversion**, **web-search fallback** ("press ⏎ to search the web for …"), and toggles
 (Do Not Disturb, dark mode). The launcher becomes a tiny command palette.
 
+---
+
+## Decided to be out of scope - DO NOT IMPLEMENT
+
+### ND-6 — ⌘1…⌘9 quick-launch
+Launch the Nth pinned app with a chord, the way browsers switch tabs. Must stay
+permission-free (Carbon hotkeys, not an event tap), so scope carefully — but it's a power-
+user favorite.
+
+### ND-7 — Shareable theme deep links & a gallery
+Presets already import/export as JSON. Add a `jetty://theme/<base64>` URL so a look can be
+shared in a single clickable link (and seed a small built-in gallery beyond the current 4).
+
 ### ND-10 — Auto-edge / "throw" the dock
 Optional mode where the dock reveals at whichever edge you push the pointer to, or where
 dragging the dock and "throwing" it snaps it to the nearest edge+alignment — turning
 positioning into a gesture instead of four pickers.
 
----
+--- 
 
 ## 🚀 What's being implemented now
 

@@ -28,6 +28,7 @@ struct ItemsView: View {
                 Menu("Add") {
                     Button("Application…") { addApplication() }
                     Button("File or Folder…") { addFileOrFolder() }
+                    Button("Link…") { addLink() }
                     Divider()
                     Button("Separator") { store.addItem(DockItem(kind: .separator)) }
                     Button("Clock") { store.addItem(DockItem(kind: .clock, displayName: "Clock")) }
@@ -58,6 +59,7 @@ struct ItemsView: View {
         case .clock: Image(systemName: "clock")
         case .jettyMenu: Image(systemName: "square.grid.2x2.fill")
         case .trash: Image(systemName: "trash")
+        case .url: Image(systemName: "globe")
         default:
             if let url = item.url ?? item.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().scaledToFit()
@@ -99,5 +101,28 @@ struct ItemsView: View {
             item.bookmark = BookmarkResolver.bookmark(for: url)
             store.addItem(item)
         }
+    }
+
+    /// Prompts for a web address and pins it as a `.url` tile (clicking it opens the
+    /// link in the default browser). A missing scheme defaults to `https://`.
+    private func addLink() {
+        let alert = NSAlert()
+        alert.messageText = "Add a Link"
+        alert.informativeText = "Enter a web address to pin as a dock tile."
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "https://example.com"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let raw = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return }
+        let normalized = raw.contains("://") ? raw : "https://\(raw)"
+        guard let url = URL(string: normalized), url.scheme != nil else { return }
+        store.addItem(DockItem.fromLink(url))
     }
 }

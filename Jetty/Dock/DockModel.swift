@@ -14,6 +14,8 @@ struct DockTile: Identifiable {
     var isActive: Bool
     /// A user-chosen icon override path, carried from the backing item (MF-7).
     var customIconPath: String?
+    /// For `.folder` tiles, how the stack popover presents its contents (MF-2).
+    var folderDisplay: FolderStackStyle?
     /// Resolved lazily by `DockModel`; the pure `makeSlots`/`makeTiles` leave it nil.
     var icon: NSImage?
 
@@ -84,7 +86,8 @@ final class DockModel: ObservableObject {
             if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
             return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
                             bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
-                            isRunning: true, isActive: info.isActive, customIconPath: nil, icon: nil)
+                            isRunning: true, isActive: info.isActive,
+                            customIconPath: nil, folderDisplay: nil, icon: nil)
         }
 
         var slots: [DockSlot] = []
@@ -110,7 +113,7 @@ final class DockModel: ObservableObject {
             let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,
                                 bundleIdentifier: item.bundleIdentifier, url: item.url, itemID: item.id,
                                 isRunning: info != nil, isActive: info?.isActive ?? false,
-                                customIconPath: item.customIconPath, icon: nil)
+                                customIconPath: item.customIconPath, folderDisplay: item.folderDisplay, icon: nil)
             slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))
         }

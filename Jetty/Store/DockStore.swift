@@ -78,6 +78,13 @@ final class DockStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Sets how a pinned folder's stack popover presents its contents (MF-2).
+    func setFolderDisplay(_ style: FolderStackStyle, id: UUID) {
+        guard let index = document.items.firstIndex(where: { $0.id == id }) else { return }
+        document.items[index].folderDisplay = style
+        scheduleSave()
+    }
+
     func moveItem(fromOffsets source: IndexSet, toOffset destination: Int) {
         document.items.move(fromOffsets: source, toOffset: destination)
         scheduleSave()

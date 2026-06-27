@@ -29,6 +29,8 @@ final class DockController {
 
     /// The Jetty Menu launcher (created on first use).
     private lazy var jettyMenu = JettyMenuController(preferences: preferences)
+    /// The folder-stack popover (MF-2).
+    private lazy var folderStack = FolderStackController(preferences: preferences)
 
     init(store: DockStore, preferences: Preferences, registry: DisplayRegistry,
          runningApps: RunningAppsModel, systemDock: SystemDockController) {
@@ -63,6 +65,7 @@ final class DockController {
 
     func teardown() {
         hoverMonitor.stop()
+        folderStack.close()
         panels.values.forEach { $0.close() }
         panels.removeAll()
         // Leave the system Dock as the user expects: restore it on quit if we hid it.
@@ -215,10 +218,15 @@ final class DockController {
     }
 
     private func open(_ tile: DockTile) {
+        // Any tap other than (re)opening a folder dismisses an open stack.
+        if tile.kind != .folder { folderStack.close() }
         switch tile.kind {
         case .application:
             openApplication(tile)
-        case .file, .folder, .url:
+        case .folder:
+            presentFolderStack(for: tile)
+            return   // keep the dock revealed while the stack is open
+        case .file, .url:
             if let url = tile.url { NSWorkspace.shared.open(url) }
         case .trash:
             AppLauncher.openTrash()
@@ -245,6 +253,18 @@ final class DockController {
         } else if let appURL {
             AppLauncher.launchApplication(at: appURL)
         }
+    }
+
+    /// Opens the folder-stack popover for a folder tile, anchored near the pointer on
+    /// the screen it's on, oriented to that display's dock edge (MF-2).
+    private func presentFolderStack(for tile: DockTile) {
+        guard let url = tile.url else { return }
+        let point = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
+        guard let screen else { return }
+        let edge = registry.uuid(for: screen).map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
+        folderStack.toggle(folder: url, style: tile.folderDisplay ?? .grid,
+                           near: point, screen: screen, edge: edge)
     }
 
     private func handleDrop(_ urls: [URL], on tile: DockTile) {
@@ -307,7 +327,10 @@ final class DockController {
                 })
             }
         case .file, .folder, .url:
-            actions.append(DockContextAction(title: "Open") { [weak self] in self?.open(tile) })
+            actions.append(DockContextAction(title: tile.kind == .folder ? "Show Stack" : "Open") { [weak self] in self?.open(tile) })
+            if tile.kind == .folder, let url = tile.url {
+                actions.append(DockContextAction(title: "Open in Finder") { NSWorkspace.shared.open(url) })
+            }
             if let url = tile.url, url.isFileURL {
                 actions.append(DockContextAction(title: "Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])

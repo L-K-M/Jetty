@@ -59,6 +59,18 @@ struct ItemsView: View {
                     Button("Clear Custom Icon") { store.setCustomIconPath(nil, id: item.id) }
                 }
             }
+            if item.kind == .folder {
+                Menu("Stack Style") {
+                    ForEach(FolderStackStyle.allCases) { style in
+                        Button {
+                            store.setFolderDisplay(style, id: item.id)
+                        } label: {
+                            Label(style.rawValue.capitalized,
+                                  systemImage: (item.folderDisplay ?? .grid) == style ? "checkmark" : "")
+                        }
+                    }
+                }
+            }
             Button("Remove", role: .destructive) { store.removeItem(id: item.id) }
         }
     }

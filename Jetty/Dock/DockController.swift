@@ -232,6 +232,17 @@ final class DockController {
             AppLauncher.openTrash()
         case .clock:
             openCalendar()
+        case .worldClock:
+            openClock()
+        case .battery:
+            openURLString("x-apple.systempreferences:com.apple.preference.battery")
+        case .systemMonitor:
+            openActivityMonitor()
+        case .weather:
+            openWeatherApp()
+        case .pomodoro:
+            PomodoroTimer.shared.tap()
+            return   // the timer toggles in place; keep the dock as-is
         case .jettyMenu:
             openJettyMenu()
             return   // don't hide the dock; the menu is its own panel
@@ -349,6 +360,21 @@ final class DockController {
             })
         case .clock:
             actions.append(DockContextAction(title: "Open Calendar") { [weak self] in self?.openCalendar() })
+        case .worldClock:
+            actions.append(DockContextAction(title: "Open Clock") { [weak self] in self?.openClock() })
+        case .battery:
+            actions.append(DockContextAction(title: "Open Battery Settings") { [weak self] in
+                self?.openURLString("x-apple.systempreferences:com.apple.preference.battery")
+            })
+        case .systemMonitor:
+            actions.append(DockContextAction(title: "Open Activity Monitor") { [weak self] in self?.openActivityMonitor() })
+        case .weather:
+            actions.append(DockContextAction(title: "Open Weather") { [weak self] in self?.openWeatherApp() })
+        case .pomodoro:
+            actions.append(DockContextAction(title: PomodoroTimer.shared.isRunning ? "Pause" : "Start") {
+                PomodoroTimer.shared.tap()
+            })
+            actions.append(DockContextAction(title: "Reset") { PomodoroTimer.shared.reset() })
         case .jettyMenu:
             actions.append(DockContextAction(title: "Open Jetty Menu") { [weak self] in self?.openJettyMenu() })
         case .separator, .runningApps:
@@ -417,6 +443,36 @@ final class DockController {
         if FileManager.default.fileExists(atPath: path) {
             AppLauncher.launchApplication(at: URL(fileURLWithPath: path))
         }
+    }
+
+    /// Opens the system Clock app (world-clock tile), falling back to Calendar.
+    private func openClock() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.clock") {
+            AppLauncher.launchApplication(at: url)
+        } else {
+            openCalendar()
+        }
+    }
+
+    /// Opens Activity Monitor (system-monitor tile).
+    private func openActivityMonitor() {
+        let path = "/System/Applications/Utilities/Activity Monitor.app"
+        if FileManager.default.fileExists(atPath: path) {
+            AppLauncher.launchApplication(at: URL(fileURLWithPath: path))
+        }
+    }
+
+    /// Opens the Weather app (weather tile), falling back to a web forecast.
+    private func openWeatherApp() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.weather") {
+            AppLauncher.launchApplication(at: url)
+        } else {
+            openURLString("https://weather.com")
+        }
+    }
+
+    private func openURLString(_ string: String) {
+        if let url = URL(string: string) { NSWorkspace.shared.open(url) }
     }
 
     // MARK: First-run seed

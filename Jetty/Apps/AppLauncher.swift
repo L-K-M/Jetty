@@ -19,8 +19,9 @@ enum AppLauncher {
             if let url = resolvedURL(item) { NSWorkspace.shared.open(url) }
         case .trash:
             openTrash()
-        case .separator, .clock, .jettyMenu:
-            break
+        case .separator, .clock, .jettyMenu, .runningApps,
+             .battery, .systemMonitor, .worldClock, .pomodoro, .weather:
+            break   // non-launchable built-in / widget tiles
         }
     }
 

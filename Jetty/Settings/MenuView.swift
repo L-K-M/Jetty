@@ -26,14 +26,9 @@ struct MenuView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("Clock tile") {
-                Toggle("Analog face", isOn: $preferences.clockAnalog)
-                if !preferences.clockAnalog {
-                    Toggle("Show date", isOn: $preferences.clockShowDate)
-                    Toggle("Show weekday", isOn: $preferences.clockShowWeekday)
-                    Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
-                }
-                Toggle("Show seconds", isOn: $preferences.clockShowSeconds)
+            Section("Info tiles") {
+                Text("The clock, world clock, Pomodoro, weather, and other live tiles are configured under the Widgets tab.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

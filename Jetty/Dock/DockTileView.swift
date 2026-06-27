@@ -49,6 +49,11 @@ struct DockTileView: View {
         switch tile.kind {
         case .separator: return "Separator"
         case .clock: return "Clock"
+        case .battery: return "Battery"
+        case .systemMonitor: return "System monitor"
+        case .worldClock: return "World clock"
+        case .pomodoro: return "Pomodoro timer"
+        case .weather: return "Weather"
         case .jettyMenu: return "Jetty Menu"
         case .trash: return "Trash"
         default: return tile.displayName.isEmpty ? "Dock item" : tile.displayName
@@ -83,6 +88,16 @@ struct DockTileView: View {
                        height: edge.isHorizontal ? baseSize * 0.5 : 1)
         case .clock:
             ClockWidgetView(preferences: preferences, height: baseSize)
+        case .battery:
+            BatteryWidgetView(height: baseSize, tint: preferences.tintColor)
+        case .systemMonitor:
+            SystemMonitorWidgetView(height: baseSize, tint: preferences.tintColor)
+        case .worldClock:
+            WorldClockWidgetView(preferences: preferences, height: baseSize)
+        case .pomodoro:
+            PomodoroWidgetView(height: baseSize, tint: preferences.tintColor)
+        case .weather:
+            WeatherWidgetView(preferences: preferences, height: baseSize, tint: preferences.tintColor)
         case .jettyMenu:
             Image(systemName: "square.grid.2x2.fill")
                 .resizable().scaledToFit().padding(baseSize * 0.18)
@@ -173,8 +188,7 @@ struct DockTileView: View {
     private var tileWidth: CGFloat {
         switch tile.kind {
         case .separator: return edge.isHorizontal ? 12 : baseSize
-        case .clock: return baseSize * 1.6
-        default: return baseSize
+        default: return baseSize * tile.kind.tileWidthFactor
         }
     }
 

@@ -58,8 +58,7 @@ enum DockLayout {
         let frameWidth: CGFloat
         switch kind {
         case .separator: frameWidth = edge.isHorizontal ? 12 : baseSize
-        case .clock:     frameWidth = baseSize * 1.6
-        default:         frameWidth = baseSize
+        default:         frameWidth = baseSize * kind.tileWidthFactor
         }
         let frameHeight = baseSize
         // Horizontal dock: along-axis is width. Vertical dock: along-axis is height.

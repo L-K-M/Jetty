@@ -1,0 +1,54 @@
+import XCTest
+@testable import Jetty
+
+final class InfoWidgetTests: XCTestCase {
+
+    // MARK: Battery
+
+    func testBatteryPercentClamps() {
+        XCTAssertEqual(SystemStats.clampPercent(-5), 0)
+        XCTAssertEqual(SystemStats.clampPercent(150), 100)
+        XCTAssertEqual(SystemStats.clampPercent(73), 73)
+    }
+
+    func testBatterySymbolByLevelAndCharging() {
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 50, isCharging: true), "battery.100.bolt")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 5, isCharging: false), "battery.0")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 100, isCharging: false), "battery.100")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 55, isCharging: false), "battery.50")
+    }
+
+    // MARK: Weather
+
+    func testWeatherSymbolMapping() {
+        XCTAssertEqual(WeatherService.symbol(forCode: 0), "sun.max.fill")
+        XCTAssertEqual(WeatherService.symbol(forCode: 2), "cloud.sun.fill")
+        XCTAssertEqual(WeatherService.symbol(forCode: 65), "cloud.rain.fill")
+        XCTAssertEqual(WeatherService.symbol(forCode: 96), "cloud.bolt.rain.fill")
+        XCTAssertEqual(WeatherService.symbol(forCode: 12345), "cloud.fill")
+    }
+
+    func testWeatherParseValidPayload() {
+        let json = """
+        { "current": { "temperature_2m": 21.4, "weather_code": 3 } }
+        """.data(using: .utf8)
+        let snap = WeatherService.parse(json, celsius: true)
+        XCTAssertEqual(snap?.temperature, 21.4)
+        XCTAssertEqual(snap?.code, 3)
+        XCTAssertEqual(snap?.celsius, true)
+    }
+
+    func testWeatherParseRejectsGarbage() {
+        XCTAssertNil(WeatherService.parse(nil, celsius: true))
+        XCTAssertNil(WeatherService.parse(Data("not json".utf8), celsius: true))
+        XCTAssertNil(WeatherService.parse(Data("{}".utf8), celsius: true))
+    }
+
+    // MARK: Tile geometry
+
+    func testWideWidgetsAreWiderThanSquareTiles() {
+        XCTAssertGreaterThan(DockItemKind.worldClock.tileWidthFactor, 1.0)
+        XCTAssertGreaterThan(DockItemKind.weather.tileWidthFactor, 1.0)
+        XCTAssertEqual(DockItemKind.application.tileWidthFactor, 1.0)
+    }
+}

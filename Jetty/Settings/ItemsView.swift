@@ -35,6 +35,14 @@ struct ItemsView: View {
                     Button("Jetty Menu") { store.addItem(DockItem(kind: .jettyMenu, displayName: "Jetty Menu")) }
                     Button("Running Apps") { store.addItem(DockItem(kind: .runningApps, displayName: "Running Apps")) }
                     Button("Trash") { store.addItem(DockItem(kind: .trash, displayName: "Trash")) }
+                    Divider()
+                    Menu("Info Widget") {
+                        Button("Battery") { store.addItem(DockItem(kind: .battery, displayName: "Battery")) }
+                        Button("System Monitor") { store.addItem(DockItem(kind: .systemMonitor, displayName: "System Monitor")) }
+                        Button("World Clock") { store.addItem(DockItem(kind: .worldClock, displayName: "World Clock")) }
+                        Button("Pomodoro") { store.addItem(DockItem(kind: .pomodoro, displayName: "Pomodoro")) }
+                        Button("Weather") { store.addItem(DockItem(kind: .weather, displayName: "Weather")) }
+                    }
                 }
                 .frame(width: 100)
                 Spacer()
@@ -122,6 +130,11 @@ struct ItemsView: View {
         case .trash: Image(systemName: "trash")
         case .url: Image(systemName: "globe")
         case .runningApps: Image(systemName: "circle.grid.2x2")
+        case .battery: Image(systemName: "battery.100")
+        case .systemMonitor: Image(systemName: "gauge.with.dots.needle.50percent")
+        case .worldClock: Image(systemName: "globe.americas")
+        case .pomodoro: Image(systemName: "timer")
+        case .weather: Image(systemName: "cloud.sun")
         default:
             if let url = item.url ?? item.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().scaledToFit()

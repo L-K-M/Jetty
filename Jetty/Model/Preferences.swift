@@ -60,6 +60,12 @@ final class Preferences: ObservableObject {
         // Hotkeys
         static let toggleHotkey = HotkeyBinding.defaultToggle
         static let menuHotkey = HotkeyBinding.defaultMenu
+        // Info widgets (ND-3)
+        static let worldClockTimeZone = "Europe/London"
+        static let pomodoroMinutes = 25.0
+        static let weatherLatitude = 0.0
+        static let weatherLongitude = 0.0
+        static let weatherUseCelsius = true
     }
 
     private enum Key {
@@ -101,6 +107,11 @@ final class Preferences: ObservableObject {
         static let clockAnalog = "clockAnalog"
         static let toggleHotkey = "toggleHotkey"
         static let menuHotkey = "menuHotkey"
+        static let worldClockTimeZone = "worldClockTimeZone"
+        static let pomodoroMinutes = "pomodoroMinutes"
+        static let weatherLatitude = "weatherLatitude"
+        static let weatherLongitude = "weatherLongitude"
+        static let weatherUseCelsius = "weatherUseCelsius"
     }
 
     // MARK: Appearance
@@ -158,6 +169,14 @@ final class Preferences: ObservableObject {
 
     @Published var toggleHotkey: HotkeyBinding { didSet { defaults.set(toggleHotkey.jsonString, forKey: Key.toggleHotkey) } }
     @Published var menuHotkey: HotkeyBinding { didSet { defaults.set(menuHotkey.jsonString, forKey: Key.menuHotkey) } }
+
+    // MARK: Info widgets
+
+    @Published var worldClockTimeZone: String { didSet { defaults.set(worldClockTimeZone, forKey: Key.worldClockTimeZone) } }
+    @Published var pomodoroMinutes: Double { didSet { defaults.set(pomodoroMinutes, forKey: Key.pomodoroMinutes) } }
+    @Published var weatherLatitude: Double { didSet { defaults.set(weatherLatitude, forKey: Key.weatherLatitude) } }
+    @Published var weatherLongitude: Double { didSet { defaults.set(weatherLongitude, forKey: Key.weatherLongitude) } }
+    @Published var weatherUseCelsius: Bool { didSet { defaults.set(weatherUseCelsius, forKey: Key.weatherUseCelsius) } }
 
     // MARK: Launch at login
 
@@ -221,6 +240,11 @@ final class Preferences: ObservableObject {
         clockAnalog = bool(Key.clockAnalog, d.clockAnalog)
         toggleHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.toggleHotkey), fallback: d.toggleHotkey)
         menuHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.menuHotkey), fallback: d.menuHotkey)
+        worldClockTimeZone = string(Key.worldClockTimeZone, d.worldClockTimeZone)
+        pomodoroMinutes = Self.clamp(double(Key.pomodoroMinutes, d.pomodoroMinutes), 1, 180)
+        weatherLatitude = Self.clamp(double(Key.weatherLatitude, d.weatherLatitude), -90, 90)
+        weatherLongitude = Self.clamp(double(Key.weatherLongitude, d.weatherLongitude), -180, 180)
+        weatherUseCelsius = bool(Key.weatherUseCelsius, d.weatherUseCelsius)
 
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
     }

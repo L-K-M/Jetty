@@ -18,6 +18,8 @@ struct SettingsView: View {
                 .tabItem { Label("Items", systemImage: "square.grid.2x2") }
             DisplaysView(store: store, preferences: preferences, registry: registry)
                 .tabItem { Label("Displays", systemImage: "display.2") }
+            WidgetsView(preferences: preferences)
+                .tabItem { Label("Widgets", systemImage: "rectangle.3.group") }
             MenuView(preferences: preferences)
                 .tabItem { Label("Jetty Menu", systemImage: "magnifyingglass") }
             PermissionsView()

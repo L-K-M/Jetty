@@ -12,101 +12,117 @@ struct DockTile: Identifiable {
     var itemID: UUID?
     var isRunning: Bool
     var isActive: Bool
-    /// Resolved lazily by `DockModel`; the pure `makeTiles` leaves it nil.
+    /// Resolved lazily by `DockModel`; the pure `makeSlots`/`makeTiles` leave it nil.
     var icon: NSImage?
 }
 
-/// The observable tile list the dock view renders, rebuilt whenever the pinned
-/// items or the running-app set changes. The merge itself
-/// (`makeTiles`) is a **pure** function over value types, so it's unit-tested
-/// without AppKit; icon resolution is a separate, cached step. See PLAN.md §6–7.
+/// The observable tile/slot list the dock view renders, rebuilt whenever the pinned
+/// items or the running-app set changes. The merge (`makeSlots`) is a **pure**
+/// function over value types, so it's unit-tested without AppKit; icon resolution is
+/// a separate, cached step. See PLAN.md §6–7.
 final class DockModel: ObservableObject {
 
+    /// Reorderable units (running apps collapse into one slot). The view renders these.
+    @Published private(set) var slots: [DockSlot] = []
+    /// Flat tiles in render order — used for deterministic panel sizing.
     @Published private(set) var tiles: [DockTile] = []
 
-    private var iconCache: [String: NSImage] = [:]
+    private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
     var onDropFiles: ((DockTile, [URL]) -> Void)?
     /// Builds the synthesized right-click menu for a tile (see PLAN.md §7).
     var onRequestContextActions: ((DockTile) -> [DockContextAction])?
-    /// Drag-to-reorder a pinned tile: move the item with `id` to pinned index `toIndex`.
-    var onReorder: ((_ itemID: UUID, _ toIndex: Int) -> Void)?
+    /// Drag-to-reorder: the new order of the reorderable slots' backing item ids.
+    var onReorder: ((_ orderedItemIDs: [UUID]) -> Void)?
 
-    /// The number of leading tiles that are pinned (and therefore reorderable). Pinned
-    /// tiles always precede running-only ones in `tiles`, so this is also the count of
-    /// `store.items`.
+    /// Count of pinned tiles (those with a backing item). Pinned tiles precede
+    /// running-only ones in `tiles`. Kept for tests / sizing.
     var pinnedCount: Int { tiles.filter { $0.itemID != nil }.count }
 
-    /// Rebuilds `tiles` from the current pinned items + running apps and resolves
-    /// icons (cached).
+    /// The item ids of the reorderable slots, in render order.
+    var reorderableItemIDs: [UUID] { slots.compactMap { $0.itemID } }
+
+    /// Rebuilds `slots`/`tiles` from the current pinned items + running apps and
+    /// resolves icons (cached, bounded — BUG-8).
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
-        var built = Self.makeTiles(pinned: pinned, running: running, showRunningApps: showRunningApps)
-        for i in built.indices {
-            built[i].icon = icon(for: built[i])
+        let now = Date().timeIntervalSinceReferenceDate
+        let built = Self.makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps)
+        slots = built.map { slot in
+            DockSlot(id: slot.id, itemID: slot.itemID,
+                     tiles: slot.tiles.map { tile in
+                         var t = tile
+                         t.icon = icon(for: tile, now: now)
+                         return t
+                     },
+                     isRunningGroup: slot.isRunningGroup)
         }
-        tiles = built
+        tiles = slots.flatMap { $0.tiles }
     }
 
     // MARK: Pure merge (unit-tested)
 
-    /// Merges pinned items (in their authored order) with running apps. A running app
-    /// already pinned (matched by bundle id) is shown once, marked running; remaining
-    /// running apps are appended when `showRunningApps` is on. Icons are left nil.
-    static func makeTiles(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockTile] {
+    /// Merges pinned items (in authored order) with running apps into reorderable
+    /// slots. A pinned app that is running is shown once (marked running). The
+    /// running-but-not-pinned apps collapse into a single slot at the `.runningApps`
+    /// sentinel's position (or, if no sentinel is present, appended at the end as a
+    /// non-reorderable group). Icons are left nil.
+    static func makeSlots(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockSlot] {
         let runningByBundle: [String: RunningAppInfo] = Dictionary(
             running.compactMap { info in info.bundleIdentifier.map { ($0, info) } },
             uniquingKeysWith: { a, _ in a })
+        let pinnedAppBundleIDs = Set(pinned.compactMap { $0.kind == .application ? $0.bundleIdentifier : nil })
 
-        var seen = Set<String>()
-        var tiles: [DockTile] = []
+        let runningOnly: [DockTile] = running.compactMap { info in
+            if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
+            return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
+                            bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
+                            isRunning: true, isActive: info.isActive, icon: nil)
+        }
+
+        var slots: [DockSlot] = []
+        var emittedRunning = false
 
         for item in pinned {
-            let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
-            let id: String
-            if item.kind == .application, let bundleID = item.bundleIdentifier {
-                id = "app:\(bundleID)"
-                seen.insert(bundleID)
-            } else {
-                id = "item:\(item.id.uuidString)"
-            }
-            tiles.append(DockTile(id: id,
-                                  kind: item.kind,
-                                  displayName: item.displayName,
-                                  bundleIdentifier: item.bundleIdentifier,
-                                  url: item.url,
-                                  itemID: item.id,
-                                  isRunning: info != nil,
-                                  isActive: info?.isActive ?? false,
-                                  icon: nil))
-        }
-
-        if showRunningApps {
-            for info in running {
-                if let bundleID = info.bundleIdentifier {
-                    if seen.contains(bundleID) { continue }
-                    seen.insert(bundleID)
+            if item.kind == .runningApps {
+                guard showRunningApps else { emittedRunning = true; continue }
+                if !runningOnly.isEmpty {
+                    slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
+                                          tiles: runningOnly, isRunningGroup: true))
                 }
-                tiles.append(DockTile(id: "app:\(info.id)",
-                                      kind: .application,
-                                      displayName: info.name,
-                                      bundleIdentifier: info.bundleIdentifier,
-                                      url: nil,
-                                      itemID: nil,
-                                      isRunning: true,
-                                      isActive: info.isActive,
-                                      icon: nil))
+                emittedRunning = true
+                continue
             }
+            let tileID: String
+            if item.kind == .application, let bundleID = item.bundleIdentifier {
+                tileID = "app:\(bundleID)"
+            } else {
+                tileID = "item:\(item.id.uuidString)"
+            }
+            let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
+            let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,
+                                bundleIdentifier: item.bundleIdentifier, url: item.url, itemID: item.id,
+                                isRunning: info != nil, isActive: info?.isActive ?? false, icon: nil)
+            slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
+                                  tiles: [tile], isRunningGroup: false))
         }
 
-        return tiles
+        if showRunningApps && !emittedRunning && !runningOnly.isEmpty {
+            slots.append(DockSlot(id: "running", itemID: nil, tiles: runningOnly, isRunningGroup: true))
+        }
+        return slots
     }
 
-    // MARK: Icons
+    /// Flat tiles in render order (derived from `makeSlots`). Kept for unit tests.
+    static func makeTiles(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockTile] {
+        makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps).flatMap { $0.tiles }
+    }
 
-    private func icon(for tile: DockTile) -> NSImage? {
-        if let cached = iconCache[tile.id] { return cached }
+    // MARK: Icons (bounded LRU — BUG-8)
+
+    private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
+        if let cached = iconCache.value(for: tile.id, now: now) { return cached }
         var image: NSImage?
         switch tile.kind {
         case .application, .file, .folder, .url:
@@ -119,10 +135,10 @@ final class DockModel: ObservableObject {
         case .trash:
             let trash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
             image = NSWorkspace.shared.icon(forFile: trash.path)
-        case .separator, .clock, .jettyMenu:
+        case .separator, .clock, .jettyMenu, .runningApps:
             image = nil   // rendered with custom views
         }
-        if let image { iconCache[tile.id] = image }
+        if let image { iconCache.insert(image, for: tile.id, now: now) }
         return image
     }
 

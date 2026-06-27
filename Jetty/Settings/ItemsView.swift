@@ -33,6 +33,7 @@ struct ItemsView: View {
                     Button("Separator") { store.addItem(DockItem(kind: .separator)) }
                     Button("Clock") { store.addItem(DockItem(kind: .clock, displayName: "Clock")) }
                     Button("Jetty Menu") { store.addItem(DockItem(kind: .jettyMenu, displayName: "Jetty Menu")) }
+                    Button("Running Apps") { store.addItem(DockItem(kind: .runningApps, displayName: "Running Apps")) }
                     Button("Trash") { store.addItem(DockItem(kind: .trash, displayName: "Trash")) }
                 }
                 .frame(width: 100)
@@ -60,6 +61,7 @@ struct ItemsView: View {
         case .jettyMenu: Image(systemName: "square.grid.2x2.fill")
         case .trash: Image(systemName: "trash")
         case .url: Image(systemName: "globe")
+        case .runningApps: Image(systemName: "circle.grid.2x2")
         default:
             if let url = item.url ?? item.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().scaledToFit()

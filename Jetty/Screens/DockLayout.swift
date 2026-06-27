@@ -136,17 +136,37 @@ enum DockLayout {
         return frame
     }
 
-    // MARK: Drag-to-reorder
+    // MARK: Drag-to-reorder (slot-based)
 
-    /// The destination pinned index for a drag of `translationPrimary` points (along
-    /// the dock's axis) starting from `currentIndex`, given the per-tile `step`
-    /// (icon size + spacing) and the count of reorderable `pinnedCount` tiles. Pure,
-    /// so it's unit-tested. See PLAN.md §7.
-    static func reorderTargetIndex(currentIndex: Int, translationPrimary: CGFloat,
-                                   step: CGFloat, pinnedCount: Int) -> Int {
-        guard step > 0, pinnedCount > 0 else { return currentIndex }
-        let delta = Int((translationPrimary / step).rounded())
-        return Swift.max(0, Swift.min(currentIndex + delta, pinnedCount - 1))
+    /// The along-axis extent of a slot whose tiles have these `kinds`, laid out with
+    /// `spacing` between them (a running-apps slot has several tiles; everything else
+    /// has one). Pure, so the live-reorder math is unit-tested.
+    static func slotExtentAlong(tileKinds kinds: [DockItemKind], baseSize: CGFloat,
+                                spacing: CGFloat, edge: DockEdge) -> CGFloat {
+        guard !kinds.isEmpty else { return 0 }
+        let sum = kinds.reduce(CGFloat(0)) { $0 + tileExtent(kind: $1, baseSize: baseSize, edge: edge).along }
+        return sum + CGFloat(kinds.count - 1) * spacing
+    }
+
+    /// The destination index the dragged slot should occupy, given every slot's
+    /// along-axis `slotExtents` (in current order), the `spacing` between slots, the
+    /// `draggedIndex`, and the pointer's along-axis drag distance `dragAlong`. Used
+    /// both for the live gap-opening preview and for the committed move. Pure. §7.
+    static func liveReorderTarget(slotExtents: [CGFloat], spacing: CGFloat,
+                                  draggedIndex: Int, dragAlong: CGFloat) -> Int {
+        guard slotExtents.indices.contains(draggedIndex) else { return draggedIndex }
+        var centers: [CGFloat] = []
+        var cursor: CGFloat = 0
+        for extent in slotExtents {
+            centers.append(cursor + extent / 2)
+            cursor += extent + spacing
+        }
+        let movedCenter = centers[draggedIndex] + dragAlong
+        var target = 0
+        for i in slotExtents.indices where i != draggedIndex {
+            if centers[i] < movedCenter { target += 1 }
+        }
+        return target
     }
 
     // MARK: Helpers

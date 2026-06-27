@@ -126,16 +126,31 @@ final class DockLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(hidden.maxY, visible.minY + 0.001)
     }
 
-    func testReorderTargetIndex() {
-        let step: CGFloat = 60   // icon 52 + spacing 8
-        // Drag right ~2 tiles from index 1 -> 3.
-        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 1, translationPrimary: 125, step: step, pinnedCount: 6), 3)
-        // Drag left from index 3 -> 1.
-        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 3, translationPrimary: -125, step: step, pinnedCount: 6), 1)
-        // Clamps to the ends.
-        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 4, translationPrimary: 9999, step: step, pinnedCount: 6), 5)
-        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 2, translationPrimary: -9999, step: step, pinnedCount: 6), 0)
+    func testSlotExtentAlong() {
+        // A single app tile = baseSize; a 2-app running group = 2*base + 1*spacing;
+        // the clock is 1.6x wide.
+        XCTAssertEqual(DockLayout.slotExtentAlong(tileKinds: [.application], baseSize: 50, spacing: 10, edge: .bottom), 50, accuracy: 0.001)
+        XCTAssertEqual(DockLayout.slotExtentAlong(tileKinds: [.application, .application], baseSize: 50, spacing: 10, edge: .bottom), 110, accuracy: 0.001)
+        XCTAssertEqual(DockLayout.slotExtentAlong(tileKinds: [.clock], baseSize: 50, spacing: 10, edge: .bottom), 80, accuracy: 0.001)
+    }
+
+    func testLiveReorderTarget() {
+        let extents = Array(repeating: CGFloat(50), count: 6)   // centers: 25,85,145,205,265,325 (spacing 10)
+        // Drag slot 1 right ~2 slots -> 3.
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 1, dragAlong: 125), 3)
+        // Drag slot 3 left -> 1.
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 3, dragAlong: -125), 1)
+        // Clamp to the ends.
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 4, dragAlong: 9999), 5)
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 2, dragAlong: -9999), 0)
         // Tiny drag stays put.
-        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 2, translationPrimary: 5, step: step, pinnedCount: 6), 2)
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 2, dragAlong: 5), 2)
+    }
+
+    func testLiveReorderTargetWithWideRunningGroup() {
+        // A wide running-apps slot (index 2) between single tiles; dragging the last
+        // slot left past the wide group lands before it.
+        let extents: [CGFloat] = [50, 50, 160, 50]   // centers (spacing 10): 25, 85, 200, 305
+        XCTAssertEqual(DockLayout.liveReorderTarget(slotExtents: extents, spacing: 10, draggedIndex: 3, dragAlong: -250), 1)
     }
 }

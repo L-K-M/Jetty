@@ -16,10 +16,6 @@ struct DockTileView: View {
     var onHoverChanged: (Bool) -> Void
     var onDropURLs: ([URL]) -> Void
     var contextActions: () -> [DockContextAction]
-    var dragOffset: CGSize
-    var isDragging: Bool
-    var onReorderChanged: (CGSize) -> Void
-    var onReorderEnded: (CGSize) -> Void
 
     @State private var isDropTargeted = false
 
@@ -30,23 +26,30 @@ struct DockTileView: View {
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
             .contentShape(Rectangle())
-            .offset(dragOffset)
-            .zIndex(isDragging ? 1 : 0)
             .onHover { onHoverChanged($0) }
             .onTapGesture(perform: onTap)
-            .gesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { onReorderChanged($0.translation) }
-                    .onEnded { onReorderEnded($0.translation) }
-            )
             .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                 loadURLs(from: providers)
                 return true
             }
             .background(dropHighlight)
             .contextMenu { contextMenuItems }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(tile.isRunning && tile.kind == .application ? "Running" : "")
+            .accessibilityAddTraits(tile.kind == .separator ? [] : .isButton)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: scale)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+    }
+
+    /// VoiceOver label per tile kind (BUG-9).
+    private var accessibilityLabel: String {
+        switch tile.kind {
+        case .separator: return "Separator"
+        case .clock: return "Clock"
+        case .jettyMenu: return "Jetty Menu"
+        case .trash: return "Trash"
+        default: return tile.displayName.isEmpty ? "Dock item" : tile.displayName
+        }
     }
 
     @ViewBuilder

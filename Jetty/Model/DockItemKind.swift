@@ -12,6 +12,11 @@ enum DockItemKind: String, Codable {
     case trash
     case clock
     case jettyMenu
+    /// A sentinel marking *where* the running-but-not-pinned apps appear in the dock.
+    /// It renders as the live running-apps cluster (one reorderable unit), so the
+    /// user can place pinned items on either side of it (e.g. the clock to its
+    /// right). See PLAN.md §6–7.
+    case runningApps
 }
 
 /// How a `.folder` tile presents its contents when clicked.

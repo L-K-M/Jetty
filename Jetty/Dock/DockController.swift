@@ -37,6 +37,7 @@ final class DockController {
 
     func start() {
         if !store.loadedFromDisk && store.items.isEmpty { seedDefaultItems() }
+        ensureRunningSentinel()
         wireModelCallbacks()
 
         if preferences.manageSystemDock { systemDock.hideSystemDock() }
@@ -161,16 +162,20 @@ final class DockController {
         model.onOpenTile = { [weak self] tile in self?.open(tile) }
         model.onDropFiles = { [weak self] tile, urls in self?.handleDrop(urls, on: tile) }
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
-        model.onReorder = { [weak self] itemID, toIndex in self?.reorder(itemID, to: toIndex) }
+        model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
     }
 
-    /// Moves the pinned item `itemID` to pinned index `toIndex` (drag-to-reorder).
-    private func reorder(_ itemID: UUID, to toIndex: Int) {
+    /// Applies a drag-to-reorder: `orderedIDs` is the new order of the reorderable
+    /// slots' backing items. Non-reorderable items (e.g. a hidden running-apps
+    /// sentinel when running apps are off) keep their positions.
+    private func reorder(to orderedIDs: [UUID]) {
         var items = store.items
-        guard let from = items.firstIndex(where: { $0.id == itemID }) else { return }
-        let item = items.remove(at: from)
-        let clamped = max(0, min(toIndex, items.count))
-        items.insert(item, at: clamped)
+        let idSet = Set(orderedIDs)
+        let byID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let movablePositions = items.indices.filter { idSet.contains(items[$0].id) }
+        let newMovable = orderedIDs.compactMap { byID[$0] }
+        guard newMovable.count == movablePositions.count else { return }
+        for (position, item) in zip(movablePositions, newMovable) { items[position] = item }
         store.setItems(items)
     }
 
@@ -187,7 +192,7 @@ final class DockController {
         case .jettyMenu:
             openJettyMenu()
             return   // don't hide the dock; the menu is its own panel
-        case .separator:
+        case .separator, .runningApps:
             return
         }
         hideRevealedDocks()
@@ -286,7 +291,7 @@ final class DockController {
             actions.append(DockContextAction(title: "Open Calendar") { [weak self] in self?.openCalendar() })
         case .jettyMenu:
             actions.append(DockContextAction(title: "Open Jetty Menu") { [weak self] in self?.openJettyMenu() })
-        case .separator:
+        case .separator, .runningApps:
             break
         }
         return actions
@@ -344,9 +349,27 @@ final class DockController {
             }
         }
         items.append(DockItem(kind: .separator))
+        items.append(DockItem(kind: .runningApps, displayName: "Running Apps"))
+        items.append(DockItem(kind: .separator))
         items.append(DockItem(kind: .clock, displayName: "Clock"))
         items.append(DockItem(kind: .jettyMenu, displayName: "Jetty Menu"))
         items.append(DockItem(kind: .trash, displayName: "Trash"))
+        store.setItems(items)
+    }
+
+    /// Ensures a `.runningApps` sentinel exists so the running-apps cluster is a
+    /// reorderable unit. Migrates docs created before the sentinel (its absence made
+    /// running apps a non-movable trailing block). Inserts it before the Trash if one
+    /// is present, else at the end. No-op once present.
+    private func ensureRunningSentinel() {
+        guard !store.items.contains(where: { $0.kind == .runningApps }) else { return }
+        var items = store.items
+        let sentinel = DockItem(kind: .runningApps, displayName: "Running Apps")
+        if let trashIndex = items.firstIndex(where: { $0.kind == .trash }) {
+            items.insert(sentinel, at: trashIndex)
+        } else {
+            items.append(sentinel)
+        }
         store.setItems(items)
     }
 }

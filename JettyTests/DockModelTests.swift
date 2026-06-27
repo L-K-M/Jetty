@@ -45,6 +45,32 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(tiles[1].id, "item:\(sep.id.uuidString)")
     }
 
+    func testRunningAppsCollapseIntoOneSlotAtSentinel() {
+        let pinned = [
+            finderItem(),
+            DockItem(kind: .runningApps, displayName: "Running Apps"),
+            DockItem(kind: .clock, displayName: "Clock"),
+        ]
+        let running = [
+            RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2),
+            RunningAppInfo(bundleIdentifier: "com.apple.mail", name: "Mail", isActive: false, pid: 3),
+        ]
+        let slots = DockModel.makeSlots(pinned: pinned, running: running, showRunningApps: true)
+        XCTAssertEqual(slots.count, 3)                      // finder | running group | clock
+        XCTAssertTrue(slots[1].isRunningGroup)
+        XCTAssertEqual(slots[1].tiles.count, 2)             // safari + mail as one slot
+        XCTAssertNotNil(slots[1].itemID)                    // reorderable as a unit
+        XCTAssertEqual(slots[2].tiles.first?.kind, .clock)  // clock sits AFTER running apps
+    }
+
+    func testRunningAppsSentinelSkippedWhenHidden() {
+        let pinned = [finderItem(), DockItem(kind: .runningApps, displayName: "Running Apps")]
+        let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)]
+        let slots = DockModel.makeSlots(pinned: pinned, running: running, showRunningApps: false)
+        XCTAssertEqual(slots.count, 1)                      // only finder; no running group
+        XCTAssertFalse(slots.contains { $0.isRunningGroup })
+    }
+
     func testPinnedCountCountsOnlyPinnedTiles() {
         let model = DockModel()
         model.rebuild(pinned: [finderItem(), DockItem(kind: .separator)],

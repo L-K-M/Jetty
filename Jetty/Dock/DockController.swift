@@ -21,6 +21,12 @@ final class DockController {
     private let toggleHotkey = CarbonHotkey(identifier: 1)
     private let menuHotkey = CarbonHotkey(identifier: 2)
 
+    /// Last-seen "structural" preference signatures, so a preference mutation only
+    /// does the work it actually needs: pure-appearance tweaks (opacity/tint/corner/
+    /// magnification-magnitude…) flow to the views via `@ObservedObject` and touch no
+    /// panels; only geometry/anchor/tile-set changes rebuild or reconcile (BUG-7).
+    private var prefSig: (reconcile: String, model: String, layout: String)?
+
     /// The Jetty Menu launcher (created on first use).
     private lazy var jettyMenu = JettyMenuController(preferences: preferences)
 
@@ -44,6 +50,7 @@ final class DockController {
 
         rebuildModel()
         reconcilePanels()
+        prefSig = preferenceSignatures()
 
         hoverMonitor.onMove = { [weak self] point in
             self?.panels.values.forEach { $0.handleMouseMoved(to: point) }
@@ -96,14 +103,40 @@ final class DockController {
     }
 
     private func applyPreferenceChange() {
-        // The system-Dock management toggle.
+        // The system-Dock management toggle (cheap, always checked).
         if preferences.manageSystemDock {
             if !systemDock.isManaging { systemDock.hideSystemDock() }
         } else if systemDock.isManaging {
             systemDock.restoreSystemDock()
         }
-        rebuildModel()
-        reconcilePanels()
+
+        // Only do the expensive work the change actually requires (BUG-7). Each tile
+        // already observes `preferences` directly, so pure-appearance edits repaint
+        // without recreating anchors or panels.
+        let sig = preferenceSignatures()
+        defer { prefSig = sig }
+        guard let previous = prefSig else { return }   // start() seeded the baseline
+
+        if sig.model != previous.model { rebuildModel() }                 // tile set
+        if sig.reconcile != previous.reconcile { reconcilePanels() }      // panel set / anchors
+        else if sig.model == previous.model && sig.layout != previous.layout {
+            relayoutPanels()                                              // frame size only
+        }
+    }
+
+    /// The subset of preferences that change the dock's structure, split by the work
+    /// each tier needs: `reconcile` (which panels exist + their anchors), `model`
+    /// (the merged tile set), and `layout` (panel frame size). Anything not here is
+    /// pure appearance and needs no panel work.
+    private func preferenceSignatures() -> (reconcile: String, model: String, layout: String) {
+        let p = preferences
+        return (
+            reconcile: [p.edge.rawValue, p.alignment.rawValue, String(p.offset),
+                        String(p.inset), p.displayScope.rawValue].joined(separator: "|"),
+            model: String(p.showRunningApps),
+            layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
+                     String(p.magnification), String(p.autoHide)].joined(separator: "|")
+        )
     }
 
     // MARK: Model

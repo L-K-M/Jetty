@@ -57,6 +57,20 @@ Because Jetty floats over content instead of reserving space, maximized windows 
 pushed aside — which is exactly why it auto-hides and needs no Accessibility permission
 to run.
 
+### Getting the real Dock back
+
+The clean way is **Settings → General → Restore System Dock** (or the menu-bar item's
+**Restore System Dock**), which Jetty also does automatically when you quit it normally.
+If Jetty was force-quit, crashed, or was deleted *while* it had the Dock hidden, the
+system Dock can stay hidden because its reveal delay is still set very high. Restore it
+by hand with one line in Terminal:
+
+```bash
+defaults delete com.apple.dock autohide-delay; defaults delete com.apple.dock autohide-time-modifier; killall Dock
+```
+
+(Re-launching Jetty and using **Restore System Dock** does the same thing.)
+
 ## Build & Run
 
 Requires **Xcode 26** (for Liquid Glass) and **macOS 13+** (Liquid Glass renders on

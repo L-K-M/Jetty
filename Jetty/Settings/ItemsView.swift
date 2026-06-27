@@ -54,9 +54,23 @@ struct ItemsView: View {
         .contextMenu {
             if item.kind != .separator && item.kind != .runningApps {
                 Button("Rename…") { renameItem(item) }
+                Button("Set Custom Icon…") { setCustomIcon(item) }
+                if item.customIconPath != nil {
+                    Button("Clear Custom Icon") { store.setCustomIconPath(nil, id: item.id) }
+                }
             }
             Button("Remove", role: .destructive) { store.removeItem(id: item.id) }
         }
+    }
+
+    /// Picks an image file to use as a pinned item's icon (MF-7).
+    private func setCustomIcon(_ item: DockItem) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        store.setCustomIconPath(url.path, id: item.id)
     }
 
     /// Prompts for a new display name for a pinned item (MF-7).
@@ -80,6 +94,15 @@ struct ItemsView: View {
 
     @ViewBuilder
     private func icon(for item: DockItem) -> some View {
+        if let path = item.customIconPath, let image = NSImage(contentsOfFile: path) {
+            Image(nsImage: image).resizable().scaledToFit()
+        } else {
+            defaultIcon(for: item)
+        }
+    }
+
+    @ViewBuilder
+    private func defaultIcon(for item: DockItem) -> some View {
         switch item.kind {
         case .separator: Image(systemName: "minus")
         case .clock: Image(systemName: "clock")

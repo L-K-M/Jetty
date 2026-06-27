@@ -71,6 +71,13 @@ final class DockStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Sets (or clears, with `nil`) a pinned item's custom icon path (MF-7).
+    func setCustomIconPath(_ path: String?, id: UUID) {
+        guard let index = document.items.firstIndex(where: { $0.id == id }) else { return }
+        document.items[index].customIconPath = path
+        scheduleSave()
+    }
+
     func moveItem(fromOffsets source: IndexSet, toOffset destination: Int) {
         document.items.move(fromOffsets: source, toOffset: destination)
         scheduleSave()

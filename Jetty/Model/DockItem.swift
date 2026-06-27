@@ -12,6 +12,8 @@ struct DockItem: Codable, Identifiable, Equatable {
     var url: URL?
     var bundleIdentifier: String?
     var folderDisplay: FolderStackStyle?
+    /// Path to a user-chosen image that overrides the default icon (MF-7).
+    var customIconPath: String?
 
     init(id: UUID = UUID(),
          kind: DockItemKind,
@@ -19,7 +21,8 @@ struct DockItem: Codable, Identifiable, Equatable {
          bookmark: Data? = nil,
          url: URL? = nil,
          bundleIdentifier: String? = nil,
-         folderDisplay: FolderStackStyle? = nil) {
+         folderDisplay: FolderStackStyle? = nil,
+         customIconPath: String? = nil) {
         self.id = id
         self.kind = kind
         self.displayName = displayName
@@ -27,6 +30,7 @@ struct DockItem: Codable, Identifiable, Equatable {
         self.url = url
         self.bundleIdentifier = bundleIdentifier
         self.folderDisplay = folderDisplay
+        self.customIconPath = customIconPath
     }
 
     init(from decoder: Decoder) throws {
@@ -38,10 +42,11 @@ struct DockItem: Codable, Identifiable, Equatable {
         url = try c.decodeIfPresent(URL.self, forKey: .url)
         bundleIdentifier = try c.decodeIfPresent(String.self, forKey: .bundleIdentifier)
         folderDisplay = try c.decodeIfPresent(FolderStackStyle.self, forKey: .folderDisplay)
+        customIconPath = try c.decodeIfPresent(String.self, forKey: .customIconPath)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, displayName, bookmark, url, bundleIdentifier, folderDisplay
+        case id, kind, displayName, bookmark, url, bundleIdentifier, folderDisplay, customIconPath
     }
 
     /// A stable identity used to dedup a pinned app against the same app appearing

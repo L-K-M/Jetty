@@ -12,8 +12,14 @@ struct DockTile: Identifiable {
     var itemID: UUID?
     var isRunning: Bool
     var isActive: Bool
+    /// A user-chosen icon override path, carried from the backing item (MF-7).
+    var customIconPath: String?
     /// Resolved lazily by `DockModel`; the pure `makeSlots`/`makeTiles` leave it nil.
     var icon: NSImage?
+
+    /// Icon-cache key: the tile id plus the custom-icon path, so changing (or
+    /// clearing) a custom icon doesn't return the stale cached image (MF-7 / BUG-8).
+    var iconCacheKey: String { customIconPath.map { "\(id)|\($0)" } ?? id }
 }
 
 /// The observable tile/slot list the dock view renders, rebuilt whenever the pinned
@@ -78,7 +84,7 @@ final class DockModel: ObservableObject {
             if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
             return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
                             bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
-                            isRunning: true, isActive: info.isActive, icon: nil)
+                            isRunning: true, isActive: info.isActive, customIconPath: nil, icon: nil)
         }
 
         var slots: [DockSlot] = []
@@ -103,7 +109,8 @@ final class DockModel: ObservableObject {
             let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
             let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,
                                 bundleIdentifier: item.bundleIdentifier, url: item.url, itemID: item.id,
-                                isRunning: info != nil, isActive: info?.isActive ?? false, icon: nil)
+                                isRunning: info != nil, isActive: info?.isActive ?? false,
+                                customIconPath: item.customIconPath, icon: nil)
             slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))
         }
@@ -122,7 +129,13 @@ final class DockModel: ObservableObject {
     // MARK: Icons (bounded LRU — BUG-8)
 
     private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
-        if let cached = iconCache.value(for: tile.id, now: now) { return cached }
+        let cacheKey = tile.iconCacheKey
+        if let cached = iconCache.value(for: cacheKey, now: now) { return cached }
+        // A user-chosen icon overrides the default for any kind (MF-7).
+        if let path = tile.customIconPath, let custom = NSImage(contentsOfFile: path) {
+            iconCache.insert(custom, for: cacheKey, now: now)
+            return custom
+        }
         var image: NSImage?
         switch tile.kind {
         case .application, .file, .folder, .url:
@@ -138,7 +151,7 @@ final class DockModel: ObservableObject {
         case .separator, .clock, .jettyMenu, .runningApps:
             image = nil   // rendered with custom views
         }
-        if let image { iconCache.insert(image, for: tile.id, now: now) }
+        if let image { iconCache.insert(image, for: cacheKey, now: now) }
         return image
     }
 

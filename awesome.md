@@ -1,5 +1,14 @@
 # awesome.md — a review of Jetty (and a pile of ideas)
 
+> **Status (implementation pass):** All bugs (BUG-4…BUG-10), general issues
+> (GI-1…GI-5; GI-3 localization remains a deliberate later effort), the full
+> Missing-features list (MF-1…MF-7), and the in-scope Novel ideas (ND-1…ND-5,
+> ND-8, ND-9) are now implemented. The **only** ND-3 sub-tile not shipped is
+> **now-playing**: macOS has no public cross-app now-playing API and the private
+> `MediaRemote` framework is gated on modern macOS, so shipping it would be dead
+> code — deferred on purpose. Out-of-scope by request and intentionally **not**
+> built: ND-6, ND-7, ND-10.
+
 ## 🐞 Bugs & correctness
 
 ### BUG-4 — Per-display anchor *edge* is ignored by the dock content

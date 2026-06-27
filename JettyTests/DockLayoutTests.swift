@@ -76,4 +76,24 @@ final class DockLayoutTests: XCTestCase {
         XCTAssertEqual(hidden.minX, 349, accuracy: 0.001)        // along-edge unchanged
         XCTAssertEqual(hidden.maxY, visible.minY + 2, accuracy: 0.001)  // only 2pt peeks
     }
+
+    func testDefaultHiddenFrameIsFullyOffScreen() {
+        // edgeReveal is 0, so the hidden dock shows no pixels.
+        let revealed = CGRect(x: 349, y: 0, width: 302, height: 70)
+        let hidden = DockLayout.hiddenFrame(edge: .bottom, revealedFrame: revealed, in: visible)
+        XCTAssertLessThanOrEqual(hidden.maxY, visible.minY + 0.001)
+    }
+
+    func testReorderTargetIndex() {
+        let step: CGFloat = 60   // icon 52 + spacing 8
+        // Drag right ~2 tiles from index 1 -> 3.
+        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 1, translationPrimary: 125, step: step, pinnedCount: 6), 3)
+        // Drag left from index 3 -> 1.
+        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 3, translationPrimary: -125, step: step, pinnedCount: 6), 1)
+        // Clamps to the ends.
+        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 4, translationPrimary: 9999, step: step, pinnedCount: 6), 5)
+        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 2, translationPrimary: -9999, step: step, pinnedCount: 6), 0)
+        // Tiny drag stays put.
+        XCTAssertEqual(DockLayout.reorderTargetIndex(currentIndex: 2, translationPrimary: 5, step: step, pinnedCount: 6), 2)
+    }
 }

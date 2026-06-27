@@ -45,6 +45,15 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(tiles[1].id, "item:\(sep.id.uuidString)")
     }
 
+    func testPinnedCountCountsOnlyPinnedTiles() {
+        let model = DockModel()
+        model.rebuild(pinned: [finderItem(), DockItem(kind: .separator)],
+                      running: [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)],
+                      showRunningApps: true)
+        XCTAssertEqual(model.tiles.count, 3)   // finder + separator + safari (running-only)
+        XCTAssertEqual(model.pinnedCount, 2)   // only finder + separator are reorderable
+    }
+
     func testPinnedAppNotDuplicatedByRunningList() {
         let pinned = [finderItem()]
         let running = [RunningAppInfo(bundleIdentifier: "com.apple.finder", name: "Finder", isActive: true, pid: 1)]

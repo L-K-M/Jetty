@@ -161,6 +161,17 @@ final class DockController {
         model.onOpenTile = { [weak self] tile in self?.open(tile) }
         model.onDropFiles = { [weak self] tile, urls in self?.handleDrop(urls, on: tile) }
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
+        model.onReorder = { [weak self] itemID, toIndex in self?.reorder(itemID, to: toIndex) }
+    }
+
+    /// Moves the pinned item `itemID` to pinned index `toIndex` (drag-to-reorder).
+    private func reorder(_ itemID: UUID, to toIndex: Int) {
+        var items = store.items
+        guard let from = items.firstIndex(where: { $0.id == itemID }) else { return }
+        let item = items.remove(at: from)
+        let clamped = max(0, min(toIndex, items.count))
+        items.insert(item, at: clamped)
+        store.setItems(items)
     }
 
     private func open(_ tile: DockTile) {

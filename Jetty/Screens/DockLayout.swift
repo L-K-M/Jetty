@@ -7,8 +7,11 @@ import CoreGraphics
 /// fully unit-testable. See PLAN.md §4–5.
 enum DockLayout {
 
-    /// How many points of the dock peek back on-screen while hidden (a hover hint).
-    static let edgeReveal: CGFloat = 2
+    /// How many points of the dock peek back on-screen while hidden. `0` hides it
+    /// completely — reveal is triggered by the pointer reaching the *screen* edge
+    /// (see `EdgeHoverMonitor` / `DockPanelController.pointerInRevealZone`), not by a
+    /// visible sliver, so no pixels of the dock show while hidden.
+    static let edgeReveal: CGFloat = 0
 
     // MARK: Content size
 
@@ -90,6 +93,19 @@ enum DockLayout {
         case .right:  frame.origin.x = visibleFrame.maxX - reveal
         }
         return frame
+    }
+
+    // MARK: Drag-to-reorder
+
+    /// The destination pinned index for a drag of `translationPrimary` points (along
+    /// the dock's axis) starting from `currentIndex`, given the per-tile `step`
+    /// (icon size + spacing) and the count of reorderable `pinnedCount` tiles. Pure,
+    /// so it's unit-tested. See PLAN.md §7.
+    static func reorderTargetIndex(currentIndex: Int, translationPrimary: CGFloat,
+                                   step: CGFloat, pinnedCount: Int) -> Int {
+        guard step > 0, pinnedCount > 0 else { return currentIndex }
+        let delta = Int((translationPrimary / step).rounded())
+        return Swift.max(0, Swift.min(currentIndex + delta, pinnedCount - 1))
     }
 
     // MARK: Helpers

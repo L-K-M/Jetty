@@ -31,6 +31,13 @@ final class DockModel: ObservableObject {
     var onDropFiles: ((DockTile, [URL]) -> Void)?
     /// Builds the synthesized right-click menu for a tile (see PLAN.md §7).
     var onRequestContextActions: ((DockTile) -> [DockContextAction])?
+    /// Drag-to-reorder a pinned tile: move the item with `id` to pinned index `toIndex`.
+    var onReorder: ((_ itemID: UUID, _ toIndex: Int) -> Void)?
+
+    /// The number of leading tiles that are pinned (and therefore reorderable). Pinned
+    /// tiles always precede running-only ones in `tiles`, so this is also the count of
+    /// `store.items`.
+    var pinnedCount: Int { tiles.filter { $0.itemID != nil }.count }
 
     /// Rebuilds `tiles` from the current pinned items + running apps and resolves
     /// icons (cached).

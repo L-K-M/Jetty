@@ -49,21 +49,29 @@ final class RunningAppsModel: ObservableObject {
         }
     }
 
+    /// Live `NSRunningApplication`s by bundle id, rebuilt with `apps` so lookups
+    /// (activate/hide/quit) are O(1) instead of re-scanning `runningApplications`
+    /// on every call during activation storms (GI-5).
+    private var indexByBundle: [String: NSRunningApplication] = [:]
+
     /// Rebuilds the snapshot from `runningApplications`, keeping only `.regular`
     /// (Dock-worthy) apps and excluding Jetty itself.
     func refresh() {
         let ownBundleID = Bundle.main.bundleIdentifier
-        apps = workspace.runningApplications
+        let regular = workspace.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != ownBundleID }
-            .map { RunningAppInfo(bundleIdentifier: $0.bundleIdentifier,
-                                  name: $0.localizedName ?? "App",
-                                  isActive: $0.isActive,
-                                  pid: $0.processIdentifier) }
+        var index: [String: NSRunningApplication] = [:]
+        for app in regular { if let bundleID = app.bundleIdentifier { index[bundleID] = app } }
+        indexByBundle = index
+        apps = regular.map { RunningAppInfo(bundleIdentifier: $0.bundleIdentifier,
+                                            name: $0.localizedName ?? "App",
+                                            isActive: $0.isActive,
+                                            pid: $0.processIdentifier) }
     }
 
     /// The live `NSRunningApplication` for a bundle id (for activate/hide/quit).
     func runningApplication(bundleIdentifier: String) -> NSRunningApplication? {
-        workspace.runningApplications.first { $0.bundleIdentifier == bundleIdentifier }
+        indexByBundle[bundleIdentifier] ?? workspace.runningApplications.first { $0.bundleIdentifier == bundleIdentifier }
     }
 
     func runningApplication(pid: pid_t) -> NSRunningApplication? {

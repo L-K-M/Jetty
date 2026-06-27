@@ -56,6 +56,7 @@ final class Preferences: ObservableObject {
         static let clockShowSeconds = false
         static let clockUse24Hour = false
         static let clockShowWeekday = false
+        static let clockAnalog = false
     }
 
     private enum Key {
@@ -94,6 +95,7 @@ final class Preferences: ObservableObject {
         static let clockShowSeconds = "clockShowSeconds"
         static let clockUse24Hour = "clockUse24Hour"
         static let clockShowWeekday = "clockShowWeekday"
+        static let clockAnalog = "clockAnalog"
     }
 
     // MARK: Appearance
@@ -145,6 +147,7 @@ final class Preferences: ObservableObject {
     @Published var clockShowSeconds: Bool { didSet { defaults.set(clockShowSeconds, forKey: Key.clockShowSeconds) } }
     @Published var clockUse24Hour: Bool { didSet { defaults.set(clockUse24Hour, forKey: Key.clockUse24Hour) } }
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
+    @Published var clockAnalog: Bool { didSet { defaults.set(clockAnalog, forKey: Key.clockAnalog) } }
 
     // MARK: Launch at login
 
@@ -205,6 +208,7 @@ final class Preferences: ObservableObject {
         clockShowSeconds = bool(Key.clockShowSeconds, d.clockShowSeconds)
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
         clockShowWeekday = bool(Key.clockShowWeekday, d.clockShowWeekday)
+        clockAnalog = bool(Key.clockAnalog, d.clockAnalog)
 
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
     }

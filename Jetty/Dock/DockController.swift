@@ -199,14 +199,16 @@ final class DockController {
     }
 
     private func openApplication(_ tile: DockTile) {
+        let appURL = tile.url ?? tile.bundleIdentifier.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+        if let appURL {
+            let name = tile.displayName.isEmpty ? appURL.deletingPathExtension().lastPathComponent : tile.displayName
+            RecentAppsStore.shared.record(name: name, bundleID: tile.bundleIdentifier, url: appURL)
+        }
         if let bundleID = tile.bundleIdentifier,
            let running = runningApps.runningApplication(bundleIdentifier: bundleID) {
             AppLauncher.activate(running)
-        } else if let url = tile.url {
-            AppLauncher.launchApplication(at: url)
-        } else if let bundleID = tile.bundleIdentifier,
-                  let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            AppLauncher.launchApplication(at: url)
+        } else if let appURL {
+            AppLauncher.launchApplication(at: appURL)
         }
     }
 
@@ -333,8 +335,16 @@ final class DockController {
     }
 
     private func openCalendar() {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") {
-            AppLauncher.launchApplication(at: url)
+        // Try known Calendar bundle ids, then the on-disk app, so a clock-tile click
+        // never silently no-ops if Calendar was replaced/renamed (BUG-6).
+        for bundleID in ["com.apple.iCal", "com.apple.Calendar"] {
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                AppLauncher.launchApplication(at: url); return
+            }
+        }
+        let path = "/System/Applications/Calendar.app"
+        if FileManager.default.fileExists(atPath: path) {
+            AppLauncher.launchApplication(at: URL(fileURLWithPath: path))
         }
     }
 

@@ -39,7 +39,9 @@ final class JettyMenuController {
         appToRestoreOnClose = frontmost?.processIdentifier == NSRunningApplication.current.processIdentifier ? nil : frontmost
 
         model.reset()
+        model.recentsProvider = { RecentAppsStore.shared.recentItems() }
         model.onLaunch = { [weak self] item in
+            RecentAppsStore.shared.record(name: item.name, bundleID: item.bundleID, url: item.url)
             AppLauncher.launchApplication(at: item.url)
             self?.close()
         }

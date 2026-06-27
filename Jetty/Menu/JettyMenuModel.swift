@@ -22,6 +22,8 @@ final class JettyMenuModel: ObservableObject {
     var onLaunch: ((AppSearchItem) -> Void)?
     var onRunPower: ((PowerCommand) -> Void)?
     var onClose: (() -> Void)?
+    /// Supplies recently-launched apps to surface first on an empty query (MF-5).
+    var recentsProvider: (() -> [AppSearchItem])?
 
     init(appIndex: AppIndex) {
         self.appIndex = appIndex
@@ -33,8 +35,21 @@ final class JettyMenuModel: ObservableObject {
 
     func recompute() {
         calculation = ExpressionEvaluator.evaluate(query)
-        results = Array(AppSearch.rank(query, in: appIndex.apps).prefix(maxResults))
+        results = Array(Self.rankedResults(query: query, apps: appIndex.apps,
+                                           recents: recentsProvider?() ?? []).prefix(maxResults))
         if selectedIndex >= results.count { selectedIndex = 0 }
+    }
+
+    /// Pure ranking: an empty query lists recents first (then the rest, de-duplicated);
+    /// a non-empty query is fuzzy-ranked over all apps. Unit-tested.
+    static func rankedResults(query: String, apps: [AppSearchItem],
+                              recents: [AppSearchItem]) -> [AppSearchItem] {
+        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return AppSearch.rank(query, in: apps)
+        }
+        let recentIDs = Set(recents.map(\.id))
+        let rest = AppSearch.rank("", in: apps).filter { !recentIDs.contains($0.id) }
+        return recents + rest
     }
 
     func moveSelection(_ delta: Int) {

@@ -27,10 +27,13 @@ struct MenuView: View {
             }
 
             Section("Clock tile") {
-                Toggle("Show date", isOn: $preferences.clockShowDate)
-                Toggle("Show weekday", isOn: $preferences.clockShowWeekday)
+                Toggle("Analog face", isOn: $preferences.clockAnalog)
+                if !preferences.clockAnalog {
+                    Toggle("Show date", isOn: $preferences.clockShowDate)
+                    Toggle("Show weekday", isOn: $preferences.clockShowWeekday)
+                    Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
+                }
                 Toggle("Show seconds", isOn: $preferences.clockShowSeconds)
-                Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
             }
         }
         .formStyle(.grouped)

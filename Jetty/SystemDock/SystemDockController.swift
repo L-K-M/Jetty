@@ -19,6 +19,10 @@ final class SystemDockController {
         static let isManaging = "SystemDock.isManaging"
         static let priorAutohide = "SystemDock.priorAutohide"
         static let capturedPrior = "SystemDock.capturedPrior"
+        static let hadPriorDelay = "SystemDock.hadPriorDelay"
+        static let priorDelay = "SystemDock.priorDelay"
+        static let hadPriorTimeModifier = "SystemDock.hadPriorTimeModifier"
+        static let priorTimeModifier = "SystemDock.priorTimeModifier"
     }
 
     init(ourDefaults: UserDefaults = .standard) {
@@ -34,6 +38,16 @@ final class SystemDockController {
         guard let dockDefaults else { return }
         if !ourDefaults.bool(forKey: Key.capturedPrior) {
             ourDefaults.set(dockDefaults.bool(forKey: "autohide"), forKey: Key.priorAutohide)
+            // Capture the user's own auto-hide delay / time-modifier (if any) so a
+            // custom Dock reveal speed is restored rather than wiped (GI-2).
+            if let delay = dockDefaults.object(forKey: "autohide-delay") as? Double {
+                ourDefaults.set(true, forKey: Key.hadPriorDelay)
+                ourDefaults.set(delay, forKey: Key.priorDelay)
+            }
+            if let tm = dockDefaults.object(forKey: "autohide-time-modifier") as? Double {
+                ourDefaults.set(true, forKey: Key.hadPriorTimeModifier)
+                ourDefaults.set(tm, forKey: Key.priorTimeModifier)
+            }
             ourDefaults.set(true, forKey: Key.capturedPrior)
         }
         dockDefaults.set(true, forKey: "autohide")
@@ -62,11 +76,23 @@ final class SystemDockController {
     func restoreSystemDock() {
         guard let dockDefaults else { return }
         let priorAutohide = ourDefaults.object(forKey: Key.priorAutohide) as? Bool ?? false
-        dockDefaults.removeObject(forKey: "autohide-delay")
-        dockDefaults.removeObject(forKey: "autohide-time-modifier")
+        // Restore the user's own delay / time-modifier if they had one; otherwise
+        // remove ours so the Dock returns to system defaults (GI-2).
+        if ourDefaults.bool(forKey: Key.hadPriorDelay) {
+            dockDefaults.set(ourDefaults.double(forKey: Key.priorDelay), forKey: "autohide-delay")
+        } else {
+            dockDefaults.removeObject(forKey: "autohide-delay")
+        }
+        if ourDefaults.bool(forKey: Key.hadPriorTimeModifier) {
+            dockDefaults.set(ourDefaults.double(forKey: Key.priorTimeModifier), forKey: "autohide-time-modifier")
+        } else {
+            dockDefaults.removeObject(forKey: "autohide-time-modifier")
+        }
         dockDefaults.set(priorAutohide, forKey: "autohide")
         ourDefaults.set(false, forKey: Key.isManaging)
         ourDefaults.set(false, forKey: Key.capturedPrior)
+        ourDefaults.set(false, forKey: Key.hadPriorDelay)
+        ourDefaults.set(false, forKey: Key.hadPriorTimeModifier)
         restartDock()
     }
 

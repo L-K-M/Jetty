@@ -150,18 +150,22 @@ final class DockPanelController {
     /// The thin band along the dock's edge (and over its along-extent) that triggers
     /// a reveal when the pointer enters it.
     private func pointerInRevealZone(_ point: NSPoint) -> Bool {
-        let f = screen.frame
-        let threshold: CGFloat = 3
+        // Trigger against visibleFrame, not screen.frame, so a top dock reveals at
+        // the menu-bar boundary (where its peek actually sits) rather than only when
+        // the pointer is shoved up into the menu bar (BUG-5). The band is widened a
+        // touch for easier targeting on side/top edges.
+        let vf = screen.visibleFrame
+        let threshold: CGFloat = 4
         let revealed = revealedFrame()
         switch anchor.edge {
         case .bottom:
-            return point.y <= f.minY + threshold && point.x >= revealed.minX && point.x <= revealed.maxX
+            return point.y <= vf.minY + threshold && point.x >= revealed.minX && point.x <= revealed.maxX
         case .top:
-            return point.y >= f.maxY - threshold && point.x >= revealed.minX && point.x <= revealed.maxX
+            return point.y >= vf.maxY - threshold && point.x >= revealed.minX && point.x <= revealed.maxX
         case .left:
-            return point.x <= f.minX + threshold && point.y >= revealed.minY && point.y <= revealed.maxY
+            return point.x <= vf.minX + threshold && point.y >= revealed.minY && point.y <= revealed.maxY
         case .right:
-            return point.x >= f.maxX - threshold && point.y >= revealed.minY && point.y <= revealed.maxY
+            return point.x >= vf.maxX - threshold && point.y >= revealed.minY && point.y <= revealed.maxY
         }
     }
 

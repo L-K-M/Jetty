@@ -12,7 +12,6 @@ private final class DockHostingView: NSHostingView<DockView> {
 /// always-on-top window that floats **over** content on reveal (no screen-space
 /// reservation). Reveal/hide is driven by the pointer location forwarded from the
 /// `EdgeHoverMonitor`, or by an explicit toggle. See PLAN.md §4.
-@MainActor
 final class DockPanelController {
 
     let displayUUID: String

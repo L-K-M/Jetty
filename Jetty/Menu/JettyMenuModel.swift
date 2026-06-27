@@ -5,7 +5,6 @@ import Combine
 /// keyboard selection. Ranking goes through the pure `AppSearch`. The owning
 /// controller's key monitor drives selection/launch so it works on macOS 13+
 /// (`onKeyPress` is 14+). See PLAN.md §8.2.
-@MainActor
 final class JettyMenuModel: ObservableObject {
 
     @Published var query: String = "" { didSet { recompute() } }

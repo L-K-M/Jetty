@@ -5,7 +5,6 @@ import Combine
 /// resolves each target display's anchor into a `DockPanelController`, forwards
 /// pointer moves for auto-hide/reveal, handles tile interactions, the optional
 /// hotkeys, and managing (hiding/restoring) the system Dock. See PLAN.md §3.
-@MainActor
 final class DockController {
 
     private let store: DockStore
@@ -226,7 +225,7 @@ final class DockController {
             if let running {
                 actions.append(DockContextAction(title: "Show") { AppLauncher.activate(running) })
                 actions.append(DockContextAction(title: running.isHidden ? "Unhide" : "Hide") {
-                    running.isHidden ? running.unhide() : running.hide()
+                    if running.isHidden { running.unhide() } else { running.hide() }
                 })
                 actions.append(DockContextAction(title: "Quit", isDestructive: true) { AppLauncher.quit(running) })
                 actions.append(.separator)

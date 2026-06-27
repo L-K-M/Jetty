@@ -13,7 +13,6 @@ private final class KeyableMenuPanel: NSPanel {
 /// for ↑/↓/Return/Esc (so it works on macOS 13+, where SwiftUI `onKeyPress` isn't
 /// available). Closing returns activation to the previously-frontmost app. See
 /// PLAN.md §8.2.
-@MainActor
 final class JettyMenuController {
 
     private let preferences: Preferences

@@ -20,7 +20,6 @@ struct DockTile: Identifiable {
 /// items or the running-app set changes. The merge itself
 /// (`makeTiles`) is a **pure** function over value types, so it's unit-tested
 /// without AppKit; icon resolution is a separate, cached step. See PLAN.md §6–7.
-@MainActor
 final class DockModel: ObservableObject {
 
     @Published private(set) var tiles: [DockTile] = []

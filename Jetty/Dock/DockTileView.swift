@@ -11,6 +11,9 @@ struct DockTileView: View {
     let baseSize: CGFloat
     let scale: CGFloat
     let isHovered: Bool
+    /// The edge this dock is anchored to (from the panel's anchor, not the global
+    /// preference) so per-display docks with different edges lay out correctly (BUG-4).
+    let edge: DockEdge
 
     var onTap: () -> Void
     var onHoverChanged: (Bool) -> Void
@@ -76,8 +79,8 @@ struct DockTileView: View {
         case .separator:
             Rectangle()
                 .fill(Color.primary.opacity(0.18))
-                .frame(width: preferences.edge.isHorizontal ? 1 : baseSize * 0.5,
-                       height: preferences.edge.isHorizontal ? baseSize * 0.5 : 1)
+                .frame(width: edge.isHorizontal ? 1 : baseSize * 0.5,
+                       height: edge.isHorizontal ? baseSize * 0.5 : 1)
         case .clock:
             ClockWidgetView(preferences: preferences, height: baseSize)
         case .jettyMenu:
@@ -120,13 +123,13 @@ struct DockTileView: View {
                     .frame(width: 4, height: 4).padding(2)
             case .bar:
                 RoundedRectangle(cornerRadius: 1).fill(preferences.indicatorColor)
-                    .frame(width: preferences.edge.isHorizontal ? baseSize * 0.4 : 3,
-                           height: preferences.edge.isHorizontal ? 3 : baseSize * 0.4)
+                    .frame(width: edge.isHorizontal ? baseSize * 0.4 : 3,
+                           height: edge.isHorizontal ? 3 : baseSize * 0.4)
                     .padding(1)
             case .underline:
                 RoundedRectangle(cornerRadius: 1).fill(preferences.indicatorColor)
-                    .frame(width: preferences.edge.isHorizontal ? baseSize * 0.6 : 2,
-                           height: preferences.edge.isHorizontal ? 2 : baseSize * 0.6)
+                    .frame(width: edge.isHorizontal ? baseSize * 0.6 : 2,
+                           height: edge.isHorizontal ? 2 : baseSize * 0.6)
             case .none:
                 EmptyView()
             }
@@ -134,7 +137,7 @@ struct DockTileView: View {
     }
 
     private var indicatorAlignment: Alignment {
-        switch preferences.edge {
+        switch edge {
         case .bottom: return .bottom
         case .top: return .top
         case .left: return .leading
@@ -169,14 +172,14 @@ struct DockTileView: View {
 
     private var tileWidth: CGFloat {
         switch tile.kind {
-        case .separator: return preferences.edge.isHorizontal ? 12 : baseSize
+        case .separator: return edge.isHorizontal ? 12 : baseSize
         case .clock: return baseSize * 1.6
         default: return baseSize
         }
     }
 
     private var scaleAnchor: UnitPoint {
-        switch preferences.edge {
+        switch edge {
         case .bottom: return .bottom
         case .top: return .top
         case .left: return .leading

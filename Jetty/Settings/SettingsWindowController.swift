@@ -11,14 +11,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let preferences: Preferences
     private let store: DockStore
     private let systemDock: SystemDockController
+    private let registry: DisplayRegistry
     private let updateChecker: UpdateChecker
 
     private weak var appToRestoreOnClose: NSRunningApplication?
 
-    init(preferences: Preferences, store: DockStore, systemDock: SystemDockController, updateChecker: UpdateChecker) {
+    init(preferences: Preferences, store: DockStore, systemDock: SystemDockController,
+         registry: DisplayRegistry, updateChecker: UpdateChecker) {
         self.preferences = preferences
         self.store = store
         self.systemDock = systemDock
+        self.registry = registry
         self.updateChecker = updateChecker
     }
 
@@ -31,7 +34,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         if window == nil {
             let root = SettingsView(preferences: preferences, store: store,
-                                    systemDock: systemDock, updateChecker: updateChecker)
+                                    systemDock: systemDock, registry: registry, updateChecker: updateChecker)
             let hosting = NSHostingController(rootView: root)
             hosting.sizingOptions = [.minSize]
 

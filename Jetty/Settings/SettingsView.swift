@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var preferences: Preferences
     @ObservedObject var store: DockStore
     let systemDock: SystemDockController
+    let registry: DisplayRegistry
     @ObservedObject var updateChecker: UpdateChecker
 
     var body: some View {
@@ -15,6 +16,8 @@ struct SettingsView: View {
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
             ItemsView(store: store)
                 .tabItem { Label("Items", systemImage: "square.grid.2x2") }
+            DisplaysView(store: store, preferences: preferences, registry: registry)
+                .tabItem { Label("Displays", systemImage: "display.2") }
             MenuView(preferences: preferences)
                 .tabItem { Label("Jetty Menu", systemImage: "magnifyingglass") }
             PermissionsView()

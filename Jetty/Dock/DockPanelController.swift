@@ -35,7 +35,7 @@ final class DockPanelController {
         self.model = model
         self.preferences = preferences
 
-        hostingView = DockHostingView(rootView: DockView(model: model, preferences: preferences))
+        hostingView = DockHostingView(rootView: DockView(model: model, preferences: preferences, anchor: anchor))
         hostingView.translatesAutoresizingMaskIntoConstraints = true
         hostingView.autoresizingMask = [.width, .height]
 
@@ -64,8 +64,12 @@ final class DockPanelController {
     // MARK: Configuration
 
     func update(screen: NSScreen, anchor: DockAnchor) {
+        let edgeChanged = self.anchor.edge != anchor.edge
         self.screen = screen
         self.anchor = anchor
+        // The SwiftUI content lays out along the anchor's edge, so refresh it when the
+        // edge changes (per-display override / MF-1).
+        if edgeChanged { hostingView.rootView = DockView(model: model, preferences: preferences, anchor: anchor) }
         layoutForCurrentState()
     }
 

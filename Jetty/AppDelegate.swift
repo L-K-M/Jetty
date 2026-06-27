@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configuration: .init(owner: "L-K-M", repo: "Jetty", appName: "Jetty")
     )
     private lazy var settingsWindow = SettingsWindowController(
-        preferences: preferences, store: store, systemDock: systemDock, updateChecker: updateChecker)
+        preferences: preferences, store: store, systemDock: systemDock, registry: registry, updateChecker: updateChecker)
 
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?

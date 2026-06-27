@@ -9,6 +9,10 @@ import AppKit
 struct DockView: View {
     @ObservedObject var model: DockModel
     @ObservedObject var preferences: Preferences
+    /// This panel's resolved anchor (per-display). The content lays out along
+    /// `anchor.edge` — not the global `preferences.edge` — so each display's dock can
+    /// use a different edge (BUG-4 / MF-1).
+    let anchor: DockAnchor
 
     @State private var hoveredTileID: String?
     @State private var hoverAlong: CGFloat?            // pointer position along the dock axis (ND-2)
@@ -21,7 +25,7 @@ struct DockView: View {
     static let padding: CGFloat = 10
 
     var body: some View {
-        let edge = preferences.edge
+        let edge = anchor.edge
         let base = CGFloat(preferences.iconSize)
         let spacing = CGFloat(preferences.tileSpacing)
         let resting = base + 2 * Self.padding
@@ -124,7 +128,7 @@ struct DockView: View {
     private func slotTiles(_ slot: DockSlot, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat]) -> some View {
         if slot.tiles.count <= 1, let tile = slot.tiles.first {
             tileView(tile, base: base, spacing: spacing, centers: centers)
-        } else if preferences.edge.isHorizontal {
+        } else if anchor.edge.isHorizontal {
             HStack(spacing: spacing) {
                 ForEach(slot.tiles) { tile in tileView(tile, base: base, spacing: spacing, centers: centers) }
             }
@@ -142,6 +146,7 @@ struct DockView: View {
             baseSize: base,
             scale: scale(center: centers[tile.id], base: base, spacing: spacing),
             isHovered: hoveredTileID == tile.id,
+            edge: anchor.edge,
             onTap: { model.onOpenTile?(tile) },
             onHoverChanged: { inside in hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID) },
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },
@@ -155,8 +160,8 @@ struct DockView: View {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 draggingSlotID = slot.id
-                dragAlong = preferences.edge.isHorizontal ? value.translation.width : value.translation.height
-                dragCross = preferences.edge.isHorizontal ? value.translation.height : value.translation.width
+                dragAlong = anchor.edge.isHorizontal ? value.translation.width : value.translation.height
+                dragCross = anchor.edge.isHorizontal ? value.translation.height : value.translation.width
             }
             .onEnded { _ in
                 commitReorder()
@@ -169,7 +174,7 @@ struct DockView: View {
     private func slotOffset(for index: Int, base: CGFloat, spacing: CGFloat) -> CGSize {
         guard let draggingSlotID,
               let dragged = model.slots.firstIndex(where: { $0.id == draggingSlotID }) else { return .zero }
-        let edge = preferences.edge
+        let edge = anchor.edge
         if index == dragged { return vector(along: dragAlong, cross: dragCross, edge: edge) }
 
         let extents = slotExtents(base: base, spacing: spacing)
@@ -202,7 +207,7 @@ struct DockView: View {
     private func slotExtents(base: CGFloat, spacing: CGFloat) -> [CGFloat] {
         model.slots.map {
             DockLayout.slotExtentAlong(tileKinds: $0.tiles.map(\.kind), baseSize: base,
-                                       spacing: spacing, edge: preferences.edge)
+                                       spacing: spacing, edge: anchor.edge)
         }
     }
 
@@ -224,7 +229,7 @@ struct DockView: View {
         var cursor: CGFloat = 0
         for slot in model.slots {
             for tile in slot.tiles {
-                let extent = DockLayout.tileExtent(kind: tile.kind, baseSize: base, edge: preferences.edge).along
+                let extent = DockLayout.tileExtent(kind: tile.kind, baseSize: base, edge: anchor.edge).along
                 map[tile.id] = cursor + extent / 2
                 cursor += extent + spacing
             }

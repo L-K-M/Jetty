@@ -201,6 +201,13 @@ final class DockController {
         model.onDropFiles = { [weak self] tile, urls in self?.handleDrop(urls, on: tile) }
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
+        model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
+    }
+
+    /// Removes a pinned item with the nostalgic Dock "poof" at the pointer (ND-5).
+    private func removeItemWithPoof(_ id: UUID) {
+        Poof.play(at: NSEvent.mouseLocation)
+        store.removeItem(id: id)
     }
 
     /// Applies a drag-to-reorder: `orderedIDs` is the new order of the reorderable
@@ -327,7 +334,7 @@ final class DockController {
             }
             if let itemID = tile.itemID {
                 actions.append(DockContextAction(title: "Remove from Dock", isDestructive: true) { [weak self] in
-                    self?.store.removeItem(id: itemID)
+                    self?.removeItemWithPoof(itemID)
                 })
             } else {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
@@ -350,7 +357,7 @@ final class DockController {
             if let itemID = tile.itemID {
                 actions.append(.separator)
                 actions.append(DockContextAction(title: "Remove from Dock", isDestructive: true) { [weak self] in
-                    self?.store.removeItem(id: itemID)
+                    self?.removeItemWithPoof(itemID)
                 })
             }
         case .trash:

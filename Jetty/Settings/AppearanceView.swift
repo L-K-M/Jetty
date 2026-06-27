@@ -51,6 +51,7 @@ struct AppearanceView: View {
                 }
                 ColorPicker("Indicator color", selection: jettyColorBinding($preferences.indicatorHex))
                 Toggle("Show name on hover", isOn: $preferences.showLabels)
+                Toggle("Accent glow on hover", isOn: $preferences.accentGlow)
             }
 
             Section("Retro flourishes") {

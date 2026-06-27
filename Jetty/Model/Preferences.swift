@@ -30,6 +30,7 @@ final class Preferences: ObservableObject {
         static let indicatorStyle = IndicatorStyle.dot
         static let indicatorHex = "#FFFFFF"
         static let showLabels = false
+        static let accentGlow = true
         // Position
         static let edge = DockEdge.bottom
         static let alignment = DockAlignment.center
@@ -82,6 +83,7 @@ final class Preferences: ObservableObject {
         static let indicatorStyle = "indicatorStyle"
         static let indicatorHex = "indicatorHex"
         static let showLabels = "showLabels"
+        static let accentGlow = "accentGlow"
         static let edge = "edge"
         static let alignment = "alignment"
         static let offset = "offset"
@@ -129,6 +131,7 @@ final class Preferences: ObservableObject {
     @Published var indicatorStyle: IndicatorStyle { didSet { defaults.set(indicatorStyle.rawValue, forKey: Key.indicatorStyle) } }
     @Published var indicatorHex: String { didSet { defaults.set(indicatorHex, forKey: Key.indicatorHex) } }
     @Published var showLabels: Bool { didSet { defaults.set(showLabels, forKey: Key.showLabels) } }
+    @Published var accentGlow: Bool { didSet { defaults.set(accentGlow, forKey: Key.accentGlow) } }
 
     // MARK: Position
 
@@ -212,6 +215,7 @@ final class Preferences: ObservableObject {
         indicatorStyle = IndicatorStyle(rawValue: string(Key.indicatorStyle, d.indicatorStyle.rawValue)) ?? d.indicatorStyle
         indicatorHex = string(Key.indicatorHex, d.indicatorHex)
         showLabels = bool(Key.showLabels, d.showLabels)
+        accentGlow = bool(Key.accentGlow, d.accentGlow)
 
         edge = DockEdge(rawValue: string(Key.edge, d.edge.rawValue)) ?? d.edge
         alignment = DockAlignment(rawValue: string(Key.alignment, d.alignment.rawValue)) ?? d.alignment

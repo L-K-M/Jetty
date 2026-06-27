@@ -164,11 +164,22 @@ struct DockView: View {
                 dragCross = anchor.edge.isHorizontal ? value.translation.height : value.translation.width
             }
             .onEnded { _ in
-                commitReorder()
+                if !commitDragOutIfNeeded(for: slot) { commitReorder() }
                 draggingSlotID = nil
                 dragAlong = 0
                 dragCross = 0
             }
+    }
+
+    /// If the slot was dragged far enough *off* the dock (perpendicular to its edge),
+    /// remove its item instead of reordering — the classic drag-out-to-remove (ND-5).
+    /// The running-apps cluster is never removed this way.
+    private func commitDragOutIfNeeded(for slot: DockSlot) -> Bool {
+        guard !slot.isRunningGroup, let itemID = slot.itemID else { return false }
+        let base = CGFloat(preferences.iconSize)
+        guard abs(dragCross) > base * 1.6 else { return false }
+        model.onDragOutRemove?(itemID)
+        return true
     }
 
     private func slotOffset(for index: Int, base: CGFloat, spacing: CGFloat) -> CGSize {

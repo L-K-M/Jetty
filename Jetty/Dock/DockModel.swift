@@ -44,6 +44,8 @@ final class DockModel: ObservableObject {
     var onRequestContextActions: ((DockTile) -> [DockContextAction])?
     /// Drag-to-reorder: the new order of the reorderable slots' backing item ids.
     var onReorder: ((_ orderedItemIDs: [UUID]) -> Void)?
+    /// Drag-out-to-remove: the backing item id of a tile dragged off the dock (ND-5).
+    var onDragOutRemove: ((_ itemID: UUID) -> Void)?
 
     /// Count of pinned tiles (those with a backing item). Pinned tiles precede
     /// running-only ones in `tiles`. Kept for tests / sizing.

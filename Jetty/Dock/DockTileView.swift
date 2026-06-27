@@ -25,6 +25,7 @@ struct DockTileView: View {
     var body: some View {
         content
             .frame(width: tileWidth, height: baseSize)
+            .background { accentGlow }
             .scaleEffect(scale, anchor: scaleAnchor)
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
@@ -42,6 +43,28 @@ struct DockTileView: View {
             .accessibilityValue(tile.isRunning && tile.kind == .application ? "Running" : "")
             .accessibilityAddTraits(tile.kind == .separator ? [] : .isButton)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: scale)
+            .animation(.easeOut(duration: 0.2), value: isHovered)
+    }
+
+    // MARK: Accent glow (ND-8)
+
+    /// A soft bloom behind the tile in the icon's dominant color, on hover or while
+    /// the app is the active one. Sampled once and cached per tile.
+    @ViewBuilder
+    private var accentGlow: some View {
+        if preferences.accentGlow, showsGlow, let color = TileAccent.color(for: tile) {
+            RoundedRectangle(cornerRadius: baseSize * 0.28, style: .continuous)
+                .fill(color)
+                .blur(radius: baseSize * 0.32)
+                .opacity(0.6)
+                .scaleEffect(1.08)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var showsGlow: Bool {
+        guard tile.icon != nil else { return false }
+        return isHovered || (tile.isRunning && tile.isActive && tile.kind == .application)
     }
 
     /// VoiceOver label per tile kind (BUG-9).

@@ -93,7 +93,7 @@ struct JettyMenuView: View {
 
     private func resultRow(_ item: AppSearchItem, selected: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+            Image(nsImage: model.icon(for: item))
                 .resizable().frame(width: 28, height: 28)
             Text(item.name).lineLimit(1)
             Spacer()

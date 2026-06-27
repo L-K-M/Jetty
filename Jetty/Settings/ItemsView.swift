@@ -51,6 +51,31 @@ struct ItemsView: View {
             Spacer()
             Text(item.kind.rawValue).font(.caption).foregroundStyle(.secondary)
         }
+        .contextMenu {
+            if item.kind != .separator && item.kind != .runningApps {
+                Button("Rename…") { renameItem(item) }
+            }
+            Button("Remove", role: .destructive) { store.removeItem(id: item.id) }
+        }
+    }
+
+    /// Prompts for a new display name for a pinned item (MF-7).
+    private func renameItem(_ item: DockItem) {
+        let alert = NSAlert()
+        alert.messageText = "Rename"
+        alert.informativeText = "Enter a new name for this dock item."
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = displayName(item)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        store.rename(id: item.id, to: name)
     }
 
     @ViewBuilder

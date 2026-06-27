@@ -52,6 +52,17 @@ final class JettyMenuModel: ObservableObject {
         return recents + rest
     }
 
+    private var iconCache: [String: NSImage] = [:]
+
+    /// App icon for a result row, cached by item id so fast typing/scrolling doesn't
+    /// re-fetch the icon every frame (BUG-10).
+    func icon(for item: AppSearchItem) -> NSImage {
+        if let cached = iconCache[item.id] { return cached }
+        let image = NSWorkspace.shared.icon(forFile: item.url.path)
+        iconCache[item.id] = image
+        return image
+    }
+
     func moveSelection(_ delta: Int) {
         selectedIndex = AppSearch.nextIndex(current: selectedIndex, delta: delta, count: results.count)
     }

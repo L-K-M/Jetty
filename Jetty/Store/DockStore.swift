@@ -64,6 +64,13 @@ final class DockStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Renames a pinned item (MF-7).
+    func rename(id: UUID, to name: String) {
+        guard let index = document.items.firstIndex(where: { $0.id == id }) else { return }
+        document.items[index].displayName = name
+        scheduleSave()
+    }
+
     func moveItem(fromOffsets source: IndexSet, toOffset destination: Int) {
         document.items.move(fromOffsets: source, toOffset: destination)
         scheduleSave()

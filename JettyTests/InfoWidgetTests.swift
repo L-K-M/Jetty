@@ -44,6 +44,37 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertNil(WeatherService.parse(Data("{}".utf8), celsius: true))
     }
 
+    // MARK: Now playing
+
+    func testNowPlayingParsePlaying() {
+        let info: [String: Any] = [
+            "kMRMediaRemoteNowPlayingInfoTitle": "Lateralus",
+            "kMRMediaRemoteNowPlayingInfoArtist": "Tool",
+            "kMRMediaRemoteNowPlayingInfoPlaybackRate": NSNumber(value: 1.0),
+        ]
+        let snap = NowPlayingService.parse(info)
+        XCTAssertEqual(snap?.title, "Lateralus")
+        XCTAssertEqual(snap?.artist, "Tool")
+        XCTAssertEqual(snap?.isPlaying, true)
+    }
+
+    func testNowPlayingParsePausedAndMissingArtist() {
+        let info: [String: Any] = [
+            "kMRMediaRemoteNowPlayingInfoTitle": "Untitled",
+            "kMRMediaRemoteNowPlayingInfoPlaybackRate": NSNumber(value: 0.0),
+        ]
+        let snap = NowPlayingService.parse(info)
+        XCTAssertEqual(snap?.title, "Untitled")
+        XCTAssertNil(snap?.artist)
+        XCTAssertEqual(snap?.isPlaying, false)
+    }
+
+    func testNowPlayingParseRejectsEmpty() {
+        XCTAssertNil(NowPlayingService.parse(nil))
+        XCTAssertNil(NowPlayingService.parse([:]))
+        XCTAssertNil(NowPlayingService.parse(["kMRMediaRemoteNowPlayingInfoTitle": ""]))
+    }
+
     // MARK: Tile geometry
 
     func testWideWidgetsAreWiderThanSquareTiles() {

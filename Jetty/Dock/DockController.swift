@@ -247,6 +247,8 @@ final class DockController {
             openActivityMonitor()
         case .weather:
             openWeatherApp()
+        case .nowPlaying:
+            openMusicApp()
         case .pomodoro:
             PomodoroTimer.shared.tap()
             return   // the timer toggles in place; keep the dock as-is
@@ -377,6 +379,8 @@ final class DockController {
             actions.append(DockContextAction(title: "Open Activity Monitor") { [weak self] in self?.openActivityMonitor() })
         case .weather:
             actions.append(DockContextAction(title: "Open Weather") { [weak self] in self?.openWeatherApp() })
+        case .nowPlaying:
+            actions.append(DockContextAction(title: "Open Music") { [weak self] in self?.openMusicApp() })
         case .pomodoro:
             actions.append(DockContextAction(title: PomodoroTimer.shared.isRunning ? "Pause" : "Start") {
                 PomodoroTimer.shared.tap()
@@ -475,6 +479,13 @@ final class DockController {
             AppLauncher.launchApplication(at: url)
         } else {
             openURLString("https://weather.com")
+        }
+    }
+
+    /// Opens the Music app (now-playing tile).
+    private func openMusicApp() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") {
+            AppLauncher.launchApplication(at: url)
         }
     }
 

@@ -24,6 +24,7 @@ enum DockItemKind: String, Codable {
     case worldClock
     case pomodoro
     case weather
+    case nowPlaying
 }
 
 extension DockItemKind {
@@ -34,6 +35,7 @@ extension DockItemKind {
     /// this so panel sizing and rendering never disagree.**
     var tileWidthFactor: CGFloat {
         switch self {
+        case .nowPlaying: return 2.4
         case .clock, .systemMonitor, .worldClock, .weather: return 1.6
         case .battery, .pomodoro: return 1.4
         default: return 1.0
@@ -43,7 +45,7 @@ extension DockItemKind {
     /// Built-in live widgets render with their own SwiftUI view (no file icon).
     var isLiveWidget: Bool {
         switch self {
-        case .clock, .battery, .systemMonitor, .worldClock, .pomodoro, .weather: return true
+        case .clock, .battery, .systemMonitor, .worldClock, .pomodoro, .weather, .nowPlaying: return true
         default: return false
         }
     }

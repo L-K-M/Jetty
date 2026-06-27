@@ -20,7 +20,7 @@ enum AppLauncher {
         case .trash:
             openTrash()
         case .separator, .clock, .jettyMenu, .runningApps,
-             .battery, .systemMonitor, .worldClock, .pomodoro, .weather:
+             .battery, .systemMonitor, .worldClock, .pomodoro, .weather, .nowPlaying:
             break   // non-launchable built-in / widget tiles
         }
     }

@@ -77,6 +77,7 @@ struct DockTileView: View {
         case .worldClock: return "World clock"
         case .pomodoro: return "Pomodoro timer"
         case .weather: return "Weather"
+        case .nowPlaying: return "Now playing"
         case .jettyMenu: return "Jetty Menu"
         case .trash: return "Trash"
         default: return tile.displayName.isEmpty ? "Dock item" : tile.displayName
@@ -121,6 +122,8 @@ struct DockTileView: View {
             PomodoroWidgetView(height: baseSize, tint: preferences.tintColor)
         case .weather:
             WeatherWidgetView(preferences: preferences, height: baseSize, tint: preferences.tintColor)
+        case .nowPlaying:
+            NowPlayingWidgetView(height: baseSize, tint: preferences.tintColor)
         case .jettyMenu:
             Image(systemName: "square.grid.2x2.fill")
                 .resizable().scaledToFit().padding(baseSize * 0.18)

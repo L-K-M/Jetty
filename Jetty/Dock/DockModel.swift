@@ -154,7 +154,7 @@ final class DockModel: ObservableObject {
             let trash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
             image = NSWorkspace.shared.icon(forFile: trash.path)
         case .separator, .clock, .jettyMenu, .runningApps,
-             .battery, .systemMonitor, .worldClock, .pomodoro, .weather:
+             .battery, .systemMonitor, .worldClock, .pomodoro, .weather, .nowPlaying:
             image = nil   // rendered with custom views
         }
         if let image { iconCache.insert(image, for: cacheKey, now: now) }

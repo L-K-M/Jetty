@@ -42,6 +42,7 @@ struct ItemsView: View {
                         Button("World Clock") { store.addItem(DockItem(kind: .worldClock, displayName: "World Clock")) }
                         Button("Pomodoro") { store.addItem(DockItem(kind: .pomodoro, displayName: "Pomodoro")) }
                         Button("Weather") { store.addItem(DockItem(kind: .weather, displayName: "Weather")) }
+                        Button("Now Playing") { store.addItem(DockItem(kind: .nowPlaying, displayName: "Now Playing")) }
                     }
                 }
                 .frame(width: 100)
@@ -135,6 +136,7 @@ struct ItemsView: View {
         case .worldClock: Image(systemName: "globe.americas")
         case .pomodoro: Image(systemName: "timer")
         case .weather: Image(systemName: "cloud.sun")
+        case .nowPlaying: Image(systemName: "music.note")
         default:
             if let url = item.url ?? item.bundleIdentifier.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().scaledToFit()

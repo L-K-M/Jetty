@@ -15,8 +15,13 @@ enum DockLayout {
 
     // MARK: Content size
 
-    /// The dock's content size for `tileCount` tiles laid along `edge`. Deterministic
-    /// (not SwiftUI `fittingSize`), so panel placement never waits on a layout pass.
+    /// The dock's content size for `tileCount` **uniform** (`iconSize`-square) tiles
+    /// laid along `edge`. Deterministic (not SwiftUI `fittingSize`), so panel
+    /// placement never waits on a layout pass.
+    ///
+    /// Use `contentSize(tiles:…)` instead when the dock contains variable-width tiles
+    /// (the clock is 1.6× wide, a horizontal separator is a thin 12pt gap); this
+    /// uniform form mis-sizes those and is kept for the all-square case and tests.
     static func contentSize(tileCount: Int, iconSize: CGFloat, spacing: CGFloat,
                             padding: CGFloat, edge: DockEdge) -> CGSize {
         let n = CGFloat(max(tileCount, 1))
@@ -24,6 +29,42 @@ enum DockLayout {
         let across = iconSize + 2 * padding
         return edge.isHorizontal ? CGSize(width: along, height: across)
                                  : CGSize(width: across, height: along)
+    }
+
+    /// The dock's content size for an actual list of tile `kinds`, accounting for
+    /// the clock tile (1.6× wide) and thin separators. The *along*-edge dimension
+    /// sums each tile's extent; the *across* dimension fits the widest tile. This is
+    /// what keeps the `NSPanel` exactly as wide as its SwiftUI content, so the clock
+    /// never clips and separators don't leave dead glass (BUG-1).
+    static func contentSize(tiles kinds: [DockItemKind], iconSize: CGFloat, spacing: CGFloat,
+                            padding: CGFloat, edge: DockEdge) -> CGSize {
+        guard !kinds.isEmpty else {
+            return contentSize(tileCount: 1, iconSize: iconSize, spacing: spacing, padding: padding, edge: edge)
+        }
+        let extents = kinds.map { tileExtent(kind: $0, baseSize: iconSize, edge: edge) }
+        let along = extents.reduce(0) { $0 + $1.along }
+            + CGFloat(kinds.count - 1) * spacing + 2 * padding
+        let across = (extents.map { $0.across }.max() ?? iconSize) + 2 * padding
+        return edge.isHorizontal ? CGSize(width: along, height: across)
+                                 : CGSize(width: across, height: along)
+    }
+
+    /// A single tile's size split into the dimension *along* the dock and the one
+    /// *across* it, for `edge`. Mirrors `DockTileView`'s per-kind frame: a horizontal
+    /// separator is a thin 12pt gap, the clock tile is 1.6× wide, everything else is
+    /// a `baseSize` square (tile height is always `baseSize`). **Keep in sync with
+    /// `DockTileView.tileWidth`.**
+    static func tileExtent(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge) -> (along: CGFloat, across: CGFloat) {
+        let frameWidth: CGFloat
+        switch kind {
+        case .separator: frameWidth = edge.isHorizontal ? 12 : baseSize
+        case .clock:     frameWidth = baseSize * 1.6
+        default:         frameWidth = baseSize
+        }
+        let frameHeight = baseSize
+        // Horizontal dock: along-axis is width. Vertical dock: along-axis is height.
+        return edge.isHorizontal ? (along: frameWidth, across: frameHeight)
+                                 : (along: frameHeight, across: frameWidth)
     }
 
     // MARK: Revealed frame

@@ -168,7 +168,7 @@ final class DockPanelController {
     // MARK: Frames
 
     private func contentSize() -> CGSize {
-        let base = DockLayout.contentSize(tileCount: model.tiles.count,
+        let base = DockLayout.contentSize(tiles: model.tiles.map(\.kind),
                                           iconSize: CGFloat(preferences.iconSize),
                                           spacing: CGFloat(preferences.tileSpacing),
                                           padding: DockView.padding,

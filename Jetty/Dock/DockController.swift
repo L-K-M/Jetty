@@ -203,8 +203,11 @@ final class DockController {
         case .trash:
             AppLauncher.moveToTrash(urls)
         default:
-            // Dropped on a non-app tile → pin the files to the dock.
-            for url in urls { store.addItem(makePinnedItem(for: url)) }
+            // Dropped on a non-app tile → pin the files to the dock, skipping any
+            // already-pinned URL so a repeat drop doesn't create duplicate tiles.
+            for url in urls where !isAlreadyPinned(url) {
+                store.addItem(makePinnedItem(for: url))
+            }
         }
     }
 
@@ -212,6 +215,12 @@ final class DockController {
         var item = DockItem.fromFileURL(url)
         item.bookmark = BookmarkResolver.bookmark(for: url)
         return item
+    }
+
+    /// Whether a file/folder URL is already pinned (compared by standardized path).
+    private func isAlreadyPinned(_ url: URL) -> Bool {
+        let target = url.standardizedFileURL
+        return store.items.contains { $0.url?.standardizedFileURL == target }
     }
 
     // MARK: Context menu
@@ -276,7 +285,13 @@ final class DockController {
         guard tile.kind == .application else { return }
         let url = tile.url ?? tile.bundleIdentifier.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
         guard let url else { return }
-        store.addItem(DockItem.application(at: url, name: tile.displayName, bundleIdentifier: tile.bundleIdentifier))
+        // Don't double-pin an app that's already in the dock.
+        if let bundleID = tile.bundleIdentifier, store.contains(bundleIdentifier: bundleID) { return }
+        // Capture a bookmark (like ItemsView / drag-to-pin do) so the pin tracks the
+        // app being moved or renamed, not just its current path.
+        var item = DockItem.application(at: url, name: tile.displayName, bundleIdentifier: tile.bundleIdentifier)
+        item.bookmark = BookmarkResolver.bookmark(for: url)
+        store.addItem(item)
     }
 
     // MARK: Hotkeys / menu

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Jetty is NOT sandboxed: a sandboxed app can never obtain the Accessibility
+	  permission the (later) window-management features need, and the App Store is
+	  out of scope. Distribution is Developer ID + notarization with the Hardened
+	  Runtime. This file deliberately enables no App Sandbox key.
+
+	  The Apple-Events temporary exception lets the Jetty Menu's power commands
+	  (Sleep / Restart / Shut Down / Log Out) drive System Events / loginwindow;
+	  macOS still shows the per-target Automation prompt on first use.
+	-->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

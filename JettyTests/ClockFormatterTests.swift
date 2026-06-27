@@ -1,0 +1,46 @@
+import XCTest
+@testable import Jetty
+
+final class ClockFormatterTests: XCTestCase {
+
+    private let posix = Locale(identifier: "en_US_POSIX")
+    private let gmt = TimeZone(identifier: "GMT")!
+    // 1970-01-01 00:00:00 GMT — a Thursday.
+    private let epoch = Date(timeIntervalSince1970: 0)
+
+    func test24HourHasColonNoMeridiem() {
+        let lines = ClockFormatter.lines(for: epoch, use24Hour: true, showSeconds: false,
+                                         showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
+        XCTAssertTrue(lines.primary.contains(":"))
+        XCTAssertFalse(lines.primary.uppercased().contains("AM"))
+        XCTAssertNil(lines.secondary)
+    }
+
+    func test12HourHasMeridiem() {
+        let lines = ClockFormatter.lines(for: epoch, use24Hour: false, showSeconds: false,
+                                         showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
+        XCTAssertTrue(lines.primary.uppercased().contains("AM"))
+    }
+
+    func testSecondsAddsAnotherColon() {
+        let without = ClockFormatter.lines(for: epoch, use24Hour: true, showSeconds: false,
+                                           showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
+        let with = ClockFormatter.lines(for: epoch, use24Hour: true, showSeconds: true,
+                                        showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
+        XCTAssertEqual(with.primary.filter { $0 == ":" }.count, without.primary.filter { $0 == ":" }.count + 1)
+    }
+
+    func testSecondaryShowsWeekdayAndDate() {
+        let lines = ClockFormatter.lines(for: epoch, use24Hour: true, showSeconds: false,
+                                         showDate: true, showWeekday: true, locale: posix, timeZone: gmt)
+        XCTAssertNotNil(lines.secondary)
+        XCTAssertTrue(lines.secondary?.contains("Thu") ?? false)
+        XCTAssertTrue(lines.secondary?.contains("Jan") ?? false)
+    }
+
+    func testNoSecondaryWhenBothOff() {
+        let lines = ClockFormatter.lines(for: epoch, use24Hour: true, showSeconds: false,
+                                         showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
+        XCTAssertNil(lines.secondary)
+    }
+}

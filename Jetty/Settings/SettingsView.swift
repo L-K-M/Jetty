@@ -22,7 +22,7 @@ struct SettingsView: View {
                 .tabItem { Label("Widgets", systemImage: "rectangle.3.group") }
             MenuView(preferences: preferences)
                 .tabItem { Label("Jetty Menu", systemImage: "magnifyingglass") }
-            PermissionsView()
+            PermissionsView(preferences: preferences)
                 .tabItem { Label("Permissions", systemImage: "lock.shield") }
             AboutView(updateChecker: updateChecker)
                 .tabItem { Label("About", systemImage: "info.circle") }

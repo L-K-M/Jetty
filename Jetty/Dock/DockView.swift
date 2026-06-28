@@ -196,7 +196,10 @@ struct DockView: View {
             isHovered: hoveredTileID == tile.id,
             edge: anchor.edge,
             onTap: { model.onOpenTile?(tile) },
-            onHoverChanged: { inside in hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID) },
+            onHoverChanged: { inside in
+                hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID)
+                if tile.kind == .application && tile.isRunning { model.onHoverApp?(tile, inside) }
+            },
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },
             contextActions: { model.onRequestContextActions?(tile) ?? [] }
         )

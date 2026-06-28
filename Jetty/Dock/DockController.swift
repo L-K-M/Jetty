@@ -32,6 +32,9 @@ final class DockController {
     private lazy var jettyMenu = JettyMenuController(preferences: preferences)
     /// The folder-stack popover (MF-2).
     private lazy var folderStack = FolderStackController(preferences: preferences)
+    /// The hover window-peek popover (live previews + raise/minimize).
+    private lazy var windowPeek = WindowPeekController(preferences: preferences)
+    private var peekWork: DispatchWorkItem?
 
     init(store: DockStore, preferences: Preferences, registry: DisplayRegistry,
          runningApps: RunningAppsModel, systemDock: SystemDockController) {
@@ -77,6 +80,8 @@ final class DockController {
         hoverMonitor.stop()
         trashMonitor.stop()
         LiveSystemStats.shared.setRunning(false)
+        peekWork?.cancel(); peekWork = nil
+        windowPeek.hide()
         folderStack.close()
         panels.values.forEach { $0.close() }
         panels.removeAll()
@@ -226,6 +231,63 @@ final class DockController {
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
         model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
+        model.onHoverApp = { [weak self] tile, entered in self?.handleAppHover(tile, entered: entered) }
+    }
+
+    // MARK: Window peek (hover previews)
+
+    /// The app tile the pointer is currently over (nil → none), coalesced so that
+    /// moving between tiles — which fires an exit and an enter in either order — settles
+    /// on the latest intent before we act (no flicker-close-then-reopen).
+    private var hoveredAppTile: DockTile?
+
+    private func handleAppHover(_ tile: DockTile, entered: Bool) {
+        guard preferences.windowPreviews else { return }
+        if entered, tile.kind == .application, tile.isRunning, pid(for: tile) != nil {
+            hoveredAppTile = tile
+        } else if !entered, hoveredAppTile?.id == tile.id {
+            hoveredAppTile = nil      // only clear when *this* tile is the one we're tracking
+        }
+        scheduleApplyPeek()
+    }
+
+    private func scheduleApplyPeek() {
+        peekWork?.cancel()
+        // Retarget an already-open peek almost immediately; require a short dwell before
+        // the first open so a quick pass over the dock doesn't pop it.
+        let delay = windowPeek.isOpen ? 0.06 : 0.45
+        let work = DispatchWorkItem { [weak self] in self?.applyPeek() }
+        peekWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func applyPeek() {
+        guard let tile = hoveredAppTile, let pid = pid(for: tile) else {
+            windowPeek.scheduleHide()
+            return
+        }
+        presentWindowPeek(tile: tile, pid: pid)
+    }
+
+    private func presentWindowPeek(tile: DockTile, pid: pid_t) {
+        let point = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) }) ?? NSScreen.main else { return }
+        let uuid = registry.uuid(for: screen)
+        let edge = uuid.map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
+        let dock = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: point, size: .zero)
+        let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
+        windowPeek.show(pid: pid, appName: name, near: point, dock: dock, screen: screen, edge: edge)
+    }
+
+    /// The process id behind a running app tile (running-only tiles carry it directly;
+    /// pinned-and-running ones resolve it from the bundle id).
+    private func pid(for tile: DockTile) -> pid_t? {
+        if let pid = tile.pid { return pid }
+        if let bundleID = tile.bundleIdentifier,
+           let running = runningApps.runningApplication(bundleIdentifier: bundleID) {
+            return running.processIdentifier
+        }
+        return nil
     }
 
     /// Pins file/folder/app URLs dropped onto the dock strip or the edge drag-sensor,

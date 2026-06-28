@@ -6,6 +6,7 @@ import CoreGraphics
 /// dock needs none of these — this pane exists so the window-peeking / live-preview
 /// milestones have a home and users understand the trade-offs. See PLAN.md §12.
 struct PermissionsView: View {
+    @ObservedObject var preferences: Preferences
     @State private var accessibilityTrusted = AccessibilityAuthorizer.isTrusted
     @State private var screenRecordingGranted = CGPreflightScreenCaptureAccess()
 
@@ -17,9 +18,15 @@ struct PermissionsView: View {
                     .foregroundStyle(.green)
             }
 
-            Section("Accessibility — for window management (coming soon)") {
+            Section("Window previews") {
+                Toggle("Show window previews when hovering an app", isOn: $preferences.windowPreviews)
+                Text("Hovering a running app's tile shows its open windows. Click a preview to raise it, or use the corner button to minimize.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Accessibility — for click-to-raise / minimize") {
                 statusRow(granted: accessibilityTrusted)
-                Text("Lets Jetty list an app's windows and click-to-raise / minimize them.")
+                Text("Lets Jetty raise and minimize a specific window from its preview. Without it, clicking a preview just brings the app forward.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Request…") { AccessibilityAuthorizer.prompt(); refresh() }
@@ -27,9 +34,9 @@ struct PermissionsView: View {
                 }
             }
 
-            Section("Screen Recording — for live window previews (coming soon)") {
+            Section("Screen Recording — for live preview thumbnails") {
                 statusRow(granted: screenRecordingGranted)
-                Text("Lets Jetty show a live thumbnail when you hover an app's tile. Optional — the dock works fully without it.")
+                Text("Lets the previews show live window thumbnails. Optional — without it you still get the window list and raise/minimize.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Request…") { CGRequestScreenCaptureAccess(); refresh() }

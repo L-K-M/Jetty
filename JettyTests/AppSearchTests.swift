@@ -35,6 +35,23 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(results.map(\.name), ["Books", "Calendar", "Safari"])
     }
 
+    /// Regression: a longer query that is still a prefix must keep matching, and apps
+    /// that can't subsequence-match it must be excluded. Mirrors the user report that
+    /// "IntelliJ" survived "intel" but vanished at "intell" while unrelated apps showed
+    /// — proving the ranking itself is correct (the live bug was query staleness, not
+    /// scoring). "WeChat" has no 'i' and "System Settings" has no 'l', so neither can
+    /// match "intell"/"intelli".
+    func testLongerPrefixQueryStillMatchesAndExcludesNonMatches() {
+        for query in ["intel", "intell", "intelli"] {
+            XCTAssertNotNil(AppSearch.score(query, "IntelliJ IDEA"), "‘\(query)’ should match IntelliJ")
+            XCTAssertNil(AppSearch.score(query, "WeChat"), "‘\(query)’ must not match WeChat")
+            XCTAssertNil(AppSearch.score(query, "System Settings"), "‘\(query)’ must not match System Settings")
+
+            let ranked = AppSearch.rank(query, in: [item("WeChat"), item("System Settings"), item("IntelliJ IDEA")])
+            XCTAssertEqual(ranked.map(\.name), ["IntelliJ IDEA"], "‘\(query)’ should rank only IntelliJ")
+        }
+    }
+
     func testNextIndexWraps() {
         XCTAssertEqual(AppSearch.nextIndex(current: 2, delta: 1, count: 3), 0)
         XCTAssertEqual(AppSearch.nextIndex(current: 0, delta: -1, count: 3), 2)

@@ -122,6 +122,7 @@ final class DockPanelController {
         guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else { return }
         guard NSMouseInRect(point, screen.frame, false) else {
             // Pointer left this screen entirely → hide if shown.
+            cancelScheduledReveal()
             if isRevealed { scheduleHide() }
             return
         }
@@ -134,7 +135,14 @@ final class DockPanelController {
             }
         } else if pointerInRevealZone(point) {
             scheduleReveal()
+        } else {
+            cancelScheduledReveal()
         }
+    }
+
+    private func cancelScheduledReveal() {
+        revealWork?.cancel()
+        revealWork = nil
     }
 
     private func scheduleReveal() {

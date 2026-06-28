@@ -54,8 +54,41 @@ struct SemanticVersion: Comparable, Equatable, CustomStringConvertible {
         case (nil, nil): return false
         case (nil, _?):  return false   // final > pre-release
         case (_?, nil):  return true    // pre-release < final
-        case let (l?, r?): return l < r // both pre-release: lexical fallback
+        case let (l?, r?): return comparePrerelease(l, r) == .orderedAscending
         }
+    }
+
+    private static func comparePrerelease(_ lhs: String, _ rhs: String) -> ComparisonResult {
+        let lParts = lhs.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        let rParts = rhs.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        let count = max(lParts.count, rParts.count)
+        for index in 0..<count {
+            guard index < lParts.count else { return .orderedAscending }
+            guard index < rParts.count else { return .orderedDescending }
+            let l = lParts[index]
+            let r = rParts[index]
+            if l == r { continue }
+            let lNumber = numericPrereleaseIdentifier(l)
+            let rNumber = numericPrereleaseIdentifier(r)
+            switch (lNumber, rNumber) {
+            case let (l?, r?):
+                if l != r { return l < r ? .orderedAscending : .orderedDescending }
+            case (_?, nil):
+                return .orderedAscending
+            case (nil, _?):
+                return .orderedDescending
+            case (nil, nil):
+                let result = l.compare(r)
+                if result != .orderedSame { return result }
+            }
+        }
+        return .orderedSame
+    }
+
+    private static func numericPrereleaseIdentifier(_ value: String) -> Int? {
+        guard !value.isEmpty, value.allSatisfy({ $0.isNumber }) else { return nil }
+        if value.count > 1, value.first == "0" { return nil }
+        return Int(value)
     }
 
     /// Semantic equality (so `1.2` equals `1.2.0`), independent of the raw string.

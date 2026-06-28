@@ -5,6 +5,14 @@ struct WeatherSnapshot: Equatable {
     let temperature: Double
     let code: Int          // WMO weather-interpretation code
     let celsius: Bool
+    let key: String
+
+    init(temperature: Double, code: Int, celsius: Bool, key: String = "") {
+        self.temperature = temperature
+        self.code = code
+        self.celsius = celsius
+        self.key = key
+    }
 }
 
 /// Fetches current weather from Open-Meteo (free, no API key, no account). Caches the
@@ -17,16 +25,23 @@ final class WeatherService: ObservableObject {
 
     @Published private(set) var snapshot: WeatherSnapshot?
 
-    private var inFlight = false
+    private var inFlightKey: String?
+    private var requestedKey: String?
     private var lastKey: String?
     private var lastFetch: Date?
+
+    static func key(latitude: Double, longitude: Double, celsius: Bool) -> String {
+        "\(latitude),\(longitude),\(celsius)"
+    }
 
     /// Refreshes if a location is set and the cache is stale or its key changed.
     func refreshIfStale(latitude: Double, longitude: Double, celsius: Bool) {
         guard latitude != 0 || longitude != 0 else { return }
-        let key = "\(latitude),\(longitude),\(celsius)"
+        let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
+        requestedKey = key
+        if snapshot?.key != key { snapshot = nil }
         if key == lastKey, let last = lastFetch, Date().timeIntervalSince(last) < 15 * 60 { return }
-        guard !inFlight else { return }
+        guard inFlightKey != key else { return }
         fetch(latitude: latitude, longitude: longitude, celsius: celsius, key: key)
     }
 
@@ -35,27 +50,28 @@ final class WeatherService: ObservableObject {
         let string = "https://api.open-meteo.com/v1/forecast?latitude=\(latitude)&longitude=\(longitude)"
             + "&current=temperature_2m,weather_code&temperature_unit=\(unit)"
         guard let url = URL(string: string) else { return }
-        inFlight = true
+        inFlightKey = key
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            let parsed = Self.parse(data, celsius: celsius)
+            let parsed = Self.parse(data, celsius: celsius, key: key)
             DispatchQueue.main.async {
-                self?.inFlight = false
-                guard let parsed else { return }
-                self?.snapshot = parsed
-                self?.lastKey = key
-                self?.lastFetch = Date()
+                guard let self else { return }
+                if self.inFlightKey == key { self.inFlightKey = nil }
+                guard let parsed, self.requestedKey == key else { return }
+                self.snapshot = parsed
+                self.lastKey = key
+                self.lastFetch = Date()
             }
         }.resume()
     }
 
     /// Parses an Open-Meteo response body into a snapshot (pure aside from JSON).
-    static func parse(_ data: Data?, celsius: Bool) -> WeatherSnapshot? {
+    static func parse(_ data: Data?, celsius: Bool, key: String = "") -> WeatherSnapshot? {
         guard let data,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let current = json["current"] as? [String: Any],
               let temp = (current["temperature_2m"] as? NSNumber)?.doubleValue else { return nil }
         let code = (current["weather_code"] as? NSNumber)?.intValue ?? 0
-        return WeatherSnapshot(temperature: temp, code: code, celsius: celsius)
+        return WeatherSnapshot(temperature: temp, code: code, celsius: celsius, key: key)
     }
 
     /// WMO weather-interpretation code → SF Symbol. Pure, unit-tested.

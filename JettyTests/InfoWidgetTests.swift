@@ -38,6 +38,14 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(snap?.celsius, true)
     }
 
+    func testWeatherParseCarriesRequestKey() {
+        let json = """
+        { "current": { "temperature_2m": 21.4, "weather_code": 3 } }
+        """.data(using: .utf8)
+        let snap = WeatherService.parse(json, celsius: false, key: "51,-0.1,false")
+        XCTAssertEqual(snap?.key, "51,-0.1,false")
+    }
+
     func testWeatherParseRejectsGarbage() {
         XCTAssertNil(WeatherService.parse(nil, celsius: true))
         XCTAssertNil(WeatherService.parse(Data("not json".utf8), celsius: true))

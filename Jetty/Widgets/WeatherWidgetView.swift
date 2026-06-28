@@ -18,6 +18,9 @@ struct WeatherWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onAppear { refresh() }
+        .onChange(of: preferences.weatherLatitude) { _ in refresh() }
+        .onChange(of: preferences.weatherLongitude) { _ in refresh() }
+        .onChange(of: preferences.weatherUseCelsius) { _ in refresh() }
         .help("Weather")
     }
 
@@ -27,6 +30,9 @@ struct WeatherWidgetView: View {
 
     @ViewBuilder
     private var content: some View {
+        let key = WeatherService.key(latitude: preferences.weatherLatitude,
+                                     longitude: preferences.weatherLongitude,
+                                     celsius: preferences.weatherUseCelsius)
         if !hasLocation {
             VStack(spacing: 2) {
                 Image(systemName: "location.slash").font(.system(size: max(11, height * 0.3)))
@@ -34,7 +40,7 @@ struct WeatherWidgetView: View {
                 Text("Set").font(.system(size: max(8, height * 0.18), weight: .medium))
                     .foregroundStyle(.secondary)
             }
-        } else if let snap = service.snapshot {
+        } else if let snap = service.snapshot, snap.key == key {
             VStack(spacing: 1) {
                 Image(systemName: WeatherService.symbol(forCode: snap.code))
                     .font(.system(size: max(13, height * 0.34)))

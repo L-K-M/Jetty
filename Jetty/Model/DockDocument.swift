@@ -23,9 +23,22 @@ struct DockDocument: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? DockDocument.currentVersion
-        items = try c.decodeIfPresent([DockItem].self, forKey: .items) ?? []
-        anchorsByDisplayUUID = try c.decodeIfPresent([String: DockAnchor].self, forKey: .anchorsByDisplayUUID) ?? [:]
+        // Lossy decoding (ISSUE-8): a single item/anchor with an unknown future enum
+        // raw value (e.g. a `kind` from a newer build, or a hand-edited file) is
+        // dropped instead of failing the whole document — so Jetty never silently
+        // "loses the dock" and falls back to defaults over one bad entry.
+        let rawItems = try c.decodeIfPresent([Failable<DockItem>].self, forKey: .items) ?? []
+        items = rawItems.compactMap(\.value)
+        let rawAnchors = try c.decodeIfPresent([String: Failable<DockAnchor>].self, forKey: .anchorsByDisplayUUID) ?? [:]
+        anchorsByDisplayUUID = rawAnchors.compactMapValues(\.value)
     }
 
     private enum CodingKeys: String, CodingKey { case version, items, anchorsByDisplayUUID }
+}
+
+/// Decodes `T` if possible, else `nil` — never throws, so it can be used inside an
+/// array/dictionary decode to skip undecodable elements (ISSUE-8).
+private struct Failable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }

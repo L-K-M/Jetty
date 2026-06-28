@@ -272,6 +272,9 @@ final class DockController {
             AppLauncher.activate(running)
         } else if let appURL {
             AppLauncher.launchApplication(at: appURL)
+        } else if let pid = tile.pid, let running = runningApps.runningApplication(pid: pid) {
+            // Bundle-less running app (no bundle id or app URL) → activate by PID (ISSUE-1).
+            AppLauncher.activate(running)
         }
     }
 

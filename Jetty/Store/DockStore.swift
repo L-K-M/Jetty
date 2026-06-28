@@ -125,8 +125,10 @@ final class DockStore: ObservableObject {
         do {
             try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(),
                                             withIntermediateDirectories: true)
-            // Keep one backup of the prior good file.
-            if fileManager.fileExists(atPath: fileURL.path) {
+            // Keep one backup of the prior good file — but ONLY snapshot a primary that
+            // still decodes. Otherwise a corrupt primary (which we may have just
+            // recovered from `.bak`) would overwrite the last good backup (ISSUE-9).
+            if fileManager.fileExists(atPath: fileURL.path), Self.fileDecodes(fileURL) {
                 let bak = fileURL.appendingPathExtension("bak")
                 try? fileManager.removeItem(at: bak)
                 try? fileManager.copyItem(at: fileURL, to: bak)
@@ -150,6 +152,13 @@ final class DockStore: ObservableObject {
         if let doc = decode(url) { return doc }
         // Fall back to the backup if the primary is missing/corrupt.
         return decode(url.appendingPathExtension("bak"))
+    }
+
+    /// Whether the file at `url` exists and decodes as a `DockDocument` — used to avoid
+    /// backing up a corrupt primary over the last good backup (ISSUE-9).
+    static func fileDecodes(_ url: URL) -> Bool {
+        guard let data = try? Data(contentsOf: url) else { return false }
+        return (try? JSONDecoder().decode(DockDocument.self, from: data)) != nil
     }
 
     static var defaultURL: URL {

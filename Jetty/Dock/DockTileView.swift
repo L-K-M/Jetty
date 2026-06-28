@@ -125,7 +125,7 @@ struct DockTileView: View {
         case .nowPlaying:
             NowPlayingWidgetView(height: baseSize, tint: preferences.tintColor)
         case .jettyMenu:
-            Image(systemName: "square.grid.2x2.fill")
+            Image(systemName: JettyMenuGlyph.resolved(preferences.jettyMenuSymbol))
                 .resizable().scaledToFit().padding(baseSize * 0.18)
                 .foregroundStyle(preferences.tintColor)
         default:

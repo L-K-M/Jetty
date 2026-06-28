@@ -12,6 +12,9 @@ struct DockTile: Identifiable {
     var itemID: UUID?
     var isRunning: Bool
     var isActive: Bool
+    /// Process id for a running-only tile, so a bundle-less app can still be activated
+    /// by PID when there's no bundle id or app URL (ISSUE-1).
+    var pid: pid_t?
     /// A user-chosen icon override path, carried from the backing item (MF-7).
     var customIconPath: String?
     /// For `.folder` tiles, how the stack popover presents its contents (MF-2).
@@ -88,7 +91,7 @@ final class DockModel: ObservableObject {
             if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
             return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
                             bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
-                            isRunning: true, isActive: info.isActive,
+                            isRunning: true, isActive: info.isActive, pid: info.pid,
                             customIconPath: nil, folderDisplay: nil, icon: nil)
         }
 
@@ -114,7 +117,7 @@ final class DockModel: ObservableObject {
             let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
             let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,
                                 bundleIdentifier: item.bundleIdentifier, url: item.url, itemID: item.id,
-                                isRunning: info != nil, isActive: info?.isActive ?? false,
+                                isRunning: info != nil, isActive: info?.isActive ?? false, pid: nil,
                                 customIconPath: item.customIconPath, folderDisplay: item.folderDisplay, icon: nil)
             slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))

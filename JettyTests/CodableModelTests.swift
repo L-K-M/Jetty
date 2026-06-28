@@ -35,6 +35,45 @@ final class CodableModelTests: XCTestCase {
         XCTAssertNotNil(item.id)   // synthesized when absent
     }
 
+    func testDecodesLossilyDroppingUnknownKindButKeepingValidItems() throws {
+        // A document from a hypothetical newer build with an unknown tile kind: the
+        // unknown item is dropped; the valid ones survive (ISSUE-8).
+        let json = Data("""
+        { "version": 1, "items": [
+            { "kind": "application", "bundleIdentifier": "com.apple.finder" },
+            { "kind": "teleporter" },
+            { "kind": "clock" }
+        ] }
+        """.utf8)
+        let doc = try JSONDecoder().decode(DockDocument.self, from: json)
+        XCTAssertEqual(doc.items.count, 2)
+        XCTAssertEqual(doc.items.map(\.kind), [.application, .clock])
+    }
+
+    func testDecodesLossilyDroppingUnknownAnchorEdge() throws {
+        let json = Data("""
+        { "version": 1, "anchorsByDisplayUUID": {
+            "GOOD": { "displayUUID": "GOOD", "edge": "left", "alignment": "center", "offset": 0, "inset": 0 },
+            "BAD":  { "displayUUID": "BAD", "edge": "diagonal" }
+        } }
+        """.utf8)
+        let doc = try JSONDecoder().decode(DockDocument.self, from: json)
+        XCTAssertEqual(doc.anchorsByDisplayUUID.count, 1)
+        XCTAssertEqual(doc.anchorsByDisplayUUID["GOOD"]?.edge, .left)
+        XCTAssertNil(doc.anchorsByDisplayUUID["BAD"])
+    }
+
+    func testUnknownFolderDisplayKeepsItem() throws {
+        // An unknown folderDisplay shouldn't drop the whole folder item (ISSUE-8).
+        let json = Data("""
+        { "kind": "folder", "displayName": "Docs", "folderDisplay": "spiral" }
+        """.utf8)
+        let item = try JSONDecoder().decode(DockItem.self, from: json)
+        XCTAssertEqual(item.kind, .folder)
+        XCTAssertEqual(item.displayName, "Docs")
+        XCTAssertNil(item.folderDisplay)
+    }
+
     func testDockAnchorClampsInset() {
         XCTAssertEqual(DockAnchor(inset: -50).inset, 0)
         XCTAssertEqual(DockAnchor(inset: 99999).inset, 400)

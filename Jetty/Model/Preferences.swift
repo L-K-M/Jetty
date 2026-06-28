@@ -39,12 +39,12 @@ final class Preferences: ObservableObject {
         // Behavior
         static let autoHide = true
         static let revealTrigger = RevealTrigger.both
-        static let revealDelayMs = 120.0
+        static let revealDelayMs = 60.0
         static let hideDelayMs = 350.0
         static let displayScope = DisplayScope.mainOnly
         static let showRunningApps = true
         static let manageSystemDock = true
-        static let animationMs = 180.0
+        static let animationMs = 140.0
         // Decorations / CRT (Zap-style retro flourishes)
         static let decorationStyle = DecorationStyle.none
         static let decorationPosition = DecorationPosition.topTrailing
@@ -58,6 +58,8 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = false
         static let clockShowWeekday = false
         static let clockAnalog = false
+        // Jetty Menu tile
+        static let jettyMenuSymbol = JettyMenuGlyph.fallback
         // Hotkeys
         static let toggleHotkey = HotkeyBinding.defaultToggle
         static let menuHotkey = HotkeyBinding.defaultMenu
@@ -107,6 +109,7 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = "clockUse24Hour"
         static let clockShowWeekday = "clockShowWeekday"
         static let clockAnalog = "clockAnalog"
+        static let jettyMenuSymbol = "jettyMenuSymbol"
         static let toggleHotkey = "toggleHotkey"
         static let menuHotkey = "menuHotkey"
         static let worldClockTimeZone = "worldClockTimeZone"
@@ -167,6 +170,7 @@ final class Preferences: ObservableObject {
     @Published var clockUse24Hour: Bool { didSet { defaults.set(clockUse24Hour, forKey: Key.clockUse24Hour) } }
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
     @Published var clockAnalog: Bool { didSet { defaults.set(clockAnalog, forKey: Key.clockAnalog) } }
+    @Published var jettyMenuSymbol: String { didSet { defaults.set(jettyMenuSymbol, forKey: Key.jettyMenuSymbol) } }
 
     // MARK: Hotkeys
 
@@ -242,6 +246,7 @@ final class Preferences: ObservableObject {
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
         clockShowWeekday = bool(Key.clockShowWeekday, d.clockShowWeekday)
         clockAnalog = bool(Key.clockAnalog, d.clockAnalog)
+        jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)
         toggleHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.toggleHotkey), fallback: d.toggleHotkey)
         menuHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.menuHotkey), fallback: d.menuHotkey)
         worldClockTimeZone = string(Key.worldClockTimeZone, d.worldClockTimeZone)

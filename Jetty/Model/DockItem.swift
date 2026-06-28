@@ -41,7 +41,9 @@ struct DockItem: Codable, Identifiable, Equatable {
         bookmark = try c.decodeIfPresent(Data.self, forKey: .bookmark)
         url = try c.decodeIfPresent(URL.self, forKey: .url)
         bundleIdentifier = try c.decodeIfPresent(String.self, forKey: .bundleIdentifier)
-        folderDisplay = try c.decodeIfPresent(FolderStackStyle.self, forKey: .folderDisplay)
+        // Tolerant: an unknown folder-display raw value keeps the item (just resets the
+        // style) rather than dropping it (ISSUE-8).
+        folderDisplay = (try? c.decodeIfPresent(FolderStackStyle.self, forKey: .folderDisplay)) ?? nil
         customIconPath = try c.decodeIfPresent(String.self, forKey: .customIconPath)
     }
 

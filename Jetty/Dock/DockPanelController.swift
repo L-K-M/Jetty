@@ -56,9 +56,14 @@ final class DockPanelController {
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 80))
         container.autoresizesSubviews = true
+        // Layer-back so the reveal/hide slide composites on the GPU instead of being
+        // redrawn on the CPU each frame — smoother, less stuttery (perf).
+        container.wantsLayer = true
+        hostingView.wantsLayer = true
         hostingView.frame = container.bounds
         container.addSubview(hostingView)
         panel.contentView = container
+        recomputeFrames()
     }
 
     // MARK: Configuration
@@ -70,18 +75,21 @@ final class DockPanelController {
         // The SwiftUI content lays out along the anchor's edge, so refresh it when the
         // edge changes (per-display override / MF-1).
         if edgeChanged { hostingView.rootView = DockView(model: model, preferences: preferences, anchor: anchor) }
+        recomputeFrames()
         layoutForCurrentState()
     }
 
     /// Recomputes the frame for the current revealed/hidden state (call after the
     /// tile set or appearance changes).
     func layoutForCurrentState() {
+        recomputeFrames()
         let frame = isRevealed ? revealedFrame() : hiddenFrame()
         panel.setFrame(frame, display: true)
         if !panel.isVisible { panel.orderFrontRegardless() }
     }
 
     func showInitial() {
+        recomputeFrames()
         if preferences.autoHide {
             isRevealed = false
             panel.setFrame(hiddenFrame(), display: false)
@@ -140,7 +148,15 @@ final class DockPanelController {
                 hideWork?.cancel(); hideWork = nil
             }
         } else if pointerInRevealZone(point) {
-            scheduleReveal()
+            // Slamming the pointer to the physical screen edge over the dock is
+            // unambiguous intent — reveal immediately, bypassing the hover delay. A
+            // mere near-edge hover still uses the short delay (avoids accidental pops).
+            if pointerAtHardEdge(point) {
+                revealWork?.cancel(); revealWork = nil
+                reveal()
+            } else {
+                scheduleReveal()
+            }
         } else {
             cancelScheduledReveal()
         }
@@ -170,20 +186,40 @@ final class DockPanelController {
     private func pointerInRevealZone(_ point: NSPoint) -> Bool {
         // Trigger against visibleFrame, not screen.frame, so a top dock reveals at
         // the menu-bar boundary (where its peek actually sits) rather than only when
-        // the pointer is shoved up into the menu bar (BUG-5). The band is widened a
-        // touch for easier targeting on side/top edges.
+        // the pointer is shoved up into the menu bar (BUG-5). The band and the
+        // along-extent are widened a touch for easier targeting (perf/feel).
         let vf = screen.visibleFrame
-        let threshold: CGFloat = 4
-        let revealed = revealedFrame()
+        let threshold: CGFloat = 8
+        let m: CGFloat = 16   // along-extent margin so near-misses still trigger
+        let r = revealedFrame()
         switch anchor.edge {
         case .bottom:
-            return point.y <= vf.minY + threshold && point.x >= revealed.minX && point.x <= revealed.maxX
+            return point.y <= vf.minY + threshold && point.x >= r.minX - m && point.x <= r.maxX + m
         case .top:
-            return point.y >= vf.maxY - threshold && point.x >= revealed.minX && point.x <= revealed.maxX
+            return point.y >= vf.maxY - threshold && point.x >= r.minX - m && point.x <= r.maxX + m
         case .left:
-            return point.x <= vf.minX + threshold && point.y >= revealed.minY && point.y <= revealed.maxY
+            return point.x <= vf.minX + threshold && point.y >= r.minY - m && point.y <= r.maxY + m
         case .right:
-            return point.x >= vf.maxX - threshold && point.y >= revealed.minY && point.y <= revealed.maxY
+            return point.x >= vf.maxX - threshold && point.y >= r.minY - m && point.y <= r.maxY + m
+        }
+    }
+
+    /// Whether the pointer is pinned at the *physical* screen edge over the dock's
+    /// extent — an unambiguous reveal intent that bypasses the hover delay.
+    private func pointerAtHardEdge(_ point: NSPoint) -> Bool {
+        let f = screen.frame
+        let slop: CGFloat = 1.5
+        let m: CGFloat = 16
+        let r = revealedFrame()
+        switch anchor.edge {
+        case .bottom:
+            return point.y <= f.minY + slop && point.x >= r.minX - m && point.x <= r.maxX + m
+        case .top:
+            return point.y >= f.maxY - slop && point.x >= r.minX - m && point.x <= r.maxX + m
+        case .left:
+            return point.x <= f.minX + slop && point.y >= r.minY - m && point.y <= r.maxY + m
+        case .right:
+            return point.x >= f.maxX - slop && point.y >= r.minY - m && point.y <= r.maxY + m
         }
     }
 
@@ -203,13 +239,20 @@ final class DockPanelController {
             : CGSize(width: base.width + extra, height: base.height)
     }
 
-    private func revealedFrame() -> CGRect {
-        DockLayout.revealedFrame(anchor: anchor, contentSize: contentSize(), in: screen.visibleFrame)
+    // Cached frames so per-mouse-move hit-testing is pure rect math (no contentSize
+    // recompute on every pointer event). Refreshed by `recomputeFrames()` whenever the
+    // tiles, appearance, screen, or anchor change.
+    private var revealedFrameValue: CGRect = .zero
+    private var hiddenFrameValue: CGRect = .zero
+
+    private func recomputeFrames() {
+        let content = contentSize()
+        revealedFrameValue = DockLayout.revealedFrame(anchor: anchor, contentSize: content, in: screen.visibleFrame)
+        hiddenFrameValue = DockLayout.hiddenFrame(edge: anchor.edge, revealedFrame: revealedFrameValue, in: screen.visibleFrame)
     }
 
-    private func hiddenFrame() -> CGRect {
-        DockLayout.hiddenFrame(edge: anchor.edge, revealedFrame: revealedFrame(), in: screen.visibleFrame)
-    }
+    private func revealedFrame() -> CGRect { revealedFrameValue }
+    private func hiddenFrame() -> CGRect { hiddenFrameValue }
 
     private func setFrame(_ frame: CGRect, animated: Bool) {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

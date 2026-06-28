@@ -50,6 +50,7 @@ final class JettyMenuController {
         model.onWebSearch = { [weak self] query in self?.webSearch(query) }
         model.onRunCommand = { [weak self] command in self?.runCommand(command) }
         CurrencyService.shared.ensureFresh()
+        appIndex.reload()   // pick up newly installed/removed apps each open (ISSUE-6)
 
         let panel = self.panel ?? makePanel()
         self.panel = panel

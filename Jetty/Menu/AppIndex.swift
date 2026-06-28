@@ -33,16 +33,28 @@ final class AppIndex: ObservableObject {
 
         var items: [AppSearchItem] = []
         var seen = Set<String>()
+
+        func add(_ url: URL) {
+            let bundleID = Bundle(url: url)?.bundleIdentifier
+            let key = bundleID ?? url.path
+            guard !seen.contains(key) else { return }
+            seen.insert(key)
+            items.append(AppSearchItem(name: url.deletingPathExtension().lastPathComponent,
+                                       bundleID: bundleID, url: url))
+        }
+
         for dir in dirs {
-            guard let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil,
+            guard let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey],
                                                              options: [.skipsHiddenFiles]) else { continue }
-            for url in contents where url.pathExtension == "app" {
-                let bundleID = Bundle(url: url)?.bundleIdentifier
-                let key = bundleID ?? url.path
-                if seen.contains(key) { continue }
-                seen.insert(key)
-                let name = url.deletingPathExtension().lastPathComponent
-                items.append(AppSearchItem(name: name, bundleID: bundleID, url: url))
+            for url in contents {
+                if url.pathExtension == "app" {
+                    add(url)
+                } else if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    // One level deeper, e.g. /Applications/SomeVendor/App.app (ISSUE-6).
+                    let sub = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil,
+                                                           options: [.skipsHiddenFiles])) ?? []
+                    for child in sub where child.pathExtension == "app" { add(child) }
+                }
             }
         }
         return items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }

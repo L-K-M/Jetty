@@ -11,6 +11,37 @@ struct MenuView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
 
+            Section("Jetty Menu icon") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 42), spacing: 8)], spacing: 8) {
+                    ForEach(JettyMenuGlyph.availableOptions, id: \.self) { symbol in
+                        Button { preferences.jettyMenuSymbol = symbol } label: {
+                            Image(systemName: symbol)
+                                .font(.system(size: 18))
+                                .frame(width: 40, height: 40)
+                                .background(isSelected(symbol) ? preferences.tintColor.opacity(0.25) : Color.secondary.opacity(0.12),
+                                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(isSelected(symbol) ? preferences.tintColor : .clear, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                        .help(symbol)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                HStack {
+                    Text("Custom symbol")
+                    TextField("any SF Symbol name", text: $preferences.jettyMenuSymbol)
+                        .textFieldStyle(.roundedBorder)
+                    Image(systemName: JettyMenuGlyph.resolved(preferences.jettyMenuSymbol))
+                        .foregroundStyle(preferences.tintColor)
+                        .frame(width: 22)
+                }
+                Text("Pick an icon above, or type any SF Symbol name (browse them in Apple's free SF Symbols app). Unknown names fall back to the default.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Power commands") {
                 ForEach(PowerCommand.allCases) { command in
                     Label {
@@ -32,6 +63,10 @@ struct MenuView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func isSelected(_ symbol: String) -> Bool {
+        preferences.jettyMenuSymbol.trimmingCharacters(in: .whitespacesAndNewlines) == symbol
     }
 
     private var menuShortcutSuffix: String {

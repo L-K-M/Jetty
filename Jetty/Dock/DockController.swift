@@ -325,9 +325,13 @@ final class DockController {
         let point = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
         guard let screen else { return }
-        let edge = registry.uuid(for: screen).map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
+        let uuid = registry.uuid(for: screen)
+        let edge = uuid.map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
+        // Open the popover clear of the dock strip (using the dock's actual on-screen
+        // frame), not overlapping it.
+        let dockFrame = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: point, size: .zero)
         folderStack.toggle(folder: url, style: tile.folderDisplay ?? .grid,
-                           near: point, screen: screen, edge: edge)
+                           near: point, dock: dockFrame, screen: screen, edge: edge)
     }
 
     private func handleDrop(_ urls: [URL], on tile: DockTile) {
@@ -492,7 +496,11 @@ final class DockController {
     }
 
     func openJettyMenu() {
-        let screen = NSScreen.main ?? NSScreen.screens.first
+        // Open on the screen the pointer is on (where the Jetty button was clicked, or
+        // where the menu hotkey was pressed), not always the primary display.
+        let point = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+            ?? NSScreen.main ?? NSScreen.screens.first
         jettyMenu.toggle(on: screen)
     }
 

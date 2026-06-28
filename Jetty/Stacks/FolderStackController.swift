@@ -12,6 +12,7 @@ final class FolderStackController {
     private var panel: NSPanel?
     private var model: FolderStackModel?
     private var globalMonitor: Any?
+    private var localMonitor: Any?
     private var keyMonitor: Any?
     private(set) var isOpen = false
     private var rootFolder: URL?
@@ -21,12 +22,12 @@ final class FolderStackController {
     }
 
     /// Opens the stack for `folder`, or closes it if it's already showing that folder.
-    func toggle(folder: URL, style: FolderStackStyle, near point: CGPoint, screen: NSScreen, edge: DockEdge) {
+    func toggle(folder: URL, style: FolderStackStyle, near point: CGPoint, dock: CGRect, screen: NSScreen, edge: DockEdge) {
         if isOpen, rootFolder == folder { close(); return }
-        show(folder: folder, style: style, near: point, screen: screen, edge: edge)
+        show(folder: folder, style: style, near: point, dock: dock, screen: screen, edge: edge)
     }
 
-    func show(folder: URL, style: FolderStackStyle, near point: CGPoint, screen: NSScreen, edge: DockEdge) {
+    func show(folder: URL, style: FolderStackStyle, near point: CGPoint, dock: CGRect, screen: NSScreen, edge: DockEdge) {
         close()
 
         let model = FolderStackModel(style: style)
@@ -52,7 +53,7 @@ final class FolderStackController {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.setContentSize(size)
-        panel.setFrameOrigin(FolderStack.origin(for: size, near: point, edge: edge, in: screen.visibleFrame))
+        panel.setFrameOrigin(FolderStack.origin(for: size, near: point, dock: dock, edge: edge, in: screen.visibleFrame))
         panel.orderFrontRegardless()
 
         self.panel = panel
@@ -69,6 +70,7 @@ final class FolderStackController {
         rootFolder = nil
         model = nil
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
+        if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor = nil }
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         panel?.orderOut(nil)
         panel = nil
@@ -95,6 +97,14 @@ final class FolderStackController {
         // A click in any other app/window dismisses the stack (Spotlight-style).
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.close()
+        }
+        // A click that lands on one of Jetty's *own* windows (e.g. the dock, which the
+        // popover opens right next to) isn't seen by the global monitor — so also watch
+        // local clicks and dismiss when they fall outside the popover itself.
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, let panel = self.panel else { return event }
+            if !panel.frame.contains(NSEvent.mouseLocation) { self.close() }
+            return event
         }
         // Escape dismisses while Jetty has focus; harmless otherwise.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in

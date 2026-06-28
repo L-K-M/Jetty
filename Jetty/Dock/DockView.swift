@@ -35,7 +35,9 @@ struct DockView: View {
         ZStack(alignment: edgeAlignment(edge)) {
             glassStrip(edge: edge, thickness: resting)
             slotStack(edge: edge, base: base, spacing: spacing)
-                .padding(Self.padding)
+                // No padding on the edge-facing side — each tile reclaims it as tap area
+                // so clicks land on icons right up to the screen edge (Fitts' law).
+                .padding(slotStackInsets(edge))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
         .contentShape(Rectangle())
@@ -306,6 +308,19 @@ struct DockView: View {
         case .top: return .top
         case .left: return .leading
         case .right: return .trailing
+        }
+    }
+
+    /// Inner padding around the tiles — full on every side *except* the one facing the
+    /// screen edge, which each tile reclaims as tap area (Fitts' law). The total tile
+    /// block size is unchanged, so `DockLayout.contentSize` still matches.
+    private func slotStackInsets(_ edge: DockEdge) -> EdgeInsets {
+        let p = Self.padding
+        switch edge {
+        case .bottom: return EdgeInsets(top: p, leading: p, bottom: 0, trailing: p)
+        case .top:    return EdgeInsets(top: 0, leading: p, bottom: p, trailing: p)
+        case .left:   return EdgeInsets(top: p, leading: 0, bottom: p, trailing: p)
+        case .right:  return EdgeInsets(top: p, leading: p, bottom: p, trailing: 0)
         }
     }
 }

@@ -61,11 +61,21 @@ struct AnalogClockFace: View {
         Canvas { context, size in
             let radius = min(size.width, size.height) / 2
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let faceRect = CGRect(x: center.x - radius, y: center.y - radius,
+                                  width: radius * 2, height: radius * 2)
+            let face = Path(ellipseIn: faceRect)
+
+            // Face: a dark glassy disc with a soft top highlight so the hands read
+            // clearly against the dock glass (instead of a transparent, low-contrast face).
+            context.fill(face, with: .color(.black.opacity(0.28)))
+            context.fill(face, with: .radialGradient(
+                Gradient(colors: [.white.opacity(0.16), .white.opacity(0.0)]),
+                center: CGPoint(x: center.x, y: center.y - radius * 0.35),
+                startRadius: 0, endRadius: radius * 1.15))
 
             // Rim.
-            let rim = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
-                                             width: radius * 2, height: radius * 2))
-            context.stroke(rim, with: .color(.primary.opacity(0.5)), lineWidth: max(1, radius * 0.06))
+            let rim = face
+            context.stroke(rim, with: .color(.white.opacity(0.55)), lineWidth: max(1, radius * 0.06))
 
             // Hour ticks.
             for tick in 0..<12 {
@@ -74,7 +84,7 @@ struct AnalogClockFace: View {
                 let inner = point(center: center, angle: angle, distance: radius * 0.78)
                 var path = Path()
                 path.move(to: inner); path.addLine(to: outer)
-                context.stroke(path, with: .color(.secondary), lineWidth: max(0.5, radius * 0.04))
+                context.stroke(path, with: .color(.white.opacity(0.5)), lineWidth: max(0.5, radius * 0.04))
             }
 
             let comps = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
@@ -84,9 +94,9 @@ struct AnalogClockFace: View {
 
             // Hands (angles measured from 12 o'clock, clockwise).
             context.stroke(handPath(center: center, angle: hour / 12 * 2 * .pi, length: radius * 0.5),
-                           with: .color(.primary), style: StrokeStyle(lineWidth: max(1.5, radius * 0.09), lineCap: .round))
+                           with: .color(.white), style: StrokeStyle(lineWidth: max(1.5, radius * 0.09), lineCap: .round))
             context.stroke(handPath(center: center, angle: minute / 60 * 2 * .pi, length: radius * 0.78),
-                           with: .color(.primary), style: StrokeStyle(lineWidth: max(1, radius * 0.06), lineCap: .round))
+                           with: .color(.white), style: StrokeStyle(lineWidth: max(1, radius * 0.06), lineCap: .round))
             if showSeconds {
                 context.stroke(handPath(center: center, angle: second / 60 * 2 * .pi, length: radius * 0.82),
                                with: .color(tint), style: StrokeStyle(lineWidth: max(0.5, radius * 0.03), lineCap: .round))

@@ -301,10 +301,33 @@ final class DockPanelController {
 
     private func recomputeFrames() {
         let content = contentSize()
-        revealedFrameValue = DockLayout.revealedFrame(anchor: anchor, contentSize: content, in: screen.visibleFrame)
+        var frame = DockLayout.revealedFrame(anchor: anchor, contentSize: content, in: screen.visibleFrame)
+        // Stretch the panel out to the *physical* screen edge (the content stays
+        // bottom/edge-aligned) so a pointer slammed to the very edge is still over the
+        // dock — clicks there hit the icons (Fitts' law). The top edge stops at the
+        // menu-bar boundary (visibleFrame), never under the menu bar.
+        let f = screen.frame
+        switch anchor.edge {
+        case .bottom:
+            let dy = frame.minY - f.minY
+            if dy > 0 { frame.origin.y = f.minY; frame.size.height += dy }
+        case .left:
+            let dx = frame.minX - f.minX
+            if dx > 0 { frame.origin.x = f.minX; frame.size.width += dx }
+        case .right:
+            let dx = f.maxX - frame.maxX
+            if dx > 0 { frame.size.width += dx }
+        case .top:
+            break
+        }
+        revealedFrameValue = frame
     }
 
     private func revealedFrame() -> CGRect { revealedFrameValue }
+
+    /// The dock's on-screen frame (always the revealed frame; the panel is parked
+    /// there). Used to place the folder-stack popover clear of the dock.
+    var revealedScreenFrame: CGRect { revealedFrameValue }
 
     /// The content-layer translation that parks the dock just off its screen edge.
     /// Geometry is the layer-backed (non-flipped) view space: +y is up, +x is right.

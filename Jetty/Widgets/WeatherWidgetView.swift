@@ -43,7 +43,8 @@ struct WeatherWidgetView: View {
         } else if let snap = service.snapshot, snap.key == key {
             VStack(spacing: 1) {
                 Image(systemName: WeatherService.symbol(forCode: snap.code))
-                    .font(.system(size: max(13, height * 0.34)))
+                    .symbolRenderingMode(.multicolor)
+                    .font(.system(size: max(18, height * 0.5)))
                     .foregroundStyle(tint)
                 Text("\(Int(snap.temperature.rounded()))°")
                     .font(.system(size: max(9, height * 0.2), weight: .semibold, design: .rounded))

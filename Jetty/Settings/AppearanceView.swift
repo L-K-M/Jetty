@@ -62,7 +62,7 @@ struct AppearanceView: View {
                     Picker("Corner", selection: $preferences.decorationPosition) {
                         ForEach(DecorationPosition.allCases) { Text($0.label).tag($0) }
                     }
-                    slider("Decoration size", $preferences.decorationSize, 4...30, "pt")
+                    slider("Decoration size", $preferences.decorationSize, 4...80, "pt")
                     HStack {
                         Text("Decoration opacity")
                         Slider(value: $preferences.decorationOpacity, in: 0...1)

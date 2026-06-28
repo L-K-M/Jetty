@@ -23,12 +23,12 @@ struct DockTileView: View {
     @State private var isDropTargeted = false
 
     var body: some View {
-        content
-            .frame(width: tileWidth, height: baseSize)
-            .background { accentGlow }
-            .scaleEffect(scale, anchor: scaleAnchor)
-            .overlay(alignment: indicatorAlignment) { indicator }
-            .overlay(alignment: .top) { label }
+        visual
+            // Reclaim the dead strip between the icon and the screen edge as part of the
+            // tap target so a click slammed to the very edge still hits the icon above
+            // it (Fitts' law). `DockView` drops its matching edge-side padding, so the
+            // dock's overall size is unchanged.
+            .padding(edgeInsets)
             .contentShape(Rectangle())
             .onHover { onHoverChanged($0) }
             .onTapGesture(perform: onTap)
@@ -42,8 +42,32 @@ struct DockTileView: View {
             .accessibilityLabel(accessibilityLabel)
             .accessibilityValue(tile.isRunning && tile.kind == .application ? "Running" : "")
             .accessibilityAddTraits(tile.kind == .separator ? [] : .isButton)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: scale)
+            // Track the pointer with almost no lag so magnification feels immediate
+            // even on fast moves (a long spring made the icon visibly trail the cursor).
+            .animation(.interactiveSpring(response: 0.10, dampingFraction: 0.9), value: scale)
             .animation(.easeOut(duration: 0.2), value: isHovered)
+    }
+
+    /// The icon (or widget) with its glow, magnification scale, indicator, and label.
+    private var visual: some View {
+        content
+            .frame(width: tileWidth, height: baseSize)
+            .background { accentGlow }
+            .scaleEffect(scale, anchor: scaleAnchor)
+            .overlay(alignment: indicatorAlignment) { indicator }
+            .overlay(alignment: .top) { label }
+    }
+
+    /// Padding added on the edge-facing side only, turning the gap between the icon and
+    /// the screen edge into hittable tap area (Fitts' law).
+    private var edgeInsets: EdgeInsets {
+        let p = DockView.padding
+        switch edge {
+        case .bottom: return EdgeInsets(top: 0, leading: 0, bottom: p, trailing: 0)
+        case .top:    return EdgeInsets(top: p, leading: 0, bottom: 0, trailing: 0)
+        case .left:   return EdgeInsets(top: 0, leading: p, bottom: 0, trailing: 0)
+        case .right:  return EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: p)
+        }
     }
 
     // MARK: Accent glow (ND-8)
@@ -64,7 +88,9 @@ struct DockTileView: View {
 
     private var showsGlow: Bool {
         guard tile.icon != nil else { return false }
-        return isHovered || (tile.isRunning && tile.isActive && tile.kind == .application)
+        // Only the *active* app glows — hovering/magnifying a tile must not add a
+        // border-like ring around the icon (it should just magnify).
+        return tile.isRunning && tile.isActive && tile.kind == .application
     }
 
     /// VoiceOver label per tile kind (BUG-9).

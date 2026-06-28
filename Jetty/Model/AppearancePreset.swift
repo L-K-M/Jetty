@@ -159,7 +159,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
                          magnificationEnabled: true, magnification: 1.5,
                          indicatorStyle: .bar, indicatorHex: "#FF6F00", showLabels: false,
                          decorationStyle: "amigaPixel", decorationPosition: "topTrailing",
-                         decorationOpacity: 1, decorationSize: 11, crtEnabled: true, crtIntensity: 0.7),
+                         decorationOpacity: 0.2, decorationSize: 30, crtEnabled: true, crtIntensity: 0.7),
     ]
 }
 

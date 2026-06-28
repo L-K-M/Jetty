@@ -238,7 +238,7 @@ final class Preferences: ObservableObject {
         decorationStyle = DecorationStyle(rawValue: string(Key.decorationStyle, d.decorationStyle.rawValue)) ?? d.decorationStyle
         decorationPosition = DecorationPosition(rawValue: string(Key.decorationPosition, d.decorationPosition.rawValue)) ?? d.decorationPosition
         decorationOpacity = Self.clamp(double(Key.decorationOpacity, d.decorationOpacity), 0, 1)
-        decorationSize = Self.clamp(double(Key.decorationSize, d.decorationSize), 4, 30)
+        decorationSize = Self.clamp(double(Key.decorationSize, d.decorationSize), 4, 80)
         crtEnabled = bool(Key.crtEnabled, d.crtEnabled)
         crtIntensity = Self.clamp(double(Key.crtIntensity, d.crtIntensity), 0, 1)
         clockShowDate = bool(Key.clockShowDate, d.clockShowDate)
@@ -304,7 +304,7 @@ final class Preferences: ObservableObject {
         decorationStyle = DecorationStyle(rawValue: preset.decorationStyle) ?? .none
         decorationPosition = DecorationPosition(rawValue: preset.decorationPosition) ?? .topTrailing
         decorationOpacity = Self.clamp(preset.decorationOpacity, 0, 1)
-        decorationSize = Self.clamp(preset.decorationSize, 4, 30)
+        decorationSize = Self.clamp(preset.decorationSize, 4, 80)
         crtEnabled = preset.crtEnabled
         crtIntensity = Self.clamp(preset.crtIntensity, 0, 1)
     }

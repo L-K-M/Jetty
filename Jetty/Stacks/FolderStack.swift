@@ -75,17 +75,18 @@ enum FolderStack {
         }
     }
 
-    /// Top-left origin (Cocoa, y-up) for a stack of `size` opened near `point` on a
-    /// dock anchored to `edge`, clamped inside `visibleFrame`.
-    static func origin(for size: CGSize, near point: CGPoint, edge: DockEdge, in vf: CGRect) -> CGPoint {
-        let margin: CGFloat = 14
-        var x = point.x - size.width / 2
-        var y = point.y - size.height / 2
+    /// Top-left origin (Cocoa, y-up) for a stack of `size` opened near `point`, placed
+    /// just *outside* the `dock` frame along `edge` (so it never overlaps the dock) and
+    /// centred on the click along the dock axis, clamped inside `visibleFrame`.
+    static func origin(for size: CGSize, near point: CGPoint, dock: CGRect, edge: DockEdge, in vf: CGRect) -> CGPoint {
+        let margin: CGFloat = 12
+        var x = point.x - size.width / 2     // centre on the click along a horizontal dock
+        var y = point.y - size.height / 2    // centre on the click along a vertical dock
         switch edge {
-        case .bottom: y = point.y + margin
-        case .top:    y = point.y - size.height - margin
-        case .left:   x = point.x + margin
-        case .right:  x = point.x - size.width - margin
+        case .bottom: y = dock.maxY + margin
+        case .top:    y = dock.minY - size.height - margin
+        case .left:   x = dock.maxX + margin
+        case .right:  x = dock.minX - size.width - margin
         }
         x = min(max(x, vf.minX + 8), vf.maxX - size.width - 8)
         y = min(max(y, vf.minY + 8), vf.maxY - size.height - 8)

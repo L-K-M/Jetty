@@ -22,21 +22,27 @@ struct SystemMonitorWidgetView: View {
 
     private func meter(label: String, value: Double) -> some View {
         let clamped = min(max(value, 0), 1)
-        return VStack(spacing: 2) {
+        let color = barColor(clamped)
+        return VStack(spacing: 3) {
             Text(label)
-                .font(.system(size: max(7, height * 0.16), weight: .semibold, design: .rounded))
+                .font(.system(size: max(7, height * 0.15), weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
+                .tracking(0.5)
             GeometryReader { geo in
                 ZStack(alignment: .bottom) {
-                    Capsule().fill(Color.primary.opacity(0.15))
-                    Capsule().fill(barColor(clamped))
-                        .frame(height: max(2, geo.size.height * clamped))
+                    Capsule(style: .continuous).fill(Color.primary.opacity(0.12))
+                    Capsule(style: .continuous)
+                        .fill(LinearGradient(colors: [color.opacity(0.6), color],
+                                             startPoint: .bottom, endPoint: .top))
+                        .frame(height: max(3, geo.size.height * clamped))
+                        .shadow(color: color.opacity(0.5), radius: 2, y: -1)
                 }
             }
-            .frame(width: max(5, height * 0.14))
+            .frame(width: max(7, height * 0.2))
             Text("\(Int((clamped * 100).rounded()))")
-                .font(.system(size: max(7, height * 0.16), weight: .medium, design: .rounded))
+                .font(.system(size: max(8, height * 0.18), weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .foregroundStyle(color)
         }
     }
 

@@ -7,20 +7,7 @@ import Combine
 /// (`onKeyPress` is 14+). See PLAN.md §8.2.
 final class JettyMenuModel: ObservableObject {
 
-    @Published var query: String = "" {
-        didSet {
-            guard query != oldValue else { return }
-            // Recompute on the NEXT runloop tick rather than synchronously inside the
-            // TextField's binding write. Recompute republishes six @Published properties
-            // (results, calculation, …); doing that synchronously *while SwiftUI is
-            // committing the text edit* can make the edit get dropped/reverted on macOS 26,
-            // leaving `query` stale (rolled back toward empty) while the field still shows
-            // the typed text — which surfaced as the search reverting to its recents list
-            // mid-type. Deferring lets the edit commit cleanly first. Coalesced so fast
-            // typing recomputes once. Flushed synchronously before activate/launch.
-            scheduleRecompute()
-        }
-    }
+    @Published var query: String = "" { didSet { recompute() } }
     @Published private(set) var results: [AppSearchItem] = []
     /// An inline calculator result when the query is an arithmetic expression
     /// (e.g. `2+2`), else `nil`. See `ExpressionEvaluator` / improvement ND-1.
@@ -32,9 +19,6 @@ final class JettyMenuModel: ObservableObject {
     /// A matched quick toggle (e.g. typing "dark"), else `nil` (ND-9).
     @Published private(set) var command: MenuCommand?
     @Published var selectedIndex: Int = 0
-    /// Bumped on each open so the AppKit search field re-focuses (the view/panel are
-    /// reused across opens, so onAppear-style focus only fires once).
-    @Published private(set) var focusToken: Int = 0
 
     let maxResults = 12
 
@@ -52,40 +36,16 @@ final class JettyMenuModel: ObservableObject {
     var recentsProvider: (() -> [AppSearchItem])?
 
     private var currencyCancellable: AnyCancellable?
-    /// A coalesced, deferred `recompute()` so query edits don't republish synchronously
-    /// inside the TextField's binding write (see `query`'s didSet).
-    private var pendingRecompute: DispatchWorkItem?
 
     init(appIndex: AppIndex) {
         self.appIndex = appIndex
         cancellable = appIndex.$apps
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.scheduleRecompute() }
+            .sink { [weak self] _ in self?.recompute() }
         // Recompute when currency rates arrive so a pending conversion fills in (ND-9).
         currencyCancellable = CurrencyService.shared.$rates
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.scheduleRecompute() }
-        recompute()
-    }
-
-    /// Schedules a coalesced recompute on the next main-runloop tick. Multiple rapid
-    /// triggers (keystrokes, app-index/rate updates) collapse into a single recompute.
-    private func scheduleRecompute() {
-        pendingRecompute?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            self?.pendingRecompute = nil
-            self?.recompute()
-        }
-        pendingRecompute = work
-        DispatchQueue.main.async(execute: work)
-    }
-
-    /// Runs any deferred recompute immediately, so the Return key / a row click act on
-    /// results for the current query rather than a tick-stale snapshot.
-    private func flushPendingRecompute() {
-        guard let work = pendingRecompute else { return }
-        work.cancel()
-        pendingRecompute = nil
+            .sink { [weak self] _ in self?.recompute() }
         recompute()
     }
 
@@ -146,7 +106,6 @@ final class JettyMenuModel: ObservableObject {
     /// The Return key: a matched quick toggle wins (the command row advertises "⏎
     /// run"), then the selected app, then a web search (ND-9 / BUG-5).
     func activateSelection() {
-        flushPendingRecompute()
         if let command {
             onRunCommand?(command)
         } else if results.indices.contains(selectedIndex) {
@@ -159,7 +118,6 @@ final class JettyMenuModel: ObservableObject {
     /// Directly launches the app at `index` — used by a row *click*, which targets a
     /// specific app and must never be hijacked by a matched command (BUG-5 follow-up).
     func launch(at index: Int) {
-        flushPendingRecompute()
         guard results.indices.contains(index) else { return }
         onLaunch?(results[index])
     }
@@ -167,11 +125,5 @@ final class JettyMenuModel: ObservableObject {
     func reset() {
         query = ""
         selectedIndex = 0
-        focusToken &+= 1
-        // Cancel the deferred recompute the `query` didSet just scheduled and run it now,
-        // so a freshly-opened menu shows its recents immediately (not a tick later).
-        pendingRecompute?.cancel()
-        pendingRecompute = nil
-        recompute()
     }
 }

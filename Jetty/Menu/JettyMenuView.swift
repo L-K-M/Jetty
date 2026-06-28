@@ -7,6 +7,7 @@ import AppKit
 struct JettyMenuView: View {
     @ObservedObject var model: JettyMenuModel
     @ObservedObject var preferences: Preferences
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,8 +52,11 @@ struct JettyMenuView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            MenuSearchField(text: $model.query, placeholder: "Search apps…", focusToken: model.focusToken)
-                .frame(maxWidth: .infinity)
+            TextField("Search apps…", text: $model.query)
+                .textFieldStyle(.plain)
+                .font(.title3)
+                .focused($searchFocused)
+                .onAppear { searchFocused = true }
         }
         .padding(14)
     }
@@ -139,15 +143,22 @@ struct JettyMenuView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
+                        // Identify each row by the item, NOT its position. The old `.id(index)`
+                        // pinned a row's identity to its slot, so when the query filtered the
+                        // list SwiftUI reused the view already sitting at each position and never
+                        // refreshed its content — row 0 kept showing the panel's initial first
+                        // app, row 1 the initial second, etc. An item-based id makes SwiftUI
+                        // rebuild the rows to match the current results.
                         resultRow(item, selected: index == model.selectedIndex)
-                            .id(index)
+                            .id(item.id)
                             .onTapGesture { model.selectedIndex = index; model.launch(at: index) }
                     }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 6)
             }
             .onChange(of: model.selectedIndex) { newValue in
-                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(newValue, anchor: .center) }
+                guard model.results.indices.contains(newValue) else { return }
+                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(model.results[newValue].id, anchor: .center) }
             }
         }
     }

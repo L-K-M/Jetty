@@ -54,6 +54,7 @@ final class SystemDockController {
         dockDefaults.set(largeDelay, forKey: "autohide-delay")
         dockDefaults.set(0.0, forKey: "autohide-time-modifier")
         ourDefaults.set(true, forKey: Key.isManaging)
+        synchronizeDockDefaults()
         restartDock()
     }
 
@@ -63,10 +64,12 @@ final class SystemDockController {
         guard isManaging, let dockDefaults else { return }
         let delay = dockDefaults.double(forKey: "autohide-delay")
         let hidden = dockDefaults.bool(forKey: "autohide")
-        if !hidden || delay < largeDelay - 1 {
+        let timeModifier = dockDefaults.double(forKey: "autohide-time-modifier")
+        if !hidden || delay < largeDelay - 1 || timeModifier != 0 {
             dockDefaults.set(true, forKey: "autohide")
             dockDefaults.set(largeDelay, forKey: "autohide-delay")
             dockDefaults.set(0.0, forKey: "autohide-time-modifier")
+            synchronizeDockDefaults()
             restartDock()
         }
     }
@@ -93,7 +96,12 @@ final class SystemDockController {
         ourDefaults.set(false, forKey: Key.capturedPrior)
         ourDefaults.set(false, forKey: Key.hadPriorDelay)
         ourDefaults.set(false, forKey: Key.hadPriorTimeModifier)
+        synchronizeDockDefaults()
         restartDock()
+    }
+
+    private func synchronizeDockDefaults() {
+        _ = dockDefaults?.synchronize()
     }
 
     /// `killall Dock` — launchd respawns it within ~1s with the new settings. Called

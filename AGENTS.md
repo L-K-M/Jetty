@@ -7,8 +7,10 @@ Guidance for AI coding agents working in the **Jetty** repository.
 Jetty is a fast, native, **auto-hiding dock for macOS Tahoe (26)** that stands in for
 the system Dock — with free-form positioning (any edge × leading/center/trailing ×
 offset/inset, per display), deep visual control (native Liquid Glass + shareable
-presets), and built-in extras (a date/time tile and a Start-menu-style **Jetty Menu**
-with app search + power commands). It is the third app in the L-K-M family alongside
+presets), and built-in extras (a family of live info tiles — clock, battery, weather,
+world clock, Pomodoro, CPU/RAM, now-playing — folder-stack popovers, and a
+Start-menu-style **Jetty Menu** / command bar with app search, calculator,
+unit/currency conversion, and power commands). It is the third app in the L-K-M family alongside
 **Zap** (app switcher) and **MacDring** (edge-tab launcher) and reuses their house
 style. See `PLAN.md` for the full design and the feasibility analysis; `README.md`
 for the user view.
@@ -44,6 +46,8 @@ permission-free**. Don't reintroduce a reservation/nudging dependency in the cor
 
 The Xcode project uses **file-system-synchronized groups**, so new files under
 `Jetty/` or `JettyTests/` are picked up automatically — no `project.pbxproj` edits.
+(The one exception so far: the Objective-C MediaRemote bridge needed a
+`SWIFT_OBJC_BRIDGING_HEADER` build setting on the app target; pure-Swift files need none.)
 
 ```bash
 # Build
@@ -71,22 +75,36 @@ Mirrors `PLAN.md §11`:
 - `Dock/` — `DockController` (the brain), `DockPanelController` (per-display
   auto-hiding panel), `DockModel` (pure tile merge), `DockView`/`DockTileView`,
   `MagnificationCurve` (pure), `EdgeHoverMonitor`.
-- `Widgets/` — `ClockWidgetView` + the pure `ClockFormatter`.
-- `Menu/` — the Jetty Menu (`JettyMenuController`/`View`/`Model`, `AppIndex`, the pure
-  `AppSearch`, `PowerCommands`).
+- `Widgets/` — the live info tiles: `ClockWidgetView` (+ pure `ClockFormatter`),
+  `BatteryWidgetView`, `WeatherWidgetView` (+ `WeatherService`), `WorldClockWidgetView`,
+  `PomodoroWidgetView` (+ `PomodoroTimer`), `SystemMonitorWidgetView` (+ `SystemStats`),
+  `NowPlayingWidgetView` (+ `NowPlayingService`). Keep the formatters/parsers pure.
+- `Stacks/` — the folder-stack popover: pure `FolderStack` (ordering/geometry/content)
+  + `FolderStackController` (the floating panel).
+- `Menu/` — the Jetty Menu / command bar (`JettyMenuController`/`View`/`Model`,
+  `AppIndex`, `RecentAppsStore`, and the pure `AppSearch`, `ExpressionEvaluator`,
+  `UnitConverter`, `CurrencyService`, `MenuCommand`, `PowerCommands`).
 - `Hotkeys/` — `CarbonHotkey`, `KeyCodes`, `AccessibilityAuthorizer` (for later features).
-- `Settings/` — the SwiftUI settings panes + window controller.
+- `Settings/` — the SwiftUI settings panes (General/Appearance/Items/Displays/Widgets/
+  Menu/Permissions/About) + window controller and `HotkeyRecorder`.
 - `Updates/` — the GitHub self-updater (reused from Zap).
+- `MediaRemote/` — the isolated Objective-C MediaRemote bridge (`MediaRemoteBridge`)
+  behind `Jetty-Bridging-Header.h`, used only by the opt-in now-playing tile.
 - `Common/` — `VisualEffectView`, `GlassBackground` (Liquid Glass + fallback),
-  `ActivationPolicy`, `LRUImageCache`.
+  `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent` (dominant-color glow),
+  `Poof`, and the retro decorations (`PanelDecoration`, `BoingBallDecoration`,
+  `CRTScreenOverlay`).
 
 ## Conventions
 
 - Follow the Swift API Design Guidelines; one type per file; `// MARK:` sections.
 - Avoid force-unwraps outside tests.
-- Keep `DockLayout`, `MagnificationCurve`, `ClockFormatter`, `AppSearch`,
-  `DockModel.makeTiles`, and `PowerCommand`'s mapping **pure** (no global state, no
-  windowing) so they stay unit-testable — they're the logic backbone.
+- Keep the logic backbone **pure** (no global state, no windowing) so it stays
+  unit-testable: `DockLayout`, `MagnificationCurve`, `ClockFormatter`, `AppSearch`,
+  `DockModel.makeSlots`/`makeTiles`, `PowerCommand` mapping, `ExpressionEvaluator`,
+  `UnitConverter`, `CurrencyService` parsing, `MenuCommand.match`, `FolderStack`
+  geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
+  `NowPlayingService.parse`, and `SemanticVersion`.
 
 ## Critical Constraints
 
@@ -116,10 +134,13 @@ Mirrors `PLAN.md §11`:
 
 ## Testing Notes
 
-- Unit-test the pure logic: `DockLayout` geometry, `DockModel.makeTiles`,
+- Unit-test the pure logic: `DockLayout` geometry, `DockModel.makeSlots`/`makeTiles`,
   `MagnificationCurve`, `ClockFormatter`, `AppSearch`, `PowerCommand` mapping,
-  Codable + forward-compat, `Preferences` clamping, `AppearancePreset` round-trip,
-  `SemanticVersion`, `GitHubRelease`.
+  `ExpressionEvaluator`, `UnitConverter`, `CurrencyService`, `MenuCommand`,
+  `FolderStack`, `SystemStats`/`WeatherService`, `NowPlayingService.parse`,
+  `HotkeyBinding`, `UpdateDownloader` filename sanitizing, Codable + forward-compat,
+  `Preferences` clamping, `AppearancePreset` round-trip, `SemanticVersion`,
+  `GitHubRelease`.
 - `AppDelegate.applicationDidFinishLaunching` is guarded by `isRunningTests`, so the
   test host doesn't spin up panels or hide the Dock.
 - Window placement, multi-monitor, reveal/auto-hide, Dock-hide, Liquid Glass,
@@ -134,6 +155,9 @@ Mirrors `PLAN.md §11`:
 - **Don't** add heavy dependencies; prefer system frameworks.
 - **Don't** persist absolute window frames, reserve screen space, or let a dock/menu
   panel activate the app (except the Jetty Menu's deliberate focus hand-off).
-- **Don't** reach for private APIs in the core. The only ones ever contemplated
-  (`_AXUIElementGetWindow`, `AXStatusLabel`) belong to *later* features and must be
-  weak-imported, isolated, and fall back to public APIs.
+- **Don't** reach for private APIs in the core. The one private-API use that has
+  shipped — the **MediaRemote** bridge behind the **opt-in** now-playing tile — is
+  isolated under `MediaRemote/`, `dlopen`-based, and **fails closed** (returns nil →
+  plain music glyph) when unavailable; keep any future private-API use the same way
+  (isolated, opt-in, fail-closed). Others contemplated for *later* features
+  (`_AXUIElementGetWindow`, `AXStatusLabel`) must likewise be weak-imported and isolated.

@@ -588,13 +588,18 @@ Jetty/
 
 ## 13. Implementation Phases / Milestones
 
-> **Status (this branch):** Design complete; **v1 (Phases 1–8) implemented** in this
-> repo following the Zap/MacDring patterns. Because this environment is Linux with no
-> Xcode/macOS, the code is written to compile by construction and is covered by
-> **pure-logic unit tests**; an on-device **build + GUI verification** pass on macOS 26
-> with Xcode 26 is the remaining step before release (windowing, multi-monitor, reveal,
-> Dock-hide, Liquid Glass, power commands need a real GUI session — same policy as the
-> siblings). Phases 9–12 are the planned post-v1 roadmap.
+> **Status:** **v1 (Phases 1–8) shipped**, and it **builds on macOS 26 with Xcode 26**.
+> A large batch of post-v1 polish has since landed too: per-display position UI, folder
+> stacks (grid/list/fan), in-dock reorder + drag-out-to-remove (with the *poof*),
+> continuous pointer-tracking magnification, per-tile accent glow, customizable global
+> shortcuts, rename / custom-icon per item, retro flourishes (decorations + CRT), the
+> Jetty-Menu command bar (calculator, unit/currency conversion, web-search fallback,
+> quick toggles), a family of **info tiles** (battery, weather, world clock, Pomodoro,
+> CPU/RAM, and an **opt-in now-playing** tile via an isolated MediaRemote bridge), and
+> the app icon (Phase 12). Still genuinely later/opt-in: window peeking (Phase 9) and
+> live previews (Phase 10). Pure logic is unit-tested; windowing, multi-monitor, reveal,
+> Dock-hide, Liquid Glass, drag-and-drop, and power commands still want manual GUI
+> verification on each release (same policy as the siblings).
 
 1. **Skeleton** — Xcode project (synchronized groups, `.accessory`, `LSUIElement`,
    hardened runtime), menu-bar `NSStatusItem`, Settings window, `Preferences` + `ColorHex`,

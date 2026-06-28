@@ -32,9 +32,17 @@ launcher).
   reserved strip, no windows getting shoved around — and **no permissions** for the
   core dock.
 - **Pinned + running apps**, with live running indicators, one-click launch/activate,
-  drag-a-file-onto-an-app to open it there, drag-to-pin and reorder, and a right-click
-  menu (Show / Hide / Quit / Keep in Dock / Show in Finder).
-- **A date/time tile** right in the dock — 12/24-hour, seconds, weekday, date.
+  drag-a-file-onto-an-app to open it there, drag-to-pin, in-dock reorder, drag-out to
+  remove (with the classic *poof*), a per-tile accent glow, and a right-click menu
+  (Show / Hide / Quit / Keep in Dock / Show in Finder). **Folders** open as a grid /
+  list / fan **stack** popover.
+- **Live info tiles** right in the dock — a date/time tile (12/24-hour, seconds,
+  weekday, date, or an analog face), plus **battery**, **weather** (no location
+  permission — you supply coordinates), a **world clock**, a **Pomodoro** timer, a
+  **CPU/RAM** monitor, and a **now-playing** tile.
+- **Make it yours** — rename a pinned item or give it a custom icon, optional retro
+  flourishes (corner decorations + CRT scanlines), and **customizable global
+  shortcuts** (General ▸ Shortcuts).
 - **The Jetty Menu** — a Windows-Start-style launcher and **command bar**: instant
   app search (type to filter, ↑/↓, ⏎) and recents, an inline **calculator**,
   **unit & currency conversion** (`10 km in miles`, `100 usd to eur`), a
@@ -98,15 +106,20 @@ xcodebuild -project Jetty.xcodeproj -scheme Jetty -destination 'platform=macOS' 
    hides the system Dock.
 2. Push the pointer to the bottom of the screen to reveal the dock, or open
    **Jetty Settings…** from the menu-bar item to choose an edge, alignment, and look.
-3. Open the **Jetty Menu** from its dock tile, the menu-bar item, or ⌃⌥⌘Space to
-   search apps and access power commands.
+3. Open the **Jetty Menu** from its dock tile, the menu-bar item, or ⌃⌥⌘Space (the
+   shortcuts are customizable in General ▸ Shortcuts) to search apps, convert units and
+   currencies, do quick math, and run power commands.
 
 ## Permissions
 
-The **core dock needs none.** The Jetty Menu's power commands ask for **Automation**
-the first time (to tell System Events to sleep/restart/etc.). Optional, *coming-soon*
-window-preview / window-management features will ask for **Screen Recording** /
-**Accessibility** — and Jetty works fully without them.
+The **core dock needs none.** The Jetty Menu's power commands and the Dark Mode quick
+toggle ask for **Automation** the first time (to tell System Events to sleep / restart /
+toggle appearance). The optional **now-playing** tile (which you add yourself; it is not
+in the default dock) reads the system's current track via Apple's private MediaRemote
+framework — it stays local, is never transmitted, and fails closed (shows a plain music
+glyph) if the framework is unavailable. Optional, *coming-soon* window-preview /
+window-management features will ask for **Screen Recording** / **Accessibility** — and
+Jetty works fully without them.
 
 ## Distribution
 

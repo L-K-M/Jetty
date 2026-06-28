@@ -15,6 +15,7 @@ final class DockController {
     let model = DockModel()
 
     private let hoverMonitor = EdgeHoverMonitor()
+    private let trashMonitor = TrashMonitor()
     private var panels: [String: DockPanelController] = [:]
     private var cancellables = Set<AnyCancellable>()
 
@@ -59,12 +60,23 @@ final class DockController {
         }
         hoverMonitor.start()
 
+        // Re-resolve icons when the Trash empties/fills so its tile shows the right
+        // can (IDEA-5). Only bother while a Trash tile is actually pinned.
+        trashMonitor.onChange = { [weak self] in
+            guard let self, self.store.items.contains(where: { $0.kind == .trash }) else { return }
+            self.model.invalidateTrashIcon()
+            self.rebuildModel()
+        }
+        trashMonitor.start()
+
         registerHotkeys()
         observe()
     }
 
     func teardown() {
         hoverMonitor.stop()
+        trashMonitor.stop()
+        LiveSystemStats.shared.setRunning(false)
         folderStack.close()
         panels.values.forEach { $0.close() }
         panels.removeAll()
@@ -150,6 +162,15 @@ final class DockController {
         model.rebuild(pinned: store.items, running: runningApps.apps,
                       showRunningApps: preferences.showRunningApps)
         relayoutPanels()
+        updateLiveStats()
+    }
+
+    /// Runs the shared system sampler only while a panel actually shows a CPU/battery
+    /// widget — authoritative state, so the timer can't leak if SwiftUI skips an
+    /// ordered-out panel's `onDisappear` (ISSUE-5).
+    private func updateLiveStats() {
+        let hasWidget = model.tiles.contains { $0.kind == .systemMonitor || $0.kind == .battery }
+        LiveSystemStats.shared.setRunning(hasWidget && !panels.isEmpty)
     }
 
     private func relayoutPanels() {
@@ -193,6 +214,7 @@ final class DockController {
                 panel.showInitial()
             }
         }
+        updateLiveStats()
     }
 
     // MARK: Interactions
@@ -234,6 +256,14 @@ final class DockController {
         store.setItems(items)
     }
 
+    /// The tile's *live* URL — resolved through the store's bookmark (so a moved
+    /// file/app is found) with the freshened bookmark persisted (ISSUE-7), falling
+    /// back to the tile's stored URL for running-only tiles with no backing item.
+    private func liveURL(for tile: DockTile) -> URL? {
+        if let id = tile.itemID, let url = store.resolvedURL(forItemID: id) { return url }
+        return tile.url
+    }
+
     private func open(_ tile: DockTile) {
         // Any tap other than (re)opening a folder dismisses an open stack.
         if tile.kind != .folder { folderStack.close() }
@@ -244,7 +274,7 @@ final class DockController {
             presentFolderStack(for: tile)
             return   // keep the dock revealed while the stack is open
         case .file, .url:
-            if let url = tile.url { NSWorkspace.shared.open(url) }
+            if let url = liveURL(for: tile) { NSWorkspace.shared.open(url) }
         case .trash:
             AppLauncher.openTrash()
         case .clock:
@@ -272,7 +302,7 @@ final class DockController {
     }
 
     private func openApplication(_ tile: DockTile) {
-        let appURL = tile.url ?? tile.bundleIdentifier.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+        let appURL = liveURL(for: tile) ?? tile.bundleIdentifier.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
         if let appURL {
             let name = tile.displayName.isEmpty ? appURL.deletingPathExtension().lastPathComponent : tile.displayName
             RecentAppsStore.shared.record(name: name, bundleID: tile.bundleIdentifier, url: appURL)
@@ -291,7 +321,7 @@ final class DockController {
     /// Opens the folder-stack popover for a folder tile, anchored near the pointer on
     /// the screen it's on, oriented to that display's dock edge (MF-2).
     private func presentFolderStack(for tile: DockTile) {
-        guard let url = tile.url else { return }
+        guard let url = liveURL(for: tile) else { return }
         let point = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
         guard let screen else { return }

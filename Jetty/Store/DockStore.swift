@@ -43,6 +43,22 @@ final class DockStore: ObservableObject {
         document.anchorsByDisplayUUID[uuid]
     }
 
+    /// Resolves a pinned item to its current URL via its bookmark (tracking moves),
+    /// and — crucially — **writes back** a freshened bookmark when the stored one was
+    /// stale, so a moved file/app keeps working on later launches instead of silently
+    /// going stale in `dock.json` (ISSUE-7). Returns nil if unknown/unresolvable.
+    func resolvedURL(forItemID id: UUID) -> URL? {
+        guard let item = document.items.first(where: { $0.id == id }),
+              let (url, isStale) = BookmarkResolver.resolve(item) else { return nil }
+        if isStale, let fresh = BookmarkResolver.bookmark(for: url),
+           let index = document.items.firstIndex(where: { $0.id == id }) {
+            document.items[index].bookmark = fresh
+            document.items[index].url = url
+            scheduleSave()
+        }
+        return url
+    }
+
     // MARK: Mutations
 
     func setItems(_ items: [DockItem]) {

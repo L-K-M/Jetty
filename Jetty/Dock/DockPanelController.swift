@@ -283,12 +283,13 @@ final class DockPanelController {
                                           spacing: CGFloat(preferences.tileSpacing),
                                           padding: DockView.padding,
                                           edge: anchor.edge)
-        // Headroom so magnified tiles aren't clipped by the window bounds.
+        // Headroom so magnified tiles aren't clipped by the window bounds. The extra
+        // goes on *both* axes: perpendicular for the grow-away-from-edge scale, and
+        // along the dock axis so the first/last tiles (which scale about their centre)
+        // don't clip at the window ends (ISSUE-2).
         guard preferences.magnificationEnabled else { return base }
         let extra = (preferences.effectiveMagnification - 1) * CGFloat(preferences.iconSize)
-        return anchor.edge.isHorizontal
-            ? CGSize(width: base.width, height: base.height + extra)
-            : CGSize(width: base.width + extra, height: base.height)
+        return CGSize(width: base.width + extra, height: base.height + extra)
     }
 
     // Cached revealed frame so per-mouse-move hit-testing is pure rect math (no

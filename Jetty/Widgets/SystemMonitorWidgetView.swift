@@ -1,23 +1,21 @@
 import SwiftUI
 
 /// A CPU + memory meter tile (ND-3): two slim bars (load and memory pressure) with
-/// labels, sampled every 2s via `TimelineView`. The bar fill shifts from the tint to
-/// orange to red as it fills, so a glance reads pressure.
+/// labels, fed by the shared `LiveSystemStats` sampler (one read per tick across all
+/// displays — ISSUE-5). The bar fill shifts from the tint to orange to red as it
+/// fills, so a glance reads pressure.
 struct SystemMonitorWidgetView: View {
     var height: CGFloat
     var tint: Color
+    @ObservedObject private var stats = LiveSystemStats.shared
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 2)) { _ in
-            let load = SystemStats.normalizedLoad()
-            let mem = SystemStats.memoryUsedFraction()
-            HStack(spacing: 6) {
-                meter(label: "CPU", value: load)
-                meter(label: "RAM", value: mem)
-            }
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HStack(spacing: 6) {
+            meter(label: "CPU", value: stats.load)
+            meter(label: "RAM", value: stats.memory)
         }
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .help("CPU load and memory usage")
     }

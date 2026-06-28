@@ -39,6 +39,10 @@ final class DockModel: ObservableObject {
     @Published private(set) var tiles: [DockTile] = []
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+    /// The Trash icon (empty/full) is recomputed only when the Trash actually changes
+    /// (via `invalidateTrashIcon()` from the controller's `TrashMonitor`), not on every
+    /// rebuild — a rebuild fires on each app focus change (IDEA-5 / ISSUE-5 spirit).
+    private var trashIconCache: NSImage?
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
@@ -76,6 +80,9 @@ final class DockModel: ObservableObject {
         }
         tiles = slots.flatMap { $0.tiles }
     }
+
+    /// Drops the cached Trash icon so the next rebuild re-reads empty/full (IDEA-5).
+    func invalidateTrashIcon() { trashIconCache = nil }
 
     // MARK: Pure merge (unit-tested)
 
@@ -140,6 +147,15 @@ final class DockModel: ObservableObject {
     // MARK: Icons (bounded LRU — BUG-8)
 
     private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
+        // The Trash reflects empty/full state (IDEA-5). Cached separately and refreshed
+        // only when the Trash changes (see `invalidateTrashIcon()`), so a moved/quit app
+        // rebuild doesn't re-list the Trash directory.
+        if tile.kind == .trash, tile.customIconPath == nil {
+            if let cached = trashIconCache { return cached }
+            let image = Self.trashIcon()
+            trashIconCache = image
+            return image
+        }
         let cacheKey = tile.iconCacheKey
         if let cached = iconCache.value(for: cacheKey, now: now) { return cached }
         // A user-chosen icon overrides the default for any kind (MF-7).
@@ -157,8 +173,7 @@ final class DockModel: ObservableObject {
                 image = NSWorkspace.shared.icon(forFile: url.path)
             }
         case .trash:
-            let trash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
-            image = NSWorkspace.shared.icon(forFile: trash.path)
+            image = Self.trashIcon()
         case .separator, .clock, .jettyMenu, .runningApps,
              .battery, .systemMonitor, .worldClock, .pomodoro, .weather, .nowPlaying:
             image = nil   // rendered with custom views
@@ -170,5 +185,17 @@ final class DockModel: ObservableObject {
     private func appURL(forBundleID bundleID: String?) -> URL? {
         guard let bundleID else { return nil }
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+    }
+
+    /// The system Trash icon reflecting empty vs. full (IDEA-5). A live `DockController`
+    /// trash watcher triggers a rebuild so this re-evaluates when the Trash changes.
+    static func trashIcon() -> NSImage? {
+        let trash = (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
+                                                  appropriateFor: nil, create: false))
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: trash, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        let name = contents.isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName
+        return NSImage(named: name)
     }
 }

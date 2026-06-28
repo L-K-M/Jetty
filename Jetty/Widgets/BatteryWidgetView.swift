@@ -1,19 +1,19 @@
 import SwiftUI
 
 /// A battery info tile (ND-3): the charge percentage with a level glyph that gains a
-/// charging glow when plugged in. Polls every 30s via `TimelineView` (no manual
-/// timer). On a Mac without a battery it shows a power-plug glyph.
+/// charging glow when plugged in. Fed by the shared `LiveSystemStats` sampler so the
+/// battery is read once per ~30s across all displays (ISSUE-5). On a Mac without a
+/// battery it shows a power-plug glyph.
 struct BatteryWidgetView: View {
     var height: CGFloat
     var tint: Color
+    @ObservedObject private var stats = LiveSystemStats.shared
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { _ in
-            content(SystemStats.battery())
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .help("Battery")
+        content(stats.battery)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .help("Battery")
     }
 
     @ViewBuilder

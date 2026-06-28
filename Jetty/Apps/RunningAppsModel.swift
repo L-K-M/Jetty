@@ -63,10 +63,20 @@ final class RunningAppsModel: ObservableObject {
         var index: [String: NSRunningApplication] = [:]
         for app in regular { if let bundleID = app.bundleIdentifier { index[bundleID] = app } }
         indexByBundle = index
-        apps = regular.map { RunningAppInfo(bundleIdentifier: $0.bundleIdentifier,
-                                            name: $0.localizedName ?? "App",
-                                            isActive: $0.isActive,
-                                            pid: $0.processIdentifier) }
+        // Dedup by bundle id: macOS can list two `.regular` instances of one app (a
+        // relaunch/activation race, a bundle that spawns a second regular process). Two
+        // infos with the same bundle id would mint two tiles with the same `DockTile.id`,
+        // which desyncs the magnification's id-keyed center map from the rendered tiles
+        // (the trailing icon then stops zooming). Apps without a bundle id keep their
+        // unique pid-based id.
+        var seenBundleIDs = Set<String>()
+        apps = regular.compactMap { app in
+            if let bundleID = app.bundleIdentifier, !seenBundleIDs.insert(bundleID).inserted { return nil }
+            return RunningAppInfo(bundleIdentifier: app.bundleIdentifier,
+                                  name: app.localizedName ?? "App",
+                                  isActive: app.isActive,
+                                  pid: app.processIdentifier)
+        }
     }
 
     /// The live `NSRunningApplication` for a bundle id (for activate/hide/quit).

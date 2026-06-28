@@ -29,6 +29,21 @@ final class DockModelTests: XCTestCase {
         XCTAssertNil(tiles[1].itemID)   // running-only, not pinned
     }
 
+    func testDuplicateRunningAppsYieldUniqueTileIDs() {
+        // Two running infos sharing a bundle id (relaunch/activation race, or a bundle
+        // with a second regular process) must not mint two tiles with the same id —
+        // that desyncs id-keyed magnification so a trailing icon stops zooming.
+        let pinned = [finderItem()]
+        let running = [
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: false, pid: 10),
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: true, pid: 11),
+            RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: false, pid: 12),
+        ]
+        let tiles = DockModel.makeTiles(pinned: pinned, running: running, showRunningApps: true)
+        XCTAssertEqual(tiles.map(\.id), ["app:com.apple.finder", "app:com.panic.Transmit", "app:com.apple.Safari"])
+        XCTAssertEqual(Set(tiles.map(\.id)).count, tiles.count)   // all ids unique
+    }
+
     func testRunningOnlyAppsHiddenWhenDisabled() {
         let pinned = [finderItem()]
         let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)]

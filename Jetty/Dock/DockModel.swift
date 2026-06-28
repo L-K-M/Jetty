@@ -99,8 +99,13 @@ final class DockModel: ObservableObject {
             uniquingKeysWith: { a, _ in a })
         let pinnedAppBundleIDs = Set(pinned.compactMap { $0.kind == .application ? $0.bundleIdentifier : nil })
 
+        // Guard the invariant the rendering relies on: **unique tile ids**. Duplicate
+        // ids (e.g. two running infos sharing a bundle id) would break id-keyed
+        // magnification — the trailing icon stops zooming. Keep the first of any id.
+        var seenRunningIDs = Set<String>()
         let runningOnly: [DockTile] = running.compactMap { info in
             if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
+            guard seenRunningIDs.insert(info.id).inserted else { return nil }
             return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
                             bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
                             isRunning: true, isActive: info.isActive, pid: info.pid,

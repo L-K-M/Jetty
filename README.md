@@ -4,7 +4,7 @@ A fast, native, **auto-hiding dock for macOS Tahoe** — a stand-in for the syst
 with the things the real Dock still won't give you: **position it anywhere**, **style
 it deeply**, and **do more with it**.
 
-**Latest release:** v<!-- version -->1.0.0<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)
+**Latest release:** v<!-- version -->1.0.1<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)
 
 > [!IMPORTANT]
 > LLM Disclosure: Jetty was built with substantial help from large language models —

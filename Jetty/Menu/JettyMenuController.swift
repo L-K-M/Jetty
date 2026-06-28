@@ -114,8 +114,9 @@ final class JettyMenuController {
 
     /// Opens a default-browser web search for `query`, then closes the menu (ND-9).
     private func webSearch(_ query: String) {
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+        var components = URLComponents(string: "https://www.google.com/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        if let url = components?.url {
             NSWorkspace.shared.open(url)
         }
         close()

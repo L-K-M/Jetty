@@ -104,7 +104,9 @@ final class JettyMenuModel: ObservableObject {
     }
 
     func activateSelection() {
-        if results.indices.contains(selectedIndex) {
+        if let command {
+            onRunCommand?(command)
+        } else if results.indices.contains(selectedIndex) {
             onLaunch?(results[selectedIndex])
         } else if let query = webSearchQuery {
             // No app results → Enter searches the web for the query (ND-9).

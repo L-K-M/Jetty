@@ -76,4 +76,18 @@ final class CommandBarTests: XCTestCase {
         XCTAssertNil(MenuCommand.match("xy"))        // too short
         XCTAssertNil(MenuCommand.match("safari"))    // unrelated
     }
+
+    func testReturnRunsMatchedCommandBeforeLaunchingSelection() {
+        let model = JettyMenuModel(appIndex: AppIndex())
+        var launched = false
+        var ranCommand: MenuCommand?
+        model.onLaunch = { _ in launched = true }
+        model.onRunCommand = { ranCommand = $0 }
+
+        model.query = "dark"
+        model.activateSelection()
+
+        XCTAssertEqual(ranCommand, .toggleDarkMode)
+        XCTAssertFalse(launched)
+    }
 }

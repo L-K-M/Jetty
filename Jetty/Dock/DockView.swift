@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// The dock's SwiftUI content: a row (or column) of **slots** on a Liquid Glass
 /// strip, with continuous pointer-tracking magnification and live drag-to-reorder.
@@ -19,6 +20,7 @@ struct DockView: View {
     @State private var draggingSlotID: String?
     @State private var dragAlong: CGFloat = 0
     @State private var dragCross: CGFloat = 0
+    @State private var isStripDropTargeted = false     // a file drag is over the dock background
 
     /// Shared inner padding — also used by `DockLayout.contentSize` so the window
     /// frame and the SwiftUI content agree.
@@ -36,7 +38,51 @@ struct DockView: View {
                 .padding(Self.padding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
+        .contentShape(Rectangle())
+        // Dropping a folder/file on the dock background (not a specific tile) pins it.
+        // A tile under the cursor handles its own drop first; this catches the rest.
+        .onDrop(of: [.fileURL], isTargeted: $isStripDropTargeted) { providers in
+            loadDroppedURLs(from: providers)
+            return true
+        }
+        .overlay { stripDropHighlight(edge: edge, thickness: resting) }
         .onHover { inside in if !inside { hoveredTileID = nil; hoverAlong = nil } }
+    }
+
+    @ViewBuilder
+    private func stripDropHighlight(edge: DockEdge, thickness: CGFloat) -> some View {
+        if isStripDropTargeted {
+            let shape = RoundedRectangle(cornerRadius: CGFloat(preferences.cornerRadius), style: .continuous)
+                .stroke(preferences.tintColor, lineWidth: 2)
+            Group {
+                if edge.isHorizontal {
+                    shape.frame(maxWidth: .infinity).frame(height: thickness)
+                } else {
+                    shape.frame(maxHeight: .infinity).frame(width: thickness)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Loads file URLs from dropped providers and pins them (off the dock background).
+    private func loadDroppedURLs(from providers: [NSItemProvider]) {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        let lock = NSLock()
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url, url.isFileURL {
+                    lock.lock(); urls.append(url); lock.unlock()
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty { model.onAddDroppedItems?(urls) }
+        }
     }
 
     // MARK: Glass strip + decorations

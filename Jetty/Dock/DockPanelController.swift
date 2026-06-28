@@ -8,6 +8,38 @@ private final class DockHostingView: NSHostingView<DockView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
+/// A thin, transparent edge window's content view that catches a *file drag* aimed
+/// at an auto-hidden dock: entering it reveals the dock, and dropping on it pins the
+/// files. This exists because a Finder drag emits no `mouseMoved` events (so the
+/// edge-hover monitor can't reveal mid-drag) and the parked dock panel is
+/// click-through while hidden (so it isn't itself a drag destination). See PLAN.md §4.
+private final class DragRevealSensorView: NSView {
+    var onDragEnter: (() -> Void)?
+    var onDropURLs: (([URL]) -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onDragEnter?()
+        return .copy
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { true }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = sender.draggingPasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        guard !urls.isEmpty else { return false }
+        onDropURLs?(urls)
+        return true
+    }
+}
+
 /// Owns one display's auto-hiding dock panel: a borderless, non-activating,
 /// always-on-top window that floats **over** content on reveal (no screen-space
 /// reservation). Reveal/hide is driven by the pointer location forwarded from the
@@ -29,6 +61,12 @@ final class DockPanelController {
 
     private var revealWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
+
+    /// A thin edge window that catches file drags while the dock is auto-hidden
+    /// (present only when auto-hide + edge-hover are on). See `DragRevealSensorView`.
+    private var sensorPanel: NSPanel?
+    /// Pins file/folder URLs dropped onto the edge sensor (wired by the controller).
+    var onDropToPin: (([URL]) -> Void)?
 
     init(displayUUID: String, screen: NSScreen, anchor: DockAnchor,
          model: DockModel, preferences: Preferences) {
@@ -101,6 +139,7 @@ final class DockPanelController {
     func layoutForCurrentState() {
         recomputeFrames()
         applyRevealState(animated: false)
+        updateDragSensor()
         if !panel.isVisible { panel.orderFrontRegardless() }
     }
 
@@ -108,11 +147,13 @@ final class DockPanelController {
         recomputeFrames()
         isRevealed = !preferences.autoHide
         applyRevealState(animated: false)
+        updateDragSensor()
         panel.orderFrontRegardless()
     }
 
     func close() {
         revealWork?.cancel(); hideWork?.cancel()
+        sensorPanel?.orderOut(nil); sensorPanel = nil
         panel.orderOut(nil)
     }
 
@@ -309,5 +350,61 @@ final class DockPanelController {
             layer.transform = target
         }
         panel.invalidateShadow()
+    }
+
+    // MARK: Drag-reveal sensor
+
+    /// Creates/positions (or tears down) the thin edge window that lets a Finder drag
+    /// reveal and drop onto the dock while it's auto-hidden. Only present when auto-hide
+    /// and edge-hover are both on; otherwise the visible dock handles drops directly.
+    private func updateDragSensor() {
+        guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else {
+            sensorPanel?.orderOut(nil); sensorPanel = nil
+            return
+        }
+        let panel = sensorPanel ?? makeSensorPanel()
+        sensorPanel = panel
+        panel.setFrame(sensorFrame(), display: false)
+        if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    private func makeSensorPanel() -> NSPanel {
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 10, height: 6),
+                        styleMask: [.borderless, .nonactivatingPanel],
+                        backing: .buffered, defer: false)
+        p.isFloatingPanel = true
+        p.becomesKeyOnlyIfNeeded = true
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = false
+        // Just *below* the dock panel so a revealed (non-click-through) dock always wins
+        // the drop, but still above ordinary app windows so the sensor catches the drag
+        // when the dock is hidden (and click-through).
+        p.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue - 1)
+        p.isMovable = false
+        p.isReleasedWhenClosed = false
+        p.isRestorable = false
+        p.hidesOnDeactivate = false
+        p.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        let view = DragRevealSensorView(frame: .zero)
+        view.onDragEnter = { [weak self] in self?.reveal() }
+        view.onDropURLs = { [weak self] urls in self?.reveal(); self?.onDropToPin?(urls) }
+        p.contentView = view
+        return p
+    }
+
+    /// A thin band hugging the usable-area edge over the dock's along-extent. Uses
+    /// `visibleFrame` (not the physical screen edge) so a top dock's sensor sits below
+    /// the menu bar — matching where the dock actually reveals.
+    private func sensorFrame() -> CGRect {
+        let t: CGFloat = 6
+        let vf = screen.visibleFrame
+        let r = revealedFrameValue
+        switch anchor.edge {
+        case .bottom: return CGRect(x: r.minX, y: vf.minY, width: r.width, height: t)
+        case .top:    return CGRect(x: r.minX, y: vf.maxY - t, width: r.width, height: t)
+        case .left:   return CGRect(x: vf.minX, y: r.minY, width: t, height: r.height)
+        case .right:  return CGRect(x: vf.maxX - t, y: r.minY, width: t, height: r.height)
+        }
     }
 }

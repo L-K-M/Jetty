@@ -49,6 +49,9 @@ final class DockModel: ObservableObject {
     var onReorder: ((_ orderedItemIDs: [UUID]) -> Void)?
     /// Drag-out-to-remove: the backing item id of a tile dragged off the dock (ND-5).
     var onDragOutRemove: ((_ itemID: UUID) -> Void)?
+    /// File/folder URLs dropped on the dock strip background (not a specific tile) —
+    /// pin them as new items.
+    var onAddDroppedItems: (([URL]) -> Void)?
 
     /// Count of pinned tiles (those with a backing item). Pinned tiles precede
     /// running-only ones in `tiles`. Kept for tests / sizing.

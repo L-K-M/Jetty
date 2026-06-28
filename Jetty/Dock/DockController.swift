@@ -139,7 +139,7 @@ final class DockController {
                         String(p.inset), p.displayScope.rawValue].joined(separator: "|"),
             model: String(p.showRunningApps),
             layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
-                     String(p.magnification), String(p.autoHide)].joined(separator: "|"),
+                     String(p.magnification), String(p.autoHide), p.revealTrigger.rawValue].joined(separator: "|"),
             hotkeys: p.toggleHotkey.jsonString + "·" + p.menuHotkey.jsonString
         )
     }
@@ -188,6 +188,7 @@ final class DockController {
             } else {
                 let panel = DockPanelController(displayUUID: uuid, screen: screen, anchor: anchor,
                                                 model: model, preferences: preferences)
+                panel.onDropToPin = { [weak self] urls in self?.pinDroppedURLs(urls) }
                 panels[uuid] = panel
                 panel.showInitial()
             }
@@ -202,6 +203,15 @@ final class DockController {
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
+        model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
+    }
+
+    /// Pins file/folder/app URLs dropped onto the dock strip or the edge drag-sensor,
+    /// skipping any already-pinned target so a repeat drop doesn't duplicate a tile.
+    private func pinDroppedURLs(_ urls: [URL]) {
+        for url in urls where !isAlreadyPinned(url) {
+            store.addItem(makePinnedItem(for: url))
+        }
     }
 
     /// Removes a pinned item with the nostalgic Dock "poof" at the pointer (ND-5).

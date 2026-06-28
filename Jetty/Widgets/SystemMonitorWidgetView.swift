@@ -86,8 +86,22 @@ struct SystemMonitorWidgetView: View {
         let ram = samples.map(\.memory)
         let net = SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
                                                 floor: SystemMonitorGraph.netFloor)
-        let labelSize = max(7, height * 0.16)
-        return ZStack {
+        let labelSize = max(7, height * 0.15)
+        // Legend sits in its own row ABOVE the chart so the sparklines never draw over
+        // the numbers; the chart fills the space that remains.
+        return VStack(spacing: 1) {
+            HStack(spacing: 5) {
+                legendValue("\(percent(stats.load))", color: tint)
+                legendValue("\(percent(stats.memory))", color: ramColor)
+                if showNetwork {
+                    legendValue(SystemMonitorGraph.formatRate(currentNetRate), color: netColor)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: labelSize, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .fixedSize(horizontal: false, vertical: true)
+
             GeometryReader { geo in
                 let size = geo.size
                 // CPU: filled area + line (the dominant series, in the tint).
@@ -102,21 +116,8 @@ struct SystemMonitorWidgetView: View {
                 // Network: thin auto-scaled line.
                 if showNetwork {
                     SystemMonitorGraph.linePath(net, in: size)
-                        .stroke(netColor.opacity(0.9), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
+                        .stroke(netColor.opacity(0.85), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
                 }
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 5) {
-                    legendValue("\(percent(stats.load))", color: tint)
-                    legendValue("\(percent(stats.memory))", color: ramColor)
-                    if showNetwork {
-                        legendValue(SystemMonitorGraph.formatRate(currentNetRate), color: netColor)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .font(.system(size: labelSize, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 5)

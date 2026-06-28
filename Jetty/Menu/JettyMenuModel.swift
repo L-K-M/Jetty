@@ -32,6 +32,9 @@ final class JettyMenuModel: ObservableObject {
     /// A matched quick toggle (e.g. typing "dark"), else `nil` (ND-9).
     @Published private(set) var command: MenuCommand?
     @Published var selectedIndex: Int = 0
+    /// Bumped on each open so the AppKit search field re-focuses (the view/panel are
+    /// reused across opens, so onAppear-style focus only fires once).
+    @Published private(set) var focusToken: Int = 0
 
     let maxResults = 12
 
@@ -164,6 +167,7 @@ final class JettyMenuModel: ObservableObject {
     func reset() {
         query = ""
         selectedIndex = 0
+        focusToken &+= 1
         // Cancel the deferred recompute the `query` didSet just scheduled and run it now,
         // so a freshly-opened menu shows its recents immediately (not a tick later).
         pendingRecompute?.cancel()

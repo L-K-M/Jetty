@@ -7,7 +7,6 @@ import AppKit
 struct JettyMenuView: View {
     @ObservedObject var model: JettyMenuModel
     @ObservedObject var preferences: Preferences
-    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,11 +51,8 @@ struct JettyMenuView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search apps…", text: $model.query)
-                .textFieldStyle(.plain)
-                .font(.title3)
-                .focused($searchFocused)
-                .onAppear { searchFocused = true }
+            MenuSearchField(text: $model.query, placeholder: "Search apps…", focusToken: model.focusToken)
+                .frame(maxWidth: .infinity)
         }
         .padding(14)
     }

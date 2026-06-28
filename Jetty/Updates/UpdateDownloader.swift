@@ -23,7 +23,7 @@ struct UpdateDownloader {
     /// `Foo-2.dmg`, …) so re-downloading never clobbers an existing file.
     static func uniqueDestination(in directory: URL, fileName: String,
                                   fileManager: FileManager = .default) -> URL {
-        let name = fileName.isEmpty ? "download" : fileName
+        let name = sanitizedFileName(fileName)
         let first = directory.appendingPathComponent(name)
         guard fileManager.fileExists(atPath: first.path) else { return first }
 
@@ -36,5 +36,17 @@ struct UpdateDownloader {
             if !fileManager.fileExists(atPath: candidate.path) { return candidate }
             index += 1
         }
+    }
+
+    /// GitHub asset names should be filenames, but sanitize defensively before
+    /// writing into Downloads so path separators/control characters never matter.
+    static func sanitizedFileName(_ fileName: String) -> String {
+        let candidate = (fileName as NSString).lastPathComponent
+        let filtered = candidate.unicodeScalars.map { scalar in
+            CharacterSet.controlCharacters.contains(scalar) ? "-" : String(scalar)
+        }.joined()
+        let trimmed = filtered.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != ".", trimmed != ".." else { return "Jetty-update" }
+        return trimmed
     }
 }

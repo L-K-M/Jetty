@@ -41,4 +41,20 @@ final class GitHubReleaseTests: XCTestCase {
         let release = try decoder.decode(GitHubRelease.self, from: json)
         XCTAssertEqual(release.releaseNotes(maxLength: 4), "Note…")
     }
+
+    func testUpdateDownloaderSanitizesAssetNames() {
+        let directory = URL(fileURLWithPath: "/tmp")
+        XCTAssertEqual(
+            UpdateDownloader.uniqueDestination(in: directory, fileName: "../../Jetty.dmg").lastPathComponent,
+            "Jetty.dmg"
+        )
+        XCTAssertEqual(
+            UpdateDownloader.uniqueDestination(in: directory, fileName: "Jetty\u{0000}.zip").lastPathComponent,
+            "Jetty-.zip"
+        )
+        XCTAssertEqual(
+            UpdateDownloader.uniqueDestination(in: directory, fileName: "..").lastPathComponent,
+            "Jetty-update"
+        )
+    }
 }

@@ -13,12 +13,16 @@ final class WindowPeekModel: ObservableObject {
 
     private(set) var pid: pid_t = 0
     private var timer: Timer?
-    private let queue = DispatchQueue(label: "ch.lkmc.jetty.windowpeek", qos: .userInitiated)
+    private var isRefreshing = false
 
     func load(pid: pid_t, appName: String) {
+        timer?.invalidate()
         self.pid = pid
         self.appName = appName
         canCapture = CGPreflightScreenCaptureAccess()
+        // Show the window list right away (glyphs); the async capture fills thumbnails in.
+        windows = WindowLister.windows(forPID: pid)
+        thumbnails = [:]
         refresh()
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(t, forMode: .common)
@@ -34,13 +38,15 @@ final class WindowPeekModel: ObservableObject {
 
     private func refresh() {
         let pid = self.pid
-        guard pid != 0 else { return }
-        queue.async { [weak self] in
+        guard pid != 0, !isRefreshing else { return }   // skip if a capture is still in flight
+        isRefreshing = true
+        Task { [weak self] in
             let wins = WindowLister.windows(forPID: pid)
-            var thumbs: [CGWindowID: CGImage] = [:]
-            for w in wins { if let image = WindowThumbnailer.image(for: w.id) { thumbs[w.id] = image } }
-            DispatchQueue.main.async {
-                guard let self, self.pid == pid else { return }   // ignore stale loads
+            let thumbs = await WindowThumbnailer.images(for: wins)
+            await MainActor.run {
+                guard let self else { return }
+                self.isRefreshing = false
+                guard self.pid == pid else { return }   // ignore stale loads
                 self.windows = wins
                 self.thumbnails = thumbs
             }

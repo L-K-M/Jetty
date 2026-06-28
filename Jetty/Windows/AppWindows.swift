@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import ApplicationServices
+import ScreenCaptureKit
 import Darwin
 
 /// One on-screen window of some application.
@@ -35,12 +36,44 @@ enum WindowLister {
     }
 }
 
-/// Captures a still image of a single window for the live-preview thumbnails. Requires
-/// Screen Recording; returns `nil` (graceful) when it isn't granted.
+/// Captures live thumbnails for the preview popover via **ScreenCaptureKit** (the
+/// modern replacement for the deprecated `CGWindowListCreateImage`). Requires Screen
+/// Recording; returns an empty map (graceful → the UI shows a window glyph) when it
+/// isn't granted, or on macOS 13 where `SCScreenshotManager` isn't available.
 enum WindowThumbnailer {
-    static func image(for windowID: CGWindowID) -> CGImage? {
-        CGWindowListCreateImage(.null, .optionIncludingWindow, windowID,
-                                [.boundsIgnoreFraming, .nominalResolution])
+    static func images(for windows: [AppWindow]) async -> [CGWindowID: CGImage] {
+        guard !windows.isEmpty else { return [:] }
+        if #available(macOS 14, *) { return await sckImages(for: windows) }
+        return [:]
+    }
+
+    /// Fetches the shareable-content list **once**, then captures each requested window
+    /// from it — far cheaper than querying the window server per window.
+    @available(macOS 14, *)
+    private static func sckImages(for windows: [AppWindow]) async -> [CGWindowID: CGImage] {
+        guard let content = try? await SCShareableContent.current else { return [:] }
+        let byID = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { first, _ in first })
+        var result: [CGWindowID: CGImage] = [:]
+        for window in windows {
+            guard let scWindow = byID[window.id], let image = await capture(scWindow) else { continue }
+            result[window.id] = image
+        }
+        return result
+    }
+
+    @available(macOS 14, *)
+    private static func capture(_ scWindow: SCWindow) async -> CGImage? {
+        let filter = SCContentFilter(desktopIndependentWindow: scWindow)
+        let config = SCStreamConfiguration()
+        // Cap the captured size — the thumbnail is small, and full window resolutions
+        // would waste memory/time.
+        let frame = scWindow.frame
+        let maxDim: CGFloat = 800
+        let scale = min(1, maxDim / max(frame.width, frame.height, 1))
+        config.width = max(1, Int(frame.width * scale))
+        config.height = max(1, Int(frame.height * scale))
+        config.showsCursor = false
+        return try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 }
 

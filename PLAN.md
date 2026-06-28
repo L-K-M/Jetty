@@ -68,7 +68,7 @@ Two product decisions cut away the hardest and riskiest parts of the category:
 | Jetty Menu: app search | ✅ | scan `/Applications` + `NSMetadataQuery` (Spotlight) | none |
 | Jetty Menu: power commands (sleep/restart/shut down/log out) | ✅ | AppleEvents to `loginwindow`/System Events (or `osascript`) | Automation (per-target, first use) |
 | Per-app window list, click-to-raise, minimize/restore | ✅ | `CGWindowList` enumeration + Accessibility `AXUIElement` (private `_AXUIElementGetWindow` resolved via `dlsym`); raise degrades to app-activate without AX | **Accessibility** (optional) |
-| Live hover **window previews** | ✅ | `CGWindowListCreateImage` thumbnails (deprecated on 15; ScreenCaptureKit is the planned migration); list + raise/minimize still work without it | **Screen Recording** (optional) |
+| Live hover **window previews** | ✅ | **ScreenCaptureKit** thumbnails (`SCScreenshotManager`, macOS 14+; glyph fallback on 13); list + raise/minimize still work without it | **Screen Recording** (optional) |
 | Mirror another app's unread **badge** | ⚠️ best-effort, later | undocumented AX `AXStatusLabel` on the Dock process (polling) or `lsappinfo StatusLabel` | Accessibility |
 | Reserve screen space (windows respect the dock) | ❌ not cleanly possible | (would need private SkyLight + SIP off) | — |
 | True minimize-to-this-dock genie / Stage-Manager parity | ❌ Dock-exclusive | — | — |

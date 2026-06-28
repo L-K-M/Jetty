@@ -14,6 +14,7 @@ final class PomodoroTimer: ObservableObject {
 
     private var duration: TimeInterval
     private var timer: Timer?
+    private var endDate: Date?
 
     init(minutes: Double = Preferences.shared.pomodoroMinutes) {
         let seconds = max(minutes, 1) * 60
@@ -27,12 +28,17 @@ final class PomodoroTimer: ObservableObject {
     func start() {
         if remaining <= 0 { reload() }
         isRunning = true
+        endDate = Date().addingTimeInterval(remaining)
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     func pause() {
+        updateRemaining()
         isRunning = false
+        endDate = nil
         timer?.invalidate()
         timer = nil
     }
@@ -45,14 +51,20 @@ final class PomodoroTimer: ObservableObject {
     private func reload() {
         duration = max(Preferences.shared.pomodoroMinutes, 1) * 60
         remaining = duration
+        endDate = nil
     }
 
     private func tick() {
-        remaining = max(0, remaining - 1)
+        updateRemaining()
         if remaining <= 0 {
             pause()
             NSSound(named: "Glass")?.play()
         }
+    }
+
+    private func updateRemaining(now: Date = Date()) {
+        guard let endDate else { return }
+        remaining = max(0, endDate.timeIntervalSince(now))
     }
 
     /// `mm:ss` for display.

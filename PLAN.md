@@ -242,17 +242,26 @@ window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliar
 // styleMask includes .nonactivatingPanel so clicking the dock never steals focus
 ```
 
-- **Hidden by default.** The panel sits off-edge (or alpha 0). It is **revealed** when:
-  (a) the pointer reaches the dock's screen edge (a global **mouse** monitor — no
-  permission), held for a short, configurable delay; or (b) the user presses the optional
-  global **toggle hotkey** (Carbon — no permission). It **hides** on pointer-leave (with a
-  grace delay), after launching an item (configurable), or on `Esc`.
-- **Overlaps, never reserves.** On reveal it slides/fades in *over* whatever is there.
+- **Hidden by default.** The panel is **parked on-screen** at its revealed frame at all
+  times, with its content slid off-edge (and made click-through) while hidden — it is
+  never moved off-screen. It is **revealed** when: (a) the pointer reaches the dock's
+  screen edge (a global **mouse** monitor — no permission), held for a short, configurable
+  delay; or (b) the user presses the optional global **toggle hotkey** (Carbon — no
+  permission). It **hides** on pointer-leave (with a grace delay), after launching an item
+  (configurable), or on `Esc`.
+- **Overlaps, never reserves.** On reveal the content slides in *over* whatever is there.
   No window is moved. This is the explicit product choice that removes the Accessibility
   dependency and the non-AX-app failure mode.
-- **Reveal/hide animation** mirrors MacDring's edge-slide: translate along the
-  perpendicular axis + fade, *Reduce Motion* → instant. The slide nudges **inward** so a
-  shared edge can't bleed onto an adjacent display.
+- **Reveal/hide animation = content-layer slide, not a window move.** The panel stays
+  parked at the revealed frame; reveal/hide animates only a content sublayer's
+  `CATransform3D` translation along the perpendicular axis (fully off its edge when
+  hidden, clipped by the layer-backed container). This is pure GPU compositing of an
+  already-rendered, never-discarded backing — animating the *window frame* from off-screen
+  instead discarded the backing and forced a full SwiftUI re-render mid-slide, which was
+  the source of reveal stutter and the "stuck half-revealed" hitch. *Reduce Motion* →
+  instant. The panel is click-through (`ignoresMouseEvents`) while hidden so the
+  transparent parked window never intercepts events; the global edge-hover monitor still
+  triggers reveal.
 - **Always-available "peek" option.** A setting keeps a thin always-visible sliver (or a
   fully pinned, always-shown dock) for users who don't want auto-hide — same
   `DockLayout` math, just a different resting frame.

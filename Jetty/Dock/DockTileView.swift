@@ -53,10 +53,11 @@ struct DockTileView: View {
         content
             .frame(width: tileWidth, height: baseSize)
             // Glow as a colored *shadow* of the icon so it hugs the icon's actual shape
-            // and fades smoothly — the old blurred rounded-rect background left a hard
-            // colored band ("border") around the icon.
-            .shadow(color: glowColor, radius: glowRadius)
-            .shadow(color: glowColor, radius: glowRadius * 0.55)
+            // and fades smoothly. Biased *toward the screen edge* (and kept tight) so it
+            // pools around/below the icon within the dock body instead of haloing out
+            // past the dock's far (top) edge.
+            .shadow(color: glowColor, radius: glowRadius, x: glowOffset.width, y: glowOffset.height)
+            .shadow(color: glowColor, radius: glowRadius * 0.55, x: glowOffset.width, y: glowOffset.height)
             .scaleEffect(scale, anchor: scaleAnchor)
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
@@ -87,7 +88,20 @@ struct DockTileView: View {
         return color.opacity(0.85)
     }
 
-    private var glowRadius: CGFloat { isGlowing ? baseSize * 0.28 : 0 }
+    private var glowRadius: CGFloat { isGlowing ? baseSize * 0.20 : 0 }
+
+    /// Pushes the glow toward the screen edge so it doesn't bloom out the dock's far
+    /// (inner) edge. Zero when not glowing.
+    private var glowOffset: CGSize {
+        guard isGlowing else { return .zero }
+        let d = baseSize * 0.10
+        switch edge {
+        case .bottom: return CGSize(width: 0, height: d)   // SwiftUI y+ is down → toward bottom edge
+        case .top:    return CGSize(width: 0, height: -d)
+        case .left:   return CGSize(width: -d, height: 0)
+        case .right:  return CGSize(width: d, height: 0)
+        }
+    }
 
     private var showsGlow: Bool {
         guard tile.icon != nil else { return false }

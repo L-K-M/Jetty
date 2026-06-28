@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CoreGraphics
+import Combine
 
 /// Reports the optional permissions used by Jetty's *later* power features. The core
 /// dock needs none of these — this pane exists so the window-peeking / live-preview
@@ -19,14 +20,16 @@ struct PermissionsView: View {
             }
 
             Section("Window previews") {
-                Toggle("Show window previews when hovering an app", isOn: $preferences.windowPreviews)
-                Text("Hovering a running app's tile shows its open windows. Click a preview to raise it, or use the corner button to minimize.")
+                Picker("Hovering an app's tile shows", selection: $preferences.windowPreviewMode) {
+                    ForEach(WindowPreviewMode.allCases) { Text($0.label).tag($0) }
+                }
+                Text(modeExplanation)
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("Accessibility — for click-to-raise / minimize") {
+            Section("Accessibility — for window names & click-to-raise / minimize") {
                 statusRow(granted: accessibilityTrusted)
-                Text("Lets Jetty raise and minimize a specific window from its preview. Without it, clicking a preview just brings the app forward.")
+                Text("Lets Jetty read window titles and raise/minimize a specific window. Without it, names mode shows generic labels and clicking just brings the app forward. Needed by both modes for precise control — but neither mode *requires* it.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Request…") { AccessibilityAuthorizer.prompt(); refresh() }
@@ -34,9 +37,9 @@ struct PermissionsView: View {
                 }
             }
 
-            Section("Screen Recording — for live preview thumbnails") {
+            Section("Screen Recording — only for “Live thumbnails”") {
                 statusRow(granted: screenRecordingGranted)
-                Text("Lets the previews show live window thumbnails. Optional — without it you still get the window list and raise/minimize.")
+                Text("Required only by the “Live thumbnails” preview mode. The default “Window names” mode never uses it.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Request…") { CGRequestScreenCaptureAccess(); refresh() }
@@ -50,6 +53,17 @@ struct PermissionsView: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: refresh)
+        // Poll so granting a permission in System Settings reflects here without a
+        // manual refresh or reopening the tab.
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in refresh() }
+    }
+
+    private var modeExplanation: String {
+        switch preferences.windowPreviewMode {
+        case .off: return "No preview appears when you hover an app."
+        case .names: return "Shows a list of the app's window names — needs no Screen Recording. Click a name to raise that window (with Accessibility) or to bring the app forward."
+        case .thumbnails: return "Shows live thumbnails of the app's windows — needs Screen Recording. Click a thumbnail to raise it, or the corner button to minimize."
+        }
     }
 
     private func statusRow(granted: Bool) -> some View {

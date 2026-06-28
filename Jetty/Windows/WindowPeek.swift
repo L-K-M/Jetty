@@ -8,6 +8,7 @@ final class WindowPeekModel: ObservableObject {
     @Published private(set) var windows: [AppWindow] = []
     @Published private(set) var thumbnails: [CGWindowID: CGImage] = [:]
     @Published private(set) var appName = ""
+    @Published private(set) var mode: WindowPreviewMode = .names
     /// True when Screen Recording is granted, so the UI can hint when previews are off.
     @Published private(set) var canCapture = CGPreflightScreenCaptureAccess()
 
@@ -15,10 +16,11 @@ final class WindowPeekModel: ObservableObject {
     private var timer: Timer?
     private var isRefreshing = false
 
-    func load(pid: pid_t, appName: String) {
+    func load(pid: pid_t, appName: String, mode: WindowPreviewMode) {
         timer?.invalidate()
         self.pid = pid
         self.appName = appName
+        self.mode = mode
         canCapture = CGPreflightScreenCaptureAccess()
         // Show the window list right away (glyphs); the async capture fills thumbnails in.
         windows = WindowLister.windows(forPID: pid)
@@ -38,11 +40,14 @@ final class WindowPeekModel: ObservableObject {
 
     private func refresh() {
         let pid = self.pid
+        let mode = self.mode
         guard pid != 0, !isRefreshing else { return }   // skip if a capture is still in flight
         isRefreshing = true
         Task { [weak self] in
             let wins = WindowLister.windows(forPID: pid)
-            let thumbs = await WindowThumbnailer.images(for: wins)
+            // Only the thumbnail mode captures images (Screen Recording); names mode
+            // never touches ScreenCaptureKit, so it needs no permission.
+            let thumbs = mode.capturesThumbnails ? await WindowThumbnailer.images(for: wins) : [:]
             await MainActor.run {
                 guard let self else { return }
                 self.isRefreshing = false
@@ -77,18 +82,22 @@ struct WindowPeekView: View {
             if model.windows.isEmpty {
                 Text("No open windows")
                     .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: thumbHeight)
-            } else {
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else if model.mode == .thumbnails {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(model.windows) { window in thumbnail(window) }
+                        ForEach(Array(model.windows.enumerated()), id: \.element.id) { index, window in
+                            thumbnail(window, index: index)
+                        }
                     }
                 }
-            }
-            if !model.canCapture {
-                Label("Enable Screen Recording in Settings → Permissions for live previews.",
-                      systemImage: "info.circle")
-                    .font(.caption2).foregroundStyle(.secondary)
+                if !model.canCapture {
+                    Label("Enable Screen Recording in Settings → Permissions for live previews.",
+                          systemImage: "info.circle")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            } else {
+                namesList
             }
         }
         .padding(12)
@@ -105,7 +114,35 @@ struct WindowPeekView: View {
         .onHover { onHoverChange($0) }
     }
 
-    private func thumbnail(_ window: AppWindow) -> some View {
+    /// A vertical list of window names (names mode — needs no Screen Recording).
+    private var namesList: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 2) {
+                ForEach(Array(model.windows.enumerated()), id: \.element.id) { index, window in
+                    Button { onSelect(window) } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "macwindow").foregroundStyle(.secondary)
+                            Text(label(window, index: index)).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 6)
+                            Button { onMinimize(window) } label: {
+                                Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain).help("Minimize")
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func label(_ window: AppWindow, index: Int) -> String {
+        window.title.isEmpty ? "Window \(index + 1)" : window.title
+    }
+
+    private func thumbnail(_ window: AppWindow, index: Int) -> some View {
         let aspect = window.bounds.height > 0 ? window.bounds.width / window.bounds.height : 1.6
         let width = min(max(thumbHeight * aspect, 80), 260)
         return VStack(spacing: 4) {
@@ -128,7 +165,7 @@ struct WindowPeekView: View {
                 }
             }
             .buttonStyle(.plain)
-            Text(window.title.isEmpty ? model.appName : window.title)
+            Text(label(window, index: index))
                 .font(.caption2).foregroundStyle(.secondary)
                 .lineLimit(1).truncationMode(.middle)
                 .frame(width: width)

@@ -242,7 +242,10 @@ final class DockController {
     private var hoveredAppTile: DockTile?
 
     private func handleAppHover(_ tile: DockTile, entered: Bool) {
-        guard preferences.windowPreviews else { return }
+        guard preferences.windowPreviewMode != .off else {
+            if windowPeek.isOpen { windowPeek.hide() }
+            return
+        }
         if entered, tile.kind == .application, tile.isRunning, pid(for: tile) != nil {
             hoveredAppTile = tile
         } else if !entered, hoveredAppTile?.id == tile.id {
@@ -270,13 +273,38 @@ final class DockController {
     }
 
     private func presentWindowPeek(tile: DockTile, pid: pid_t) {
-        let point = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) }) ?? NSScreen.main else { return }
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let uuid = registry.uuid(for: screen)
         let edge = uuid.map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
-        let dock = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: point, size: .zero)
+        let dock = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: mouse, size: .zero)
+        // Anchor to the app's icon (not the cursor) so the selector doesn't track the mouse.
+        let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
-        windowPeek.show(pid: pid, appName: name, near: point, dock: dock, screen: screen, edge: edge)
+        windowPeek.show(pid: pid, appName: name, near: anchor, dock: dock,
+                        screen: screen, edge: edge, mode: preferences.windowPreviewMode)
+    }
+
+    /// The screen-space centre of `tile`'s icon along the dock axis, so the peek anchors
+    /// to the app rather than the pointer. Mirrors `DockView.tileCenters` plus the
+    /// centred slot-stack layout (magnification headroom `extra` + leading padding).
+    private func tileAnchor(for tile: DockTile, edge: DockEdge, dock: CGRect) -> CGPoint? {
+        let base = CGFloat(preferences.iconSize)
+        let spacing = CGFloat(preferences.tileSpacing)
+        var cursor: CGFloat = 0
+        var centerAlong: CGFloat?
+        for t in model.tiles {
+            let extent = DockLayout.tileExtent(kind: t.kind, baseSize: base, edge: edge).along
+            if t.id == tile.id { centerAlong = cursor + extent / 2; break }
+            cursor += extent + spacing
+        }
+        guard let centerAlong else { return nil }
+        let extra = preferences.magnificationEnabled ? (preferences.effectiveMagnification - 1) * base : 0
+        let leading = extra / 2 + DockView.padding
+        switch edge {
+        case .bottom, .top: return CGPoint(x: dock.minX + leading + centerAlong, y: dock.midY)
+        case .left, .right: return CGPoint(x: dock.midX, y: dock.maxY - (leading + centerAlong))
+        }
     }
 
     /// The process id behind a running app tile (running-only tiles carry it directly;
@@ -360,7 +388,8 @@ final class DockController {
         case .separator, .runningApps:
             return
         }
-        hideRevealedDocks()
+        // Don't hide on click — the dock stays put until the pointer leaves it, then the
+        // auto-hide pointer-tracking takes over. Hiding on launch felt abrupt.
     }
 
     private func openApplication(_ tile: DockTile) {
@@ -551,11 +580,6 @@ final class DockController {
     }
 
     func toggleAllDocks() { panels.values.forEach { $0.toggle() } }
-
-    private func hideRevealedDocks() {
-        guard preferences.autoHide else { return }
-        panels.values.forEach { $0.hide() }
-    }
 
     func openJettyMenu() {
         // Open on the screen the pointer is on (where the Jetty button was clicked, or

@@ -141,9 +141,11 @@ fallbacks.
   content and auto-hides; it does **not** nudge other apps' windows (no Accessibility
   dependency in v1).
 - **Window peeking / live previews** — **shipped**: hovering a running app's tile shows a
-  popover of its windows (live thumbnails with Screen Recording; click-to-raise /
-  minimize with Accessibility), degrading gracefully without either. See `Jetty/Windows/`.
-  **Alt-tab / badge mirroring** are still later (need Accessibility / Screen Recording).
+  popover of its windows, anchored to the icon. A `WindowPreviewMode` setting picks
+  **Off**, **Window names** (the default — needs no Screen Recording; titles via
+  Accessibility, else "Window N"), or **Live thumbnails** (ScreenCaptureKit). Click to
+  raise / minimize via Accessibility, degrading to app-activate without it. See
+  `Jetty/Windows/`. **Alt-tab / badge mirroring** are still later.
 - **SIP-disabling or `Dock.app` injection** (cDock/Docky route). Permanently off-limits.
 - **App Store distribution.** Developer ID + notarization only.
 - **Stage Manager / native-fullscreen parity.** Jetty stays out of the way there (auto-hide

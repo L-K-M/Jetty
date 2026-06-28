@@ -24,17 +24,18 @@ final class WindowPeekController {
 
     /// Shows (or re-targets) the popover for `pid`. Does nothing if the app has no
     /// listable on-screen windows.
-    func show(pid: pid_t, appName: String, near point: CGPoint, dock: CGRect, screen: NSScreen, edge: DockEdge) {
+    func show(pid: pid_t, appName: String, near point: CGPoint, dock: CGRect,
+              screen: NSScreen, edge: DockEdge, mode: WindowPreviewMode) {
         hideWork?.cancel(); hideWork = nil
         let wins = WindowLister.windows(forPID: pid)
         guard !wins.isEmpty else { hide(); return }
 
-        let size = panelSize(count: wins.count, screen: screen)
+        let size = panelSize(count: wins.count, mode: mode, screen: screen)
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        if currentPID != pid {
+        if currentPID != pid || model.mode != mode {
             currentPID = pid
-            model.load(pid: pid, appName: appName)
+            model.load(pid: pid, appName: appName, mode: mode)
         }
         panel.setContentSize(size)
         panel.setFrameOrigin(origin(size: size, near: point, dock: dock, edge: edge, in: screen.visibleFrame))
@@ -116,11 +117,17 @@ final class WindowPeekController {
 
     // MARK: Geometry
 
-    private func panelSize(count: Int, screen: NSScreen) -> CGSize {
-        let estimatedPerWindow: CGFloat = 190     // thumbnail + spacing
-        let width = min(max(CGFloat(count) * estimatedPerWindow + 24, 240),
-                        screen.visibleFrame.width - 40)
-        return CGSize(width: width, height: 200)
+    private func panelSize(count: Int, mode: WindowPreviewMode, screen: NSScreen) -> CGSize {
+        if mode == .thumbnails {
+            let estimatedPerWindow: CGFloat = 190     // thumbnail + spacing
+            let width = min(max(CGFloat(count) * estimatedPerWindow + 24, 240),
+                            screen.visibleFrame.width - 40)
+            return CGSize(width: width, height: 200)
+        }
+        // Names: a compact vertical list.
+        let rows = min(count, 10)
+        let height = min(CGFloat(rows) * 30 + 52, screen.visibleFrame.height - 60)
+        return CGSize(width: 280, height: height)
     }
 
     private func origin(size: CGSize, near point: CGPoint, dock: CGRect, edge: DockEdge, in vf: CGRect) -> CGPoint {

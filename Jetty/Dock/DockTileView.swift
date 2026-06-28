@@ -52,7 +52,11 @@ struct DockTileView: View {
     private var visual: some View {
         content
             .frame(width: tileWidth, height: baseSize)
-            .background { accentGlow }
+            // Glow as a colored *shadow* of the icon so it hugs the icon's actual shape
+            // and fades smoothly — the old blurred rounded-rect background left a hard
+            // colored band ("border") around the icon.
+            .shadow(color: glowColor, radius: glowRadius)
+            .shadow(color: glowColor, radius: glowRadius * 0.55)
             .scaleEffect(scale, anchor: scaleAnchor)
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
@@ -72,19 +76,18 @@ struct DockTileView: View {
 
     // MARK: Accent glow (ND-8)
 
-    /// A soft bloom behind the tile in the icon's dominant color, on hover or while
-    /// the app is the active one. Sampled once and cached per tile.
-    @ViewBuilder
-    private var accentGlow: some View {
-        if preferences.accentGlow, showsGlow, let color = TileAccent.color(for: tile) {
-            RoundedRectangle(cornerRadius: baseSize * 0.28, style: .continuous)
-                .fill(color)
-                .blur(radius: baseSize * 0.32)
-                .opacity(0.6)
-                .scaleEffect(1.08)
-                .allowsHitTesting(false)
-        }
+    /// A soft bloom in the icon's dominant color while the app is the active one
+    /// (sampled once, cached per tile). Rendered as a shadow on `visual`.
+    private var isGlowing: Bool {
+        preferences.accentGlow && showsGlow && TileAccent.color(for: tile) != nil
     }
+
+    private var glowColor: Color {
+        guard isGlowing, let color = TileAccent.color(for: tile) else { return .clear }
+        return color.opacity(0.85)
+    }
+
+    private var glowRadius: CGFloat { isGlowing ? baseSize * 0.28 : 0 }
 
     private var showsGlow: Bool {
         guard tile.icon != nil else { return false }

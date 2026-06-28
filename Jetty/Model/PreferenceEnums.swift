@@ -49,6 +49,29 @@ enum RevealTrigger: String, Codable, CaseIterable, Identifiable {
     var allowsHotkey: Bool { self == .hotkey || self == .both }
 }
 
+/// How the hover window-peek presents an app's windows.
+enum WindowPreviewMode: String, Codable, CaseIterable, Identifiable {
+    /// No hover preview at all.
+    case off
+    /// A list of window names — needs **no** permission (names come from Accessibility
+    /// when granted, else a generic "Window N"); clicking raises (or activates the app).
+    case names
+    /// Live window thumbnails — needs **Screen Recording**.
+    case thumbnails
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off: return "Off"
+        case .names: return "Window names"
+        case .thumbnails: return "Live thumbnails"
+        }
+    }
+
+    var capturesThumbnails: Bool { self == .thumbnails }
+}
+
 /// Which displays get a Jetty dock.
 enum DisplayScope: String, Codable, CaseIterable, Identifiable {
     case mainOnly

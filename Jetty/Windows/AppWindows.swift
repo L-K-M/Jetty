@@ -31,8 +31,18 @@ enum WindowLister {
             let title = (info[kCGWindowName as String] as? String) ?? ""
             result.append(AppWindow(id: CGWindowID(id.uint32Value), title: title, bounds: rect, pid: pid))
         }
+        // CGWindowList only yields kCGWindowName with Screen Recording. Fill missing
+        // titles from Accessibility when that's granted (no Screen Recording needed) so
+        // the names view is useful without the capture permission.
+        let axTitles = WindowActions.titles(forPID: pid)
+        let merged: [AppWindow] = result.map { window in
+            guard window.title.isEmpty, let title = axTitles[window.id] else { return window }
+            var copy = window
+            copy.title = title
+            return copy
+        }
         // Largest first — the main windows lead.
-        return result.sorted { $0.bounds.width * $0.bounds.height > $1.bounds.width * $1.bounds.height }
+        return merged.sorted { $0.bounds.width * $0.bounds.height > $1.bounds.width * $1.bounds.height }
     }
 }
 
@@ -92,6 +102,27 @@ enum WindowActions {
     static func minimize(_ window: AppWindow) {
         guard let axWindow = axWindow(for: window) else { return }
         AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
+    }
+
+    /// Window titles keyed by `CGWindowID` via Accessibility (empty without AX trust).
+    /// Lets the names view show real titles without Screen Recording.
+    static func titles(forPID pid: pid_t) -> [CGWindowID: String] {
+        guard AXIsProcessTrusted(), let getWindow = Self.getWindowFn else { return [:] }
+        let app = AXUIElementCreateApplication(pid)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
+              let axWindows = value as? [AXUIElement] else { return [:] }
+        var result: [CGWindowID: String] = [:]
+        for ax in axWindows {
+            var wid = CGWindowID(0)
+            guard getWindow(ax, &wid) == .success else { continue }
+            var titleValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(ax, kAXTitleAttribute as CFString, &titleValue) == .success,
+               let title = titleValue as? String, !title.isEmpty {
+                result[wid] = title
+            }
+        }
+        return result
     }
 
     // MARK: AX window matching

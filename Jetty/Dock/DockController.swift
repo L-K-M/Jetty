@@ -364,8 +364,8 @@ final class DockController {
             }
         case .trash:
             actions.append(DockContextAction(title: "Open Trash") { AppLauncher.openTrash() })
-            actions.append(DockContextAction(title: "Empty Trash…", isDestructive: true) {
-                PowerCommandRunner.run(.emptyTrash)
+            actions.append(DockContextAction(title: "Empty Trash…", isDestructive: true) { [weak self] in
+                self?.confirmAndEmptyTrash()
             })
         case .clock:
             actions.append(DockContextAction(title: "Open Calendar") { [weak self] in self?.openCalendar() })
@@ -392,6 +392,17 @@ final class DockController {
             break
         }
         return actions
+    }
+
+    private func confirmAndEmptyTrash() {
+        let alert = NSAlert()
+        alert.messageText = "Empty Trash?"
+        alert.informativeText = "Are you sure you want to permanently empty the Trash?"
+        alert.addButton(withTitle: "Empty Trash")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        PowerCommandRunner.run(.emptyTrash)
     }
 
     private func pin(_ tile: DockTile) {

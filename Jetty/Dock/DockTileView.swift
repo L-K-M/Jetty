@@ -131,7 +131,7 @@ struct DockTileView: View {
         case .jettyMenu:
             Image(systemName: JettyMenuGlyph.resolved(preferences.jettyMenuSymbol))
                 .resizable().scaledToFit().padding(baseSize * 0.18)
-                .foregroundStyle(preferences.tintColor)
+                .foregroundStyle(preferences.glyphColor)
         default:
             iconImage
         }

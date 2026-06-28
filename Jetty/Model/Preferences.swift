@@ -29,6 +29,10 @@ final class Preferences: ObservableObject {
         static let magnification = 1.5
         static let indicatorStyle = IndicatorStyle.dot
         static let indicatorHex = "#FFFFFF"
+        /// Foreground color of the Jetty-menu dock glyph. Separate from `tintHex` (the
+        /// background tint) so the symbol always contrasts against the glass — using the
+        /// background tint for both can never read well. White suits the default dark glass.
+        static let glyphHex = "#FFFFFF"
         static let showLabels = false
         static let accentGlow = true
         static let windowPreviewMode = WindowPreviewMode.names
@@ -112,6 +116,7 @@ final class Preferences: ObservableObject {
         static let clockShowWeekday = "clockShowWeekday"
         static let clockAnalog = "clockAnalog"
         static let jettyMenuSymbol = "jettyMenuSymbol"
+        static let glyphHex = "glyphHex"
         static let toggleHotkey = "toggleHotkey"
         static let menuHotkey = "menuHotkey"
         static let worldClockTimeZone = "worldClockTimeZone"
@@ -135,6 +140,8 @@ final class Preferences: ObservableObject {
     @Published var magnification: Double { didSet { defaults.set(magnification, forKey: Key.magnification) } }
     @Published var indicatorStyle: IndicatorStyle { didSet { defaults.set(indicatorStyle.rawValue, forKey: Key.indicatorStyle) } }
     @Published var indicatorHex: String { didSet { defaults.set(indicatorHex, forKey: Key.indicatorHex) } }
+    /// Foreground color of the Jetty-menu dock glyph — independent of the background tint.
+    @Published var glyphHex: String { didSet { defaults.set(glyphHex, forKey: Key.glyphHex) } }
     @Published var showLabels: Bool { didSet { defaults.set(showLabels, forKey: Key.showLabels) } }
     @Published var accentGlow: Bool { didSet { defaults.set(accentGlow, forKey: Key.accentGlow) } }
     @Published var windowPreviewMode: WindowPreviewMode { didSet { defaults.set(windowPreviewMode.rawValue, forKey: Key.windowPreviewMode) } }
@@ -221,6 +228,7 @@ final class Preferences: ObservableObject {
         magnification = Self.clamp(double(Key.magnification, d.magnification), 1, 2.5)
         indicatorStyle = IndicatorStyle(rawValue: string(Key.indicatorStyle, d.indicatorStyle.rawValue)) ?? d.indicatorStyle
         indicatorHex = string(Key.indicatorHex, d.indicatorHex)
+        glyphHex = string(Key.glyphHex, d.glyphHex)
         showLabels = bool(Key.showLabels, d.showLabels)
         accentGlow = bool(Key.accentGlow, d.accentGlow)
         windowPreviewMode = WindowPreviewMode(rawValue: string(Key.windowPreviewMode, d.windowPreviewMode.rawValue)) ?? d.windowPreviewMode
@@ -267,6 +275,8 @@ final class Preferences: ObservableObject {
     var tintColor: Color { Color(hexString: tintHex) }
     var gradientColor: Color { Color(hexString: gradientHex) }
     var indicatorColor: Color { Color(hexString: indicatorHex) }
+    /// Foreground color for the Jetty-menu dock glyph (separate from the background tint).
+    var glyphColor: Color { Color(hexString: glyphHex) }
 
     /// The effective magnification factor (1.0 when disabled).
     var effectiveMagnification: CGFloat { magnificationEnabled ? CGFloat(magnification) : 1.0 }
@@ -284,7 +294,7 @@ final class Preferences: ObservableObject {
                          gradientAngle: gradientAngle, backgroundOpacity: backgroundOpacity, iconSize: iconSize,
                          tileSpacing: tileSpacing, cornerRadius: cornerRadius, magnificationEnabled: magnificationEnabled,
                          magnification: magnification, indicatorStyle: indicatorStyle, indicatorHex: indicatorHex,
-                         showLabels: showLabels,
+                         showLabels: showLabels, glyphHex: glyphHex,
                          decorationStyle: decorationStyle.rawValue, decorationPosition: decorationPosition.rawValue,
                          decorationOpacity: decorationOpacity, decorationSize: decorationSize,
                          crtEnabled: crtEnabled, crtIntensity: crtIntensity)
@@ -304,6 +314,7 @@ final class Preferences: ObservableObject {
         magnification = Self.clamp(preset.magnification, 1, 2.5)
         indicatorStyle = preset.indicatorStyle
         indicatorHex = preset.indicatorHex
+        glyphHex = preset.glyphHex
         showLabels = preset.showLabels
         decorationStyle = DecorationStyle(rawValue: preset.decorationStyle) ?? .none
         decorationPosition = DecorationPosition(rawValue: preset.decorationPosition) ?? .topTrailing

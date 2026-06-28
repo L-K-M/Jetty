@@ -35,10 +35,11 @@ struct MenuView: View {
                     TextField("any SF Symbol name", text: $preferences.jettyMenuSymbol)
                         .textFieldStyle(.roundedBorder)
                     Image(systemName: JettyMenuGlyph.resolved(preferences.jettyMenuSymbol))
-                        .foregroundStyle(preferences.tintColor)
+                        .foregroundStyle(preferences.glyphColor)
                         .frame(width: 22)
                 }
-                Text("Pick an icon above, or type any SF Symbol name (browse them in Apple's free SF Symbols app). Unknown names fall back to the default.")
+                ColorPicker("Icon color", selection: jettyColorBinding($preferences.glyphHex))
+                Text("Pick an icon above, or type any SF Symbol name (browse them in Apple's free SF Symbols app). Unknown names fall back to the default. The icon color is separate from the dock's background tint so the symbol always stays legible.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

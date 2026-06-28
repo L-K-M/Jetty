@@ -19,6 +19,8 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     var indicatorStyle: IndicatorStyle
     var indicatorHex: String
     var showLabels: Bool
+    /// Foreground color of the Jetty-menu dock glyph (separate from the background tint).
+    var glyphHex: String
     // Retro flourishes (Zap parity)
     var decorationStyle: String
     var decorationPosition: String
@@ -43,6 +45,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
          indicatorStyle: IndicatorStyle,
          indicatorHex: String,
          showLabels: Bool,
+         glyphHex: String = Preferences.Default.glyphHex,
          decorationStyle: String = "none",
          decorationPosition: String = "topTrailing",
          decorationOpacity: Double = 1,
@@ -63,6 +66,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         self.indicatorStyle = indicatorStyle
         self.indicatorHex = indicatorHex
         self.showLabels = showLabels
+        self.glyphHex = glyphHex
         self.decorationStyle = decorationStyle
         self.decorationPosition = decorationPosition
         self.decorationOpacity = decorationOpacity
@@ -88,6 +92,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         indicatorStyle = try c.decodeIfPresent(IndicatorStyle.self, forKey: .indicatorStyle) ?? d.indicatorStyle
         indicatorHex = try c.decodeIfPresent(String.self, forKey: .indicatorHex) ?? d.indicatorHex
         showLabels = try c.decodeIfPresent(Bool.self, forKey: .showLabels) ?? d.showLabels
+        glyphHex = try c.decodeIfPresent(String.self, forKey: .glyphHex) ?? d.glyphHex
         decorationStyle = try c.decodeIfPresent(String.self, forKey: .decorationStyle) ?? d.decorationStyle.rawValue
         decorationPosition = try c.decodeIfPresent(String.self, forKey: .decorationPosition) ?? d.decorationPosition.rawValue
         decorationOpacity = try c.decodeIfPresent(Double.self, forKey: .decorationOpacity) ?? d.decorationOpacity
@@ -99,7 +104,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case name, material, tintHex, gradientHex, gradientAngle, backgroundOpacity
         case iconSize, tileSpacing, cornerRadius, magnificationEnabled, magnification
-        case indicatorStyle, indicatorHex, showLabels
+        case indicatorStyle, indicatorHex, showLabels, glyphHex
         case decorationStyle, decorationPosition, decorationOpacity, decorationSize, crtEnabled, crtIntensity
     }
 
@@ -133,7 +138,8 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
                          gradientHex: "#FFFFFF", gradientAngle: 0, backgroundOpacity: 0.4,
                          iconSize: 48, tileSpacing: 6, cornerRadius: 20,
                          magnificationEnabled: false, magnification: 1.3,
-                         indicatorStyle: .underline, indicatorHex: "#0A84FF", showLabels: false),
+                         indicatorStyle: .underline, indicatorHex: "#0A84FF", showLabels: false,
+                         glyphHex: "#1C1C1E"),
         AppearancePreset(name: "Graphite", material: .solid, tintHex: "#1C1C1E",
                          gradientHex: "#2C2C2E", gradientAngle: 0, backgroundOpacity: 0.85,
                          iconSize: 48, tileSpacing: 8, cornerRadius: 16,

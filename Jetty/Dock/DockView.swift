@@ -142,13 +142,20 @@ struct DockView: View {
         tile.kind == .application && tile.isRunning && tile.isActive && tile.icon != nil
     }
 
-    /// A soft radial bloom in the icon's dominant colour — no hard edge (radial fade),
-    /// and clipped to the strip by its caller so it never bulges past the dock edge.
+    /// A radial bloom in the icon's dominant colour: a bright core over a broad soft
+    /// halo. No hard edge (radial fade); the caller clips it to the strip so it can't
+    /// bulge past the dock edge — which lets it be generous without spilling out.
     private func glowDot(color: Color, base: CGFloat) -> some View {
-        Circle()
-            .fill(RadialGradient(colors: [color.opacity(0.85), color.opacity(0)],
-                                 center: .center, startRadius: 0, endRadius: base * 0.7))
-            .frame(width: base * 1.4, height: base * 1.4)
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [color.opacity(0.55), color.opacity(0)],
+                                     center: .center, startRadius: 0, endRadius: base * 0.95))
+                .frame(width: base * 1.9, height: base * 1.9)
+            Circle()
+                .fill(RadialGradient(colors: [color.opacity(0.95), color.opacity(0)],
+                                     center: .center, startRadius: 0, endRadius: base * 0.5))
+                .frame(width: base * 1.0, height: base * 1.0)
+        }
     }
 
     @ViewBuilder

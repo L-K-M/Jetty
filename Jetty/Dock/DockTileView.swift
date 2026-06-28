@@ -230,10 +230,15 @@ struct DockTileView: View {
     private func loadURLs(from providers: [NSItemProvider]) {
         var urls: [URL] = []
         let group = DispatchGroup()
+        let lock = NSLock()
         for provider in providers {
             group.enter()
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                if let url { urls.append(url) }
+                if let url {
+                    lock.lock()
+                    urls.append(url)
+                    lock.unlock()
+                }
                 group.leave()
             }
         }

@@ -19,6 +19,9 @@ final class DockPanelController {
     private let preferences: Preferences
     private let panel: NSPanel
     private let hostingView: DockHostingView
+    /// A plain layer-backed view we own, between the window and the SwiftUI host.
+    /// Reveal/hide animates *this* layer's `transform`, never the window frame.
+    private let slideView: NSView
 
     private(set) var screen: NSScreen
     private(set) var anchor: DockAnchor
@@ -36,8 +39,7 @@ final class DockPanelController {
         self.preferences = preferences
 
         hostingView = DockHostingView(rootView: DockView(model: model, preferences: preferences, anchor: anchor))
-        hostingView.translatesAutoresizingMaskIntoConstraints = true
-        hostingView.autoresizingMask = [.width, .height]
+        slideView = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 80))
 
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 80),
                         styleMask: [.borderless, .nonactivatingPanel],
@@ -56,12 +58,27 @@ final class DockPanelController {
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 80))
         container.autoresizesSubviews = true
-        // Layer-back so the reveal/hide slide composites on the GPU instead of being
-        // redrawn on the CPU each frame — smoother, less stuttery (perf).
+        // Layer-back the whole stack and clip to the window so the slid-away content
+        // is simply masked off (no visible overdraw outside the panel bounds).
         container.wantsLayer = true
+        container.layer?.masksToBounds = true
+
+        // The window NEVER moves. Reveal/hide animates only `slideView.layer.transform`
+        // — a pure GPU composite of content that stays logically on-screen, so its
+        // backing is never discarded and SwiftUI is never re-laid-out mid-slide. That
+        // off-screen window-frame animation was the source of the reveal stutter and
+        // the "stuck half-revealed" hitch (perf).
+        slideView.frame = container.bounds
+        slideView.autoresizingMask = [.width, .height]
+        slideView.translatesAutoresizingMaskIntoConstraints = true
+        slideView.wantsLayer = true
+
+        hostingView.translatesAutoresizingMaskIntoConstraints = true
+        hostingView.autoresizingMask = [.width, .height]
         hostingView.wantsLayer = true
-        hostingView.frame = container.bounds
-        container.addSubview(hostingView)
+        hostingView.frame = slideView.bounds
+        slideView.addSubview(hostingView)
+        container.addSubview(slideView)
         panel.contentView = container
         recomputeFrames()
     }
@@ -79,24 +96,18 @@ final class DockPanelController {
         layoutForCurrentState()
     }
 
-    /// Recomputes the frame for the current revealed/hidden state (call after the
-    /// tile set or appearance changes).
+    /// Re-parks the panel at the revealed frame and re-applies the current
+    /// revealed/hidden content offset (call after the tile set or appearance changes).
     func layoutForCurrentState() {
         recomputeFrames()
-        let frame = isRevealed ? revealedFrame() : hiddenFrame()
-        panel.setFrame(frame, display: true)
+        applyRevealState(animated: false)
         if !panel.isVisible { panel.orderFrontRegardless() }
     }
 
     func showInitial() {
         recomputeFrames()
-        if preferences.autoHide {
-            isRevealed = false
-            panel.setFrame(hiddenFrame(), display: false)
-        } else {
-            isRevealed = true
-            panel.setFrame(revealedFrame(), display: false)
-        }
+        isRevealed = !preferences.autoHide
+        applyRevealState(animated: false)
         panel.orderFrontRegardless()
     }
 
@@ -111,7 +122,7 @@ final class DockPanelController {
         hideWork?.cancel(); hideWork = nil
         guard !isRevealed else { return }
         isRevealed = true
-        setFrame(revealedFrame(), animated: animated)
+        applyRevealState(animated: animated)
     }
 
     func hide(animated: Bool = true) {
@@ -128,7 +139,7 @@ final class DockPanelController {
         revealWork?.cancel(); revealWork = nil
         guard isRevealed else { return }
         isRevealed = false
-        setFrame(hiddenFrame(), animated: animated)
+        applyRevealState(animated: animated)
     }
 
     /// Pointer moved (global coordinates) — decide whether to reveal or hide.
@@ -239,31 +250,64 @@ final class DockPanelController {
             : CGSize(width: base.width + extra, height: base.height)
     }
 
-    // Cached frames so per-mouse-move hit-testing is pure rect math (no contentSize
-    // recompute on every pointer event). Refreshed by `recomputeFrames()` whenever the
-    // tiles, appearance, screen, or anchor change.
+    // Cached revealed frame so per-mouse-move hit-testing is pure rect math (no
+    // contentSize recompute on every pointer event). The panel is *always* parked
+    // here — hidden vs. revealed is a content-layer transform, not a window move.
+    // Refreshed by `recomputeFrames()` whenever the tiles, appearance, screen, or
+    // anchor change.
     private var revealedFrameValue: CGRect = .zero
-    private var hiddenFrameValue: CGRect = .zero
 
     private func recomputeFrames() {
         let content = contentSize()
         revealedFrameValue = DockLayout.revealedFrame(anchor: anchor, contentSize: content, in: screen.visibleFrame)
-        hiddenFrameValue = DockLayout.hiddenFrame(edge: anchor.edge, revealedFrame: revealedFrameValue, in: screen.visibleFrame)
     }
 
     private func revealedFrame() -> CGRect { revealedFrameValue }
-    private func hiddenFrame() -> CGRect { hiddenFrameValue }
 
-    private func setFrame(_ frame: CGRect, animated: Bool) {
+    /// The content-layer translation that parks the dock just off its screen edge.
+    /// Geometry is the layer-backed (non-flipped) view space: +y is up, +x is right.
+    private func hiddenTransform() -> CATransform3D {
+        let w = revealedFrameValue.width
+        let h = revealedFrameValue.height
+        switch anchor.edge {
+        case .bottom: return CATransform3DMakeTranslation(0, -h, 0)
+        case .top:    return CATransform3DMakeTranslation(0,  h, 0)
+        case .left:   return CATransform3DMakeTranslation(-w, 0, 0)
+        case .right:  return CATransform3DMakeTranslation( w, 0, 0)
+        }
+    }
+
+    /// Parks the (always on-screen) panel at the revealed frame and slides the dock
+    /// content in/out by animating only the content layer's transform — pure GPU
+    /// compositing, so reveal never re-renders the SwiftUI tree or the window backing.
+    private func applyRevealState(animated: Bool) {
+        if panel.frame != revealedFrameValue {
+            panel.setFrame(revealedFrameValue, display: false)
+        }
+        // Click-through while hidden so the parked (transparent) panel never eats
+        // events meant for whatever sits under the dock strip.
+        panel.ignoresMouseEvents = !isRevealed
+        guard let layer = slideView.layer else { return }
+        let target = isRevealed ? CATransform3DIdentity : hiddenTransform()
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if animated && !reduceMotion && preferences.animationMs > 0 {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = preferences.animationMs / 1000.0
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(frame, display: true)
-            }
+            let from = layer.presentation()?.transform ?? layer.transform
+            let anim = CABasicAnimation(keyPath: "transform")
+            anim.fromValue = NSValue(caTransform3D: from)
+            anim.toValue = NSValue(caTransform3D: target)
+            anim.duration = preferences.animationMs / 1000.0
+            anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(anim, forKey: "revealSlide")
+            layer.transform = target
+        } else if layer.animation(forKey: "revealSlide") != nil,
+                  CATransform3DEqualToTransform(layer.transform, target) {
+            // A slide is already converging on this exact target (e.g. a tile-set or
+            // appearance refresh landing mid-reveal) — let it finish rather than
+            // snapping the content (which would reintroduce a visible hitch).
         } else {
-            panel.setFrame(frame, display: true)
+            layer.removeAnimation(forKey: "revealSlide")
+            layer.transform = target
         }
+        panel.invalidateShadow()
     }
 }

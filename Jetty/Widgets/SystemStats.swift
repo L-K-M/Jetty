@@ -75,4 +75,32 @@ enum SystemStats {
         let total = Double(ProcessInfo.processInfo.physicalMemory)
         return total > 0 ? Swift.min(used / total, 1) : 0
     }
+
+    // MARK: Network
+
+    /// Cumulative bytes received/sent across all *active, non-loopback* interfaces, read
+    /// from the link-layer counters via `getifaddrs`. Permission-free. These are running
+    /// totals since boot — `LiveSystemStats` differences them into a per-second rate.
+    /// Returns `(0, 0)` if the query fails.
+    static func networkBytes() -> (received: UInt64, sent: UInt64) {
+        var received: UInt64 = 0
+        var sent: UInt64 = 0
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let first = head else { return (0, 0) }
+        defer { freeifaddrs(head) }
+
+        var node: UnsafeMutablePointer<ifaddrs>? = first
+        while let current = node {
+            defer { node = current.pointee.ifa_next }
+            let flags = current.pointee.ifa_flags          // UInt32 bitmask of IFF_* flags
+            guard (flags & UInt32(IFF_UP)) != 0, (flags & UInt32(IFF_LOOPBACK)) == 0,
+                  let addr = current.pointee.ifa_addr,
+                  addr.pointee.sa_family == UInt8(AF_LINK),
+                  let raw = current.pointee.ifa_data else { continue }
+            let data = raw.assumingMemoryBound(to: if_data.self).pointee
+            received += UInt64(data.ifi_ibytes)
+            sent += UInt64(data.ifi_obytes)
+        }
+        return (received, sent)
+    }
 }

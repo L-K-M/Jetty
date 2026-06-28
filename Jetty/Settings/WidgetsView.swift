@@ -35,6 +35,20 @@ struct WidgetsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("System Monitor") {
+                Picker("Style", selection: $preferences.systemMonitorStyle) {
+                    ForEach(SystemMonitorStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if preferences.systemMonitorStyle == .graph {
+                    Toggle("Include network activity", isOn: $preferences.systemMonitorShowNetwork)
+                }
+                Text(preferences.systemMonitorStyle == .graph
+                     ? "Plots CPU and memory (and, optionally, total network throughput) over the last couple of minutes. The widget is permission-free."
+                     : "Two slim gauges for CPU load and memory usage. Switch to Graph for a sparkline of the trend over time.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Weather") {
                 HStack {
                     Text("Latitude")

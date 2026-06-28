@@ -1,6 +1,14 @@
 import Foundation
 import Combine
 
+/// One throttled, recent-history sample of the live system metrics.
+struct SystemSample: Equatable {
+    var load: Double      // CPU: normalized 1-min load average (0…~1+, can exceed 1)
+    var memory: Double    // memory used fraction (0…1)
+    var netDown: Double   // bytes/second received
+    var netUp: Double     // bytes/second sent
+}
+
 /// One shared, throttled sampler for the live system widgets. Each `TimelineView`
 /// tile used to poll CPU/memory/battery on its own, so N displays meant N
 /// independent samples every tick (ISSUE-5). This reads each source **once** per
@@ -10,19 +18,26 @@ import Combine
 /// tile/panel state rather than SwiftUI `onAppear`/`onDisappear` — an ordered-out
 /// panel doesn't reliably deliver `onDisappear`, which would otherwise leak the timer.
 ///
-/// CPU/memory are sampled on the base interval; battery (which moves slowly and is
-/// pricier) only every `batteryEvery` ticks.
+/// CPU/memory/network are sampled on the base interval; battery (which moves slowly
+/// and is pricier) only every `batteryEvery` ticks. A bounded ring buffer of recent
+/// samples (`history`) backs the System Monitor's graph style.
 final class LiveSystemStats: ObservableObject {
     static let shared = LiveSystemStats()
 
     @Published private(set) var load: Double = 0
     @Published private(set) var memory: Double = 0
     @Published private(set) var battery: SystemStats.Battery?
+    /// Recent samples, oldest → newest, for the graph style. Bounded to `historyCapacity`.
+    @Published private(set) var history: [SystemSample] = []
 
     private let interval: TimeInterval = 2
     private let batteryEvery = 15          // 2s × 15 = ~30s, matching the old battery cadence
+    /// 60 samples × 2s ≈ a 2-minute window in the graph.
+    let historyCapacity = 60
     private var timer: Timer?
     private var tick = 0
+    /// Previous cumulative network counters, to difference into a per-second rate.
+    private var lastNetwork: (received: UInt64, sent: UInt64)?
 
     private init() {}
 
@@ -38,6 +53,9 @@ final class LiveSystemStats: ObservableObject {
 
     private func startTimer() {
         tick = 0
+        // Drop the stale network baseline so the first post-(re)start delta is 0 rather
+        // than a huge spike covering however long the sampler was off.
+        lastNetwork = nil
         // First reading on the next runloop turn — never synchronously inside a caller
         // that might be mid-view-update (avoids "Publishing changes from within view
         // updates").
@@ -63,6 +81,37 @@ final class LiveSystemStats: ObservableObject {
     private func sample(includeBattery: Bool) {
         load = SystemStats.normalizedLoad()
         memory = SystemStats.memoryUsedFraction()
+
+        let now = SystemStats.networkBytes()
+        let rate = Self.throughput(current: now, previous: lastNetwork, interval: interval)
+        lastNetwork = now
+
+        history = Self.appending(SystemSample(load: load, memory: memory, netDown: rate.down, netUp: rate.up),
+                                 to: history, cap: historyCapacity)
+
         if includeBattery { battery = SystemStats.battery() }
+    }
+
+    // MARK: Pure helpers (unit-tested)
+
+    /// Appends `sample`, trimming the oldest entries so the buffer never exceeds `cap`.
+    static func appending(_ sample: SystemSample, to history: [SystemSample], cap: Int) -> [SystemSample] {
+        guard cap > 0 else { return [] }
+        var next = history
+        next.append(sample)
+        if next.count > cap { next.removeFirst(next.count - cap) }
+        return next
+    }
+
+    /// Per-second throughput from two cumulative counter reads. Returns `(0, 0)` when
+    /// there's no previous read, a non-positive interval, or the counters went backwards
+    /// (a 32-bit wrap or interface reset) — never a negative or garbage rate.
+    static func throughput(current: (received: UInt64, sent: UInt64),
+                           previous: (received: UInt64, sent: UInt64)?,
+                           interval: TimeInterval) -> (down: Double, up: Double) {
+        guard let previous, interval > 0 else { return (0, 0) }
+        let down = current.received >= previous.received ? Double(current.received - previous.received) / interval : 0
+        let up = current.sent >= previous.sent ? Double(current.sent - previous.sent) / interval : 0
+        return (down, up)
     }
 }

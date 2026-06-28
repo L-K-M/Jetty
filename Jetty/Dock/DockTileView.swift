@@ -119,7 +119,9 @@ struct DockTileView: View {
         case .battery:
             BatteryWidgetView(height: baseSize, tint: preferences.tintColor)
         case .systemMonitor:
-            SystemMonitorWidgetView(height: baseSize, tint: preferences.tintColor)
+            SystemMonitorWidgetView(height: baseSize, tint: preferences.tintColor,
+                                    style: preferences.systemMonitorStyle,
+                                    showNetwork: preferences.systemMonitorShowNetwork)
         case .worldClock:
             WorldClockWidgetView(preferences: preferences, height: baseSize)
         case .pomodoro:

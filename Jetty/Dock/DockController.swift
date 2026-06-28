@@ -88,7 +88,7 @@ final class DockController {
         store.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                DispatchQueue.main.async { self?.rebuildModel(); self?.relayoutPanels() }
+                DispatchQueue.main.async { self?.rebuildModel(); self?.reconcilePanels() }
             }
             .store(in: &cancellables)
 

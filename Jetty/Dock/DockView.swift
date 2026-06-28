@@ -106,9 +106,49 @@ struct DockView: View {
             }
         }
         sized
+            // The active-app glow lives here, *inside* the strip's clip, so it tints the
+            // dock under the running app instead of blooming out past the dock's edges.
+            .overlay { activeGlows(edge: edge, thickness: thickness) }
             .overlay { decorations(cornerRadius: radius) }
             .overlay { if preferences.crtEnabled { CRTScreenOverlay(intensity: preferences.crtIntensity, cornerRadius: radius) } }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    // MARK: Active-app glow (ND-8) — clipped to the strip
+
+    @ViewBuilder
+    private func activeGlows(edge: DockEdge, thickness: CGFloat) -> some View {
+        if preferences.accentGlow {
+            let base = CGFloat(preferences.iconSize)
+            let spacing = CGFloat(preferences.tileSpacing)
+            let centers = tileCenters(base: base, spacing: spacing)
+            let extra = preferences.magnificationEnabled ? (preferences.effectiveMagnification - 1) * base : 0
+            let lead = extra / 2 + Self.padding   // first tile's offset from the strip's leading edge
+            ZStack {
+                ForEach(model.tiles.filter(isActiveAppTile)) { tile in
+                    if let along = centers[tile.id], let color = TileAccent.color(for: tile) {
+                        glowDot(color: color, base: base)
+                            .position(edge.isHorizontal
+                                      ? CGPoint(x: lead + along, y: thickness / 2)
+                                      : CGPoint(x: thickness / 2, y: lead + along))
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func isActiveAppTile(_ tile: DockTile) -> Bool {
+        tile.kind == .application && tile.isRunning && tile.isActive && tile.icon != nil
+    }
+
+    /// A soft radial bloom in the icon's dominant colour — no hard edge (radial fade),
+    /// and clipped to the strip by its caller so it never bulges past the dock edge.
+    private func glowDot(color: Color, base: CGFloat) -> some View {
+        Circle()
+            .fill(RadialGradient(colors: [color.opacity(0.85), color.opacity(0)],
+                                 center: .center, startRadius: 0, endRadius: base * 0.7))
+            .frame(width: base * 1.4, height: base * 1.4)
     }
 
     @ViewBuilder

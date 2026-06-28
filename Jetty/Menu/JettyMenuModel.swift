@@ -103,15 +103,23 @@ final class JettyMenuModel: ObservableObject {
         selectedIndex = AppSearch.nextIndex(current: selectedIndex, delta: delta, count: results.count)
     }
 
+    /// The Return key: a matched quick toggle wins (the command row advertises "⏎
+    /// run"), then the selected app, then a web search (ND-9 / BUG-5).
     func activateSelection() {
         if let command {
             onRunCommand?(command)
         } else if results.indices.contains(selectedIndex) {
             onLaunch?(results[selectedIndex])
         } else if let query = webSearchQuery {
-            // No app results → Enter searches the web for the query (ND-9).
             onWebSearch?(query)
         }
+    }
+
+    /// Directly launches the app at `index` — used by a row *click*, which targets a
+    /// specific app and must never be hijacked by a matched command (BUG-5 follow-up).
+    func launch(at index: Int) {
+        guard results.indices.contains(index) else { return }
+        onLaunch?(results[index])
     }
 
     func reset() {

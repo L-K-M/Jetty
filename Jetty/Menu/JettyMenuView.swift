@@ -145,7 +145,7 @@ struct JettyMenuView: View {
                     ForEach(Array(model.results.enumerated()), id: \.element.id) { index, item in
                         resultRow(item, selected: index == model.selectedIndex)
                             .id(index)
-                            .onTapGesture { model.selectedIndex = index; model.activateSelection() }
+                            .onTapGesture { model.selectedIndex = index; model.launch(at: index) }
                     }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 6)

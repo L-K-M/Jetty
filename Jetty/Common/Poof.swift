@@ -7,6 +7,6 @@ enum Poof {
     static func play(at screenPoint: NSPoint, size: CGFloat = 64) {
         NSAnimationEffect.poof.show(centeredAt: screenPoint,
                                     size: NSSize(width: size, height: size),
-                                    completionHandler: nil)
+                                    completionHandler: {})
     }
 }

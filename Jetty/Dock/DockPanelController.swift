@@ -109,12 +109,18 @@ final class DockPanelController {
     func hide(animated: Bool = true) {
         revealWork?.cancel(); revealWork = nil
         guard isRevealed, preferences.autoHide else { return }
-        isRevealed = false
-        setFrame(hiddenFrame(), animated: animated)
+        hideIgnoringAutoHide(animated: animated)
     }
 
     func toggle() {
-        if isRevealed { hide() } else { reveal() }
+        if isRevealed { hideIgnoringAutoHide() } else { reveal() }
+    }
+
+    private func hideIgnoringAutoHide(animated: Bool = true) {
+        revealWork?.cancel(); revealWork = nil
+        guard isRevealed else { return }
+        isRevealed = false
+        setFrame(hiddenFrame(), animated: animated)
     }
 
     /// Pointer moved (global coordinates) — decide whether to reveal or hide.

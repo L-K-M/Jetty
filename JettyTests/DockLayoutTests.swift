@@ -159,28 +159,40 @@ final class DockLayoutTests: XCTestCase {
     func testPointerCrossedEdgeBottomSeam() {
         // Upper display A sits directly above another (A.frame.minY == 0); its bottom dock
         // is centred at the physical edge. A pointer that crossed the seam onto the lower
-        // display (y just below 0) over the dock's extent counts as an edge slam.
+        // display (y just below 0) over the dock's extent counts as an edge slam. Band 24
+        // is the live reveal band (a seam doesn't clamp the cursor, so the band is generous).
         let screenA = CGRect(x: 0, y: 0, width: 1000, height: 800)
         let dock = CGRect(x: 400, y: 0, width: 200, height: 70)
         let crossed = { (p: CGPoint) in
-            DockLayout.pointerCrossedEdge(p, screenFrame: screenA, dockFrame: dock, edge: .bottom, band: 8, margin: 16)
+            DockLayout.pointerCrossedEdge(p, screenFrame: screenA, dockFrame: dock, edge: .bottom, band: 24, margin: 16)
         }
         XCTAssertTrue(crossed(CGPoint(x: 500, y: -4)))    // just past the seam, over the dock
+        XCTAssertTrue(crossed(CGPoint(x: 500, y: -20)))   // overshoot within the 24pt reveal band
         XCTAssertTrue(crossed(CGPoint(x: 610, y: -1)))    // within the along-extent margin (600+16)
         XCTAssertFalse(crossed(CGPoint(x: 500, y: 4)))    // still inside the screen → handled on-screen
-        XCTAssertFalse(crossed(CGPoint(x: 500, y: -20)))  // too far past (deep on the other display)
+        XCTAssertFalse(crossed(CGPoint(x: 500, y: -30)))  // too far past (deep on the other display)
         XCTAssertFalse(crossed(CGPoint(x: 700, y: -4)))   // past the edge but not over the dock
+    }
+
+    func testPointerCrossedEdgeHysteresisBand() {
+        // Reveal uses band 24, keep-revealed uses band 36, so a point 30pt past the seam is
+        // outside the reveal band but inside the keep band — the dock stays up (no flap).
+        let screenA = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let dock = CGRect(x: 400, y: 0, width: 200, height: 70)
+        let p = CGPoint(x: 500, y: -30)
+        XCTAssertFalse(DockLayout.pointerCrossedEdge(p, screenFrame: screenA, dockFrame: dock, edge: .bottom, band: 24, margin: 16))
+        XCTAssertTrue(DockLayout.pointerCrossedEdge(p, screenFrame: screenA, dockFrame: dock, edge: .bottom, band: 36, margin: 16))
     }
 
     func testPointerCrossedEdgeOtherEdges() {
         let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
         // Top dock: crossing is just ABOVE maxY.
         let topDock = CGRect(x: 400, y: 730, width: 200, height: 70)
-        XCTAssertTrue(DockLayout.pointerCrossedEdge(CGPoint(x: 500, y: 804), screenFrame: screen, dockFrame: topDock, edge: .top, band: 8, margin: 16))
-        XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 500, y: 796), screenFrame: screen, dockFrame: topDock, edge: .top, band: 8, margin: 16))
+        XCTAssertTrue(DockLayout.pointerCrossedEdge(CGPoint(x: 500, y: 810), screenFrame: screen, dockFrame: topDock, edge: .top, band: 24, margin: 16))
+        XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 500, y: 796), screenFrame: screen, dockFrame: topDock, edge: .top, band: 24, margin: 16))
         // Right dock: crossing is just RIGHT of maxX.
         let rightDock = CGRect(x: 930, y: 350, width: 70, height: 200)
-        XCTAssertTrue(DockLayout.pointerCrossedEdge(CGPoint(x: 1004, y: 450), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 8, margin: 16))
-        XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 1004, y: 700), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 8, margin: 16))
+        XCTAssertTrue(DockLayout.pointerCrossedEdge(CGPoint(x: 1010, y: 450), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 24, margin: 16))
+        XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 1010, y: 700), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 24, margin: 16))
     }
 }

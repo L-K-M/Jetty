@@ -135,6 +135,33 @@ enum DockLayout {
         return frame
     }
 
+    // MARK: Edge-crossing reveal (multi-display seams)
+
+    /// Whether `point` (global Cocoa coords) sits just **past** the dock's physical edge:
+    /// within `band` points *outside* `screenFrame` across `edge`, and over the dock's
+    /// along-extent (`dockFrame` widened by `margin`). On a display stacked against another
+    /// this catches the cursor that crossed the internal seam onto the neighbour, so the
+    /// dock stays reachable; on a true screen boundary the region is off-desktop and the
+    /// cursor can never reach it, so it never fires (no regression for non-stacked layouts).
+    /// Pure, so the reveal geometry is unit-tested.
+    static func pointerCrossedEdge(_ point: CGPoint, screenFrame f: CGRect, dockFrame r: CGRect,
+                                   edge: DockEdge, band: CGFloat, margin m: CGFloat) -> Bool {
+        switch edge {
+        case .bottom:
+            return point.y < f.minY && point.y >= f.minY - band
+                && point.x >= r.minX - m && point.x <= r.maxX + m
+        case .top:
+            return point.y > f.maxY && point.y <= f.maxY + band
+                && point.x >= r.minX - m && point.x <= r.maxX + m
+        case .left:
+            return point.x < f.minX && point.x >= f.minX - band
+                && point.y >= r.minY - m && point.y <= r.maxY + m
+        case .right:
+            return point.x > f.maxX && point.x <= f.maxX + band
+                && point.y >= r.minY - m && point.y <= r.maxY + m
+        }
+    }
+
     // MARK: Drag-to-reorder (slot-based)
 
     /// The along-axis extent of a slot whose tiles have these `kinds`, laid out with

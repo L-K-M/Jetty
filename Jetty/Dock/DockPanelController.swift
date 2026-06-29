@@ -187,9 +187,27 @@ final class DockPanelController {
     func handleMouseMoved(to point: NSPoint) {
         guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else { return }
         guard NSMouseInRect(point, screen.frame, false) else {
-            // Pointer left this screen entirely → hide if shown.
-            cancelScheduledReveal()
-            if isRevealed { scheduleHide() }
+            // The pointer is off this screen. A dock on a display stacked directly against
+            // another (e.g. this screen sits ABOVE another) lives on an *internal seam*:
+            // there's no physical screen edge to pin the cursor, so it glides onto the
+            // neighbouring display before any sample can land in the on-screen reveal band
+            // — and the dock would never reveal there. Treat a sample that has just crossed
+            // this screen's dock edge (a thin band just past the edge, over the dock's
+            // along-extent) as an edge slam and reveal (BUG: one-screen bottom-edge reveal).
+            if !isRevealed {
+                if pointerCrossedDockEdge(point) {
+                    revealWork?.cancel(); revealWork = nil
+                    reveal()
+                }
+                return
+            }
+            // Already revealed: keep it up while the pointer hugs the seam just past the
+            // dock (it's about to move back onto it); hide once it's clearly away.
+            if NSMouseInRect(point, revealedFrame().insetBy(dx: -12, dy: -12), false) {
+                hideWork?.cancel(); hideWork = nil
+            } else {
+                scheduleHide()
+            }
             return
         }
         if isRevealed {
@@ -273,6 +291,18 @@ final class DockPanelController {
         case .right:
             return point.x >= f.maxX - slop && point.y >= r.minY - m && point.y <= r.maxY + m
         }
+    }
+
+    /// Whether the pointer has just crossed this screen's dock edge to the **outside** —
+    /// i.e. it's within a thin band just past the physical edge, over the dock's
+    /// along-extent. On a display stacked against another, the shared seam lets the cursor
+    /// glide onto the neighbour before it can land in the on-screen reveal band; catching
+    /// the crossing makes the dock reachable there. On a true screen boundary this region
+    /// is off-desktop, so the cursor can never reach it and this never fires (no regression
+    /// for the common, non-stacked layout). The band matches the on-screen reveal zone.
+    private func pointerCrossedDockEdge(_ point: NSPoint) -> Bool {
+        DockLayout.pointerCrossedEdge(point, screenFrame: screen.frame, dockFrame: revealedFrame(),
+                                      edge: anchor.edge, band: 8, margin: 16)
     }
 
     // MARK: Frames

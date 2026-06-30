@@ -32,23 +32,61 @@ struct DockView: View {
         let spacing = CGFloat(preferences.tileSpacing)
         let resting = base + 2 * Self.padding
 
-        ZStack(alignment: edgeAlignment(edge)) {
-            glassStrip(edge: edge, thickness: resting)
-            slotStack(edge: edge, base: base, spacing: spacing)
+        // A GeometryReader so we can tell when the tiles no longer fit the dock's
+        // along-axis and switch to a scrollable strip (MF: too many apps).
+        GeometryReader { geo in
+            let overflows = contentOverflows(edge: edge, base: base, spacing: spacing, available: geo.size)
+            ZStack(alignment: edgeAlignment(edge)) {
+                glassStrip(edge: edge, thickness: resting)
+                slotsContainer(edge: edge, base: base, spacing: spacing, resting: resting, overflows: overflows)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
+            .contentShape(Rectangle())
+            // Dropping a folder/file on the dock background (not a specific tile) pins it.
+            // A tile under the cursor handles its own drop first; this catches the rest.
+            .onDrop(of: [.fileURL], isTargeted: $isStripDropTargeted) { providers in
+                loadDroppedURLs(from: providers)
+                return true
+            }
+            .overlay { stripDropHighlight(edge: edge, thickness: resting) }
+            .onHover { inside in if !inside { hoveredTileID = nil; hoverAlong = nil } }
+        }
+    }
+
+    /// Whether the tiles' natural along-axis size exceeds the space the dock has — i.e.
+    /// the dock has grown to (and been clamped at) the screen edge and can't show every
+    /// tile at once.
+    private func contentOverflows(edge: DockEdge, base: CGFloat, spacing: CGFloat, available: CGSize) -> Bool {
+        guard !model.slots.isEmpty else { return false }
+        let natural = DockLayout.contentSize(tiles: model.tiles.map(\.kind), iconSize: base,
+                                             spacing: spacing, padding: Self.padding, edge: edge)
+        return edge.isHorizontal ? natural.width > available.width + 1
+                                 : natural.height > available.height + 1
+    }
+
+    /// The tile strip — laid out normally when it fits, or wrapped in a scroll view along
+    /// the dock axis when there are too many tiles to fit (native mouse-wheel / trackpad
+    /// scrolling). Magnification is suspended in the scrolling state: the tiles are packed
+    /// edge-to-edge, so growing them while scrolling would fight the scroll and clip.
+    @ViewBuilder
+    private func slotsContainer(edge: DockEdge, base: CGFloat, spacing: CGFloat,
+                                resting: CGFloat, overflows: Bool) -> some View {
+        if overflows {
+            let scroll = ScrollView(edge.isHorizontal ? .horizontal : .vertical, showsIndicators: false) {
+                slotStack(edge: edge, base: base, spacing: spacing, magnifies: false)
+                    .padding(slotStackInsets(edge))
+            }
+            if edge.isHorizontal {
+                scroll.frame(maxWidth: .infinity).frame(height: resting)
+            } else {
+                scroll.frame(maxHeight: .infinity).frame(width: resting)
+            }
+        } else {
+            slotStack(edge: edge, base: base, spacing: spacing, magnifies: true)
                 // No padding on the edge-facing side — each tile reclaims it as tap area
                 // so clicks land on icons right up to the screen edge (Fitts' law).
                 .padding(slotStackInsets(edge))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
-        .contentShape(Rectangle())
-        // Dropping a folder/file on the dock background (not a specific tile) pins it.
-        // A tile under the cursor handles its own drop first; this catches the rest.
-        .onDrop(of: [.fileURL], isTargeted: $isStripDropTargeted) { providers in
-            loadDroppedURLs(from: providers)
-            return true
-        }
-        .overlay { stripDropHighlight(edge: edge, thickness: resting) }
-        .onHover { inside in if !inside { hoveredTileID = nil; hoverAlong = nil } }
     }
 
     @ViewBuilder
@@ -180,20 +218,20 @@ struct DockView: View {
     // MARK: Slots
 
     @ViewBuilder
-    private func slotStack(edge: DockEdge, base: CGFloat, spacing: CGFloat) -> some View {
+    private func slotStack(edge: DockEdge, base: CGFloat, spacing: CGFloat, magnifies: Bool) -> some View {
         let centers = tileCenters(base: base, spacing: spacing)
         let slots = Array(model.slots.enumerated())
         Group {
             if edge.isHorizontal {
                 HStack(spacing: spacing) {
                     ForEach(slots, id: \.element.id) { index, slot in
-                        slotView(slot, slotIndex: index, base: base, spacing: spacing, centers: centers)
+                        slotView(slot, slotIndex: index, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
                     }
                 }
             } else {
                 VStack(spacing: spacing) {
                     ForEach(slots, id: \.element.id) { index, slot in
-                        slotView(slot, slotIndex: index, base: base, spacing: spacing, centers: centers)
+                        slotView(slot, slotIndex: index, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
                     }
                 }
             }
@@ -208,11 +246,11 @@ struct DockView: View {
     }
 
     private func slotView(_ slot: DockSlot, slotIndex: Int, base: CGFloat, spacing: CGFloat,
-                          centers: [String: CGFloat]) -> some View {
+                          centers: [String: CGFloat], magnifies: Bool) -> some View {
         let isDragged = draggingSlotID == slot.id
         let offset = slotOffset(for: slotIndex, base: base, spacing: spacing)
 
-        return slotTiles(slot, base: base, spacing: spacing, centers: centers)
+        return slotTiles(slot, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
             .offset(offset)
             .zIndex(isDragged ? 1 : 0)
             .animation(isDragged ? nil : .spring(response: 0.26, dampingFraction: 0.85), value: offset)
@@ -220,26 +258,26 @@ struct DockView: View {
     }
 
     @ViewBuilder
-    private func slotTiles(_ slot: DockSlot, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat]) -> some View {
+    private func slotTiles(_ slot: DockSlot, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat], magnifies: Bool) -> some View {
         if slot.tiles.count <= 1, let tile = slot.tiles.first {
-            tileView(tile, base: base, spacing: spacing, centers: centers)
+            tileView(tile, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
         } else if anchor.edge.isHorizontal {
             HStack(spacing: spacing) {
-                ForEach(slot.tiles) { tile in tileView(tile, base: base, spacing: spacing, centers: centers) }
+                ForEach(slot.tiles) { tile in tileView(tile, base: base, spacing: spacing, centers: centers, magnifies: magnifies) }
             }
         } else {
             VStack(spacing: spacing) {
-                ForEach(slot.tiles) { tile in tileView(tile, base: base, spacing: spacing, centers: centers) }
+                ForEach(slot.tiles) { tile in tileView(tile, base: base, spacing: spacing, centers: centers, magnifies: magnifies) }
             }
         }
     }
 
-    private func tileView(_ tile: DockTile, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat]) -> some View {
+    private func tileView(_ tile: DockTile, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat], magnifies: Bool) -> some View {
         DockTileView(
             tile: tile,
             preferences: preferences,
             baseSize: base,
-            scale: scale(center: centers[tile.id], base: base, spacing: spacing),
+            scale: magnifies ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
             isHovered: hoveredTileID == tile.id,
             edge: anchor.edge,
             onTap: { model.onOpenTile?(tile) },

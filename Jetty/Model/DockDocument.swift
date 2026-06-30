@@ -9,15 +9,21 @@ struct DockDocument: Codable, Equatable {
     /// Per-display placement overrides, keyed by display UUID. Displays without an
     /// entry fall back to the global default anchor in `Preferences`.
     var anchorsByDisplayUUID: [String: DockAnchor]
+    /// Displays the user has explicitly opted out of (no dock there), keyed by display
+    /// UUID. Honored only while at least one *other* targeted display remains — Jetty
+    /// never leaves every screen dockless (see `DockController.targetUUIDs`).
+    var disabledDisplayUUIDs: Set<String>
 
     static let currentVersion = 1
 
     init(version: Int = DockDocument.currentVersion,
          items: [DockItem] = [],
-         anchorsByDisplayUUID: [String: DockAnchor] = [:]) {
+         anchorsByDisplayUUID: [String: DockAnchor] = [:],
+         disabledDisplayUUIDs: Set<String> = []) {
         self.version = version
         self.items = items
         self.anchorsByDisplayUUID = anchorsByDisplayUUID
+        self.disabledDisplayUUIDs = disabledDisplayUUIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -31,9 +37,12 @@ struct DockDocument: Codable, Equatable {
         items = rawItems.compactMap(\.value)
         let rawAnchors = try c.decodeIfPresent([String: Failable<DockAnchor>].self, forKey: .anchorsByDisplayUUID) ?? [:]
         anchorsByDisplayUUID = rawAnchors.compactMapValues(\.value)
+        disabledDisplayUUIDs = try c.decodeIfPresent(Set<String>.self, forKey: .disabledDisplayUUIDs) ?? []
     }
 
-    private enum CodingKeys: String, CodingKey { case version, items, anchorsByDisplayUUID }
+    private enum CodingKeys: String, CodingKey {
+        case version, items, anchorsByDisplayUUID, disabledDisplayUUIDs
+    }
 }
 
 /// Decodes `T` if possible, else `nil` — never throws, so it can be used inside an

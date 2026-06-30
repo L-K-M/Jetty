@@ -185,10 +185,24 @@ final class DockController {
     // MARK: Panels
 
     private func targetUUIDs() -> [String] {
+        let base: [String]
         switch preferences.displayScope {
-        case .mainOnly: return [registry.mainScreenUUID()].compactMap { $0 }
-        case .allDisplays: return registry.allUUIDs()
+        case .mainOnly: base = [registry.mainScreenUUID()].compactMap { $0 }
+        case .allDisplays: base = registry.allUUIDs()
         }
+        // Drop displays the user disabled — but never leave *every* display dockless. If
+        // disabling would remove all docks (e.g. the only screen left is one the user
+        // turned off, or they disabled them all), ignore the opt-outs so a dock always
+        // exists somewhere.
+        return Self.enabledTargets(base: base, disabled: store.document.disabledDisplayUUIDs)
+    }
+
+    /// `base` displays minus the user's opt-outs — but never empty: if every target is
+    /// disabled, all of `base` is returned so a dock always exists somewhere. Pure, so
+    /// the "never left without a dock" guarantee is unit-tested.
+    static func enabledTargets(base: [String], disabled: Set<String>) -> [String] {
+        let enabled = base.filter { !disabled.contains($0) }
+        return enabled.isEmpty ? base : enabled
     }
 
     private func effectiveAnchor(forUUID uuid: String) -> DockAnchor {

@@ -43,6 +43,13 @@ final class DockStore: ObservableObject {
         document.anchorsByDisplayUUID[uuid]
     }
 
+    /// Whether the user has opted this display out of showing a dock. Note this is the
+    /// raw preference; `DockController` still shows a dock here if it would otherwise be
+    /// the only display left without one.
+    func isDisplayDisabled(forDisplayUUID uuid: String) -> Bool {
+        document.disabledDisplayUUIDs.contains(uuid)
+    }
+
     /// Resolves a pinned item to its current URL via its bookmark (tracking moves),
     /// and — crucially — **writes back** a freshened bookmark when the stored one was
     /// stale, so a moved file/app keeps working on later launches instead of silently
@@ -113,6 +120,12 @@ final class DockStore: ObservableObject {
 
     func clearAnchor(forDisplayUUID uuid: String) {
         document.anchorsByDisplayUUID[uuid] = nil
+        scheduleSave()
+    }
+
+    func setDisplayDisabled(_ disabled: Bool, forDisplayUUID uuid: String) {
+        if disabled { document.disabledDisplayUUIDs.insert(uuid) }
+        else { document.disabledDisplayUUIDs.remove(uuid) }
         scheduleSave()
     }
 

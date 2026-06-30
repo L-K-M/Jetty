@@ -101,4 +101,17 @@ final class DockModelTests: XCTestCase {
         let tiles = DockModel.makeTiles(pinned: pinned, running: running, showRunningApps: true)
         XCTAssertEqual(tiles.filter { $0.bundleIdentifier == "com.apple.finder" }.count, 1)
     }
+
+    func testDisabledDisplaysAreDroppedButNeverAll() {
+        let a = "uuid-A", b = "uuid-B"
+        // One of two displays disabled → only the other hosts a dock.
+        XCTAssertEqual(DockController.enabledTargets(base: [a, b], disabled: [b]), [a])
+        // The sole remaining display is the disabled one → it still gets a dock (never
+        // left without one).
+        XCTAssertEqual(DockController.enabledTargets(base: [b], disabled: [b]), [b])
+        // Every display disabled → all fall back on, rather than zero docks.
+        XCTAssertEqual(Set(DockController.enabledTargets(base: [a, b], disabled: [a, b])), Set([a, b]))
+        // None disabled → unchanged.
+        XCTAssertEqual(DockController.enabledTargets(base: [a, b], disabled: []), [a, b])
+    }
 }

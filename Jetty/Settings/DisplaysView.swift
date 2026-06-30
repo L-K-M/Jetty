@@ -21,23 +21,29 @@ struct DisplaysView: View {
 
             ForEach(screenEntries) { entry in
                 Section(entry.name) {
-                    Toggle("Custom position for this display", isOn: overrideBinding(entry.id))
-                    if store.anchorOverride(forDisplayUUID: entry.id) != nil {
-                        Picker("Edge", selection: edgeBinding(entry.id)) {
-                            ForEach(DockEdge.allCases) { Text($0.label).tag($0) }
-                        }
-                        Picker("Alignment", selection: alignmentBinding(entry.id)) {
-                            ForEach(DockAlignment.allCases) { Text($0.label).tag($0) }
-                        }
-                        HStack {
-                            Text("Offset")
-                            Slider(value: offsetBinding(entry.id), in: -600...600)
-                            Text("\(Int(anchor(for: entry.id).offset))").monospacedDigit().frame(width: 44, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("Edge inset")
-                            Slider(value: insetBinding(entry.id), in: 0...80)
-                            Text("\(Int(anchor(for: entry.id).inset))").monospacedDigit().frame(width: 44, alignment: .trailing)
+                    Toggle("Disable dock on this display", isOn: disabledBinding(entry.id))
+                    if store.isDisplayDisabled(forDisplayUUID: entry.id) {
+                        Text("No dock will show here — unless this becomes the only connected display, so you're never left without a dock.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Toggle("Custom position for this display", isOn: overrideBinding(entry.id))
+                        if store.anchorOverride(forDisplayUUID: entry.id) != nil {
+                            Picker("Edge", selection: edgeBinding(entry.id)) {
+                                ForEach(DockEdge.allCases) { Text($0.label).tag($0) }
+                            }
+                            Picker("Alignment", selection: alignmentBinding(entry.id)) {
+                                ForEach(DockAlignment.allCases) { Text($0.label).tag($0) }
+                            }
+                            HStack {
+                                Text("Offset")
+                                Slider(value: offsetBinding(entry.id), in: -600...600)
+                                Text("\(Int(anchor(for: entry.id).offset))").monospacedDigit().frame(width: 44, alignment: .trailing)
+                            }
+                            HStack {
+                                Text("Edge inset")
+                                Slider(value: insetBinding(entry.id), in: 0...80)
+                                Text("\(Int(anchor(for: entry.id).inset))").monospacedDigit().frame(width: 44, alignment: .trailing)
+                            }
                         }
                     }
                 }
@@ -68,6 +74,12 @@ struct DisplaysView: View {
         transform(&a)
         a.displayUUID = uuid
         store.setAnchor(a, forDisplayUUID: uuid)
+    }
+
+    private func disabledBinding(_ uuid: String) -> Binding<Bool> {
+        Binding(
+            get: { store.isDisplayDisabled(forDisplayUUID: uuid) },
+            set: { store.setDisplayDisabled($0, forDisplayUUID: uuid) })
     }
 
     private func overrideBinding(_ uuid: String) -> Binding<Bool> {

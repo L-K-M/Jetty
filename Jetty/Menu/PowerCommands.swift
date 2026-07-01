@@ -83,12 +83,34 @@ enum PowerCommandRunner {
         }
     }
 
-    /// Locks the screen by putting the display to sleep (requires "Require password
-    /// after sleep" to actually lock — the standard public approach).
+    /// Locks the screen. The public options (display sleep, screen saver) only lock
+    /// when "Require password" is set to *immediately* — with the common "after
+    /// 5 minutes" setting the screen went dark **unlocked** under a button labeled
+    /// "Lock Screen". loginwindow's `SACLockScreenImmediate` is what ⌃⌘Q uses and
+    /// always locks; per AGENTS.md it's kept isolated, user-invoked, and fail-closed
+    /// (dlopen/dlsym like the MediaRemote bridge), falling back to starting the
+    /// screen saver — which at least honors the user's password-delay setting and
+    /// visibly reacts — if the symbol ever disappears.
     private static func lockScreen() {
+        typealias LockFunction = @convention(c) () -> Int32
+        let path = "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login"
+        if let handle = dlopen(path, RTLD_LAZY) {
+            defer { dlclose(handle) }
+            if let symbol = dlsym(handle, "SACLockScreenImmediate") {
+                let lock = unsafeBitCast(symbol, to: LockFunction.self)
+                _ = lock()
+                return
+            }
+        }
+        startScreenSaver()
+    }
+
+    /// Fallback lock: launch the screen-saver engine (locks per the user's
+    /// "require password after screen saver begins" setting).
+    private static func startScreenSaver() {
+        let engine = "/System/Library/CoreServices/ScreenSaverEngine.app/Contents/MacOS/ScreenSaverEngine"
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-        process.arguments = ["displaysleepnow"]
-        do { try process.run() } catch { NSLog("Jetty: lockScreen failed: \(error.localizedDescription)") }
+        process.executableURL = URL(fileURLWithPath: engine)
+        do { try process.run() } catch { NSLog("Jetty: lockScreen fallback failed: \(error.localizedDescription)") }
     }
 }

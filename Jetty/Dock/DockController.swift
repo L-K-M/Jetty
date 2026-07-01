@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import os
 
 /// The orchestrator: merges pinned + running apps into the shared `DockModel`,
 /// resolves each target display's anchor into a `DockPanelController`, forwards
@@ -154,7 +153,7 @@ final class DockController {
         let p = preferences
         return (
             reconcile: [p.edge.rawValue, p.alignment.rawValue, String(p.offset),
-                        String(p.inset), p.displayScope.rawValue].joined(separator: "|"),
+                        String(p.inset)].joined(separator: "|"),
             model: String(p.showRunningApps),
             layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
                      String(p.magnification), String(p.autoHide), p.revealTrigger.rawValue].joined(separator: "|"),
@@ -186,16 +185,11 @@ final class DockController {
     // MARK: Panels
 
     private func targetUUIDs() -> [String] {
-        let base: [String]
-        switch preferences.displayScope {
-        case .mainOnly: base = [registry.mainScreenUUID()].compactMap { $0 }
-        case .allDisplays: base = registry.allUUIDs()
-        }
-        // Drop displays the user disabled — but never leave *every* display dockless. If
-        // disabling would remove all docks (e.g. the only screen left is one the user
-        // turned off, or they disabled them all), ignore the opt-outs so a dock always
-        // exists somewhere.
-        return Self.enabledTargets(base: base, disabled: store.document.disabledDisplayUUIDs)
+        // Every connected display gets a dock, minus the ones the user turned off in
+        // Displays — but never leave *every* display dockless. If disabling would remove
+        // all docks (they turned them all off, or the only screen left is a disabled one),
+        // the opt-outs are ignored so a dock always exists somewhere.
+        return Self.enabledTargets(base: registry.allUUIDs(), disabled: store.document.disabledDisplayUUIDs)
     }
 
     /// `base` displays minus the user's opt-outs — but never empty: if every target is
@@ -235,24 +229,6 @@ final class DockController {
             }
         }
         updateLiveStats()
-        logReconcileDiagnostics(targets: targets)
-    }
-
-    /// TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed). Uses
-    /// `os.Logger` with `.public` privacy so the values actually appear in Console (a
-    /// runtime-composed `NSLog` string is redacted to `<private>`). One line summarizes
-    /// every screen macOS reports, how the registry keyed them, which are disabled/targeted,
-    /// and which panels now exist — enough to pinpoint whether a display is undetected,
-    /// key-collided, disabled, or created-but-not-revealing.
-    private func logReconcileDiagnostics(targets: Set<String>) {
-        let screens = NSScreen.screens
-            .map { "\(DisplayRegistry.key(for: $0))@\(NSStringFromRect($0.frame))" }
-            .joined(separator: " | ")
-        let disabled = store.document.disabledDisplayUUIDs.sorted().joined(separator: ",")
-        let panelKeys = panels.keys.sorted().joined(separator: ",")
-        let targetKeys = targets.sorted().joined(separator: ",")
-        Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jetty", category: "diag").notice(
-            "[Jetty] reconcile scope=\(self.preferences.displayScope.rawValue, privacy: .public) NSScreens=\(NSScreen.screens.count, privacy: .public) registry=\(self.registry.screensByUUID.count, privacy: .public) targets=[\(targetKeys, privacy: .public)] disabled=[\(disabled, privacy: .public)] panels=[\(panelKeys, privacy: .public)] screens=[\(screens, privacy: .public)]")
     }
 
     // MARK: Interactions

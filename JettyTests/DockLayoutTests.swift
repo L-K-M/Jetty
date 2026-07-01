@@ -25,7 +25,10 @@ final class DockLayoutTests: XCTestCase {
         // app(50) + horizontal separator(12) + clock(1.6×50=80), 2 gaps, padding.
         let size = DockLayout.contentSize(tiles: [.application, .separator, .clock],
                                           iconSize: 50, spacing: 8, padding: 10, edge: .bottom)
-        XCTAssertEqual(size.width, 50 + 12 + 50 * 1.6 + 2 * 8 + 2 * 10, accuracy: 0.001)  // 178
+        // Bind to CGFloat so the mixed integer/1.6 literal arithmetic resolves (Xcode 26
+        // otherwise flags it "ambiguous" via the CGFloat/Double bridge).
+        let expectedWidth: CGFloat = 50 + 12 + 50 * 1.6 + 2 * 8 + 2 * 10   // 178
+        XCTAssertEqual(size.width, expectedWidth, accuracy: 0.001)
         XCTAssertEqual(size.height, 50 + 20, accuracy: 0.001)                            // 70
     }
 
@@ -35,14 +38,16 @@ final class DockLayoutTests: XCTestCase {
         // The clock is 1.6× wide, so the variable-width panel must be wider than the
         // old uniform assumption (which clipped the clock).
         XCTAssertGreaterThan(variable.width, uniform.width)
-        XCTAssertEqual(variable.width, 50 * 1.6 + 20, accuracy: 0.001)                    // 100
+        let expectedWidth: CGFloat = 50 * 1.6 + 20   // 100
+        XCTAssertEqual(variable.width, expectedWidth, accuracy: 0.001)
     }
 
     func testVerticalDockWidensAcrossForClock() {
         // On a left/right dock the clock's 1.6× is the *cross* axis (width).
         let size = DockLayout.contentSize(tiles: [.application, .clock],
                                           iconSize: 50, spacing: 8, padding: 10, edge: .left)
-        XCTAssertEqual(size.width, 50 * 1.6 + 20, accuracy: 0.001)        // across fits the clock: 100
+        let expectedWidth: CGFloat = 50 * 1.6 + 20   // across fits the clock: 100
+        XCTAssertEqual(size.width, expectedWidth, accuracy: 0.001)
         XCTAssertEqual(size.height, 50 + 50 + 8 + 20, accuracy: 0.001)    // both tiles are baseSize tall: 128
     }
 

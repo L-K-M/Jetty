@@ -25,9 +25,10 @@ final class DockLayoutTests: XCTestCase {
         // app(50) + horizontal separator(12) + clock(1.6×50=80), 2 gaps, padding.
         let size = DockLayout.contentSize(tiles: [.application, .separator, .clock],
                                           iconSize: 50, spacing: 8, padding: 10, edge: .bottom)
-        // Bind to CGFloat so the mixed integer/1.6 literal arithmetic resolves (Xcode 26
-        // otherwise flags it "ambiguous" via the CGFloat/Double bridge).
-        let expectedWidth: CGFloat = 50 + 12 + 50 * 1.6 + 2 * 8 + 2 * 10   // 178
+        // app(50) + separator(12) + clock(50 * 1.6 = 80) + 2 gaps(8) + 2 padding(10) = 178.
+        // Written as a literal: the Xcode 26 solver can't type-check the mixed
+        // integer/1.6 CGFloat expression "in reasonable time".
+        let expectedWidth: CGFloat = 178
         XCTAssertEqual(size.width, expectedWidth, accuracy: 0.001)
         XCTAssertEqual(size.height, 50 + 20, accuracy: 0.001)                            // 70
     }

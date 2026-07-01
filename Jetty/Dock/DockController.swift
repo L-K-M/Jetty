@@ -214,11 +214,13 @@ final class DockController {
     private func reconcilePanels() {
         let targets = Set(targetUUIDs())
 
-        // TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed):
-        // shows the effective scope and whether every physical screen produced a target.
-        NSLog("[Jetty] reconcile scope=%@ targets=%d allUUIDs=%d screensByUUID=%d NSScreen.screens=%d",
-              preferences.displayScope.rawValue, targets.count, registry.allUUIDs().count,
-              registry.screensByUUID.count, NSScreen.screens.count)
+        // TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed).
+        // Values are interpolated into the message (not passed as %@ args) so macOS does
+        // NOT redact them to <private> in Console.
+        let screenList = NSScreen.screens
+            .map { "\(DisplayRegistry.key(for: $0))@\(NSStringFromRect($0.frame))" }
+            .joined(separator: " | ")
+        NSLog("[Jetty] reconcile scope=\(preferences.displayScope.rawValue) NSScreens=\(NSScreen.screens.count) registry=\(registry.screensByUUID.count) targets=\(targets.count) :: \(screenList)")
 
         // Remove panels for displays no longer targeted/connected.
         for (uuid, panel) in panels where !targets.contains(uuid) {
@@ -238,7 +240,7 @@ final class DockController {
                 panels[uuid] = panel
                 panel.showInitial()
                 // TEMP DIAGNOSTIC (remove once confirmed): one line per display that gets a panel.
-                NSLog("[Jetty] created panel uuid=%@ screenFrame=%@", uuid, NSStringFromRect(screen.frame))
+                NSLog("[Jetty] created panel uuid=\(uuid) screenFrame=\(NSStringFromRect(screen.frame))")
             }
         }
         updateLiveStats()

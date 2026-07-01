@@ -164,8 +164,7 @@ final class DockPanelController {
         guard !isRevealed else { return }
         isRevealed = true
         // TEMP DIAGNOSTIC (remove once confirmed): which display actually reveals, and where.
-        NSLog("[Jetty] reveal uuid=%@ panelFrame=%@ onScreen=%@", displayUUID,
-              NSStringFromRect(panel.frame), NSStringFromRect(panel.screen?.frame ?? .zero))
+        NSLog("[Jetty] reveal uuid=\(displayUUID) panelFrame=\(NSStringFromRect(panel.frame)) onScreen=\(NSStringFromRect(panel.screen?.frame ?? .zero))")
         applyRevealState(animated: animated)
     }
 

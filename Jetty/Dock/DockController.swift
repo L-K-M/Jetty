@@ -248,45 +248,70 @@ final class DockController {
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
         model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
-        model.onHoverApp = { [weak self] tile, entered in self?.handleAppHover(tile, entered: entered) }
+        model.onHoverTile = { [weak self] tile, entered in self?.handleTileHover(tile, entered: entered) }
     }
 
-    // MARK: Window peek (hover previews)
+    // MARK: Hover previews (app windows / folder contents)
 
-    /// The app tile the pointer is currently over (nil → none), coalesced so that
-    /// moving between tiles — which fires an exit and an enter in either order — settles
-    /// on the latest intent before we act (no flicker-close-then-reopen).
-    private var hoveredAppTile: DockTile?
+    /// The tile the pointer is currently over that offers a hover preview (nil → none),
+    /// coalesced so that moving between tiles — which fires an exit and an enter in either
+    /// order — settles on the latest intent before we act (no flicker-close-then-reopen).
+    private var hoveredPreviewTile: DockTile?
 
-    private func handleAppHover(_ tile: DockTile, entered: Bool) {
-        guard preferences.windowPreviewMode != .off else {
-            if windowPeek.isOpen { windowPeek.hide() }
-            return
+    /// The kind of preview a tile shows on hover, or nil if it shows none.
+    private enum HoverPreview { case windows, folder }
+    private func hoverPreview(for tile: DockTile) -> HoverPreview? {
+        switch tile.kind {
+        case .application:
+            guard preferences.windowPreviewMode != .off, tile.isRunning, pid(for: tile) != nil else { return nil }
+            return .windows
+        case .folder:
+            return liveURL(for: tile) != nil ? .folder : nil
+        default:
+            return nil
         }
-        if entered, tile.kind == .application, tile.isRunning, pid(for: tile) != nil {
-            hoveredAppTile = tile
-        } else if !entered, hoveredAppTile?.id == tile.id {
-            hoveredAppTile = nil      // only clear when *this* tile is the one we're tracking
-        }
-        scheduleApplyPeek()
     }
 
-    private func scheduleApplyPeek() {
+    /// Hover entered/left a tile: show that tile's preview (a running app's windows, or a
+    /// folder's contents) after a short dwell. Clicking still opens the tile — a folder
+    /// opens in Finder — so both are available. Mirrors the window-peek dwell/grace so
+    /// moving into the popover keeps it up.
+    private func handleTileHover(_ tile: DockTile, entered: Bool) {
+        if entered {
+            guard hoverPreview(for: tile) != nil else { return }
+            hoveredPreviewTile = tile
+        } else if hoveredPreviewTile?.id == tile.id {
+            hoveredPreviewTile = nil      // only clear when *this* tile is the one we're tracking
+        }
+        scheduleApplyPreview()
+    }
+
+    private func scheduleApplyPreview() {
         peekWork?.cancel()
-        // Retarget an already-open peek almost immediately; require a short dwell before
-        // the first open so a quick pass over the dock doesn't pop it.
-        let delay = windowPeek.isOpen ? 0.06 : 0.45
-        let work = DispatchWorkItem { [weak self] in self?.applyPeek() }
+        // Retarget an already-open preview almost immediately; require a short dwell
+        // before the first open so a quick pass over the dock doesn't pop one.
+        let anyOpen = windowPeek.isOpen || folderStack.isOpen
+        let work = DispatchWorkItem { [weak self] in self?.applyPreview() }
         peekWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (anyOpen ? 0.06 : 0.45), execute: work)
     }
 
-    private func applyPeek() {
-        guard let tile = hoveredAppTile, let pid = pid(for: tile) else {
+    private func applyPreview() {
+        guard let tile = hoveredPreviewTile, let kind = hoverPreview(for: tile) else {
             windowPeek.scheduleHide()
+            folderStack.scheduleHide()
             return
         }
-        presentWindowPeek(tile: tile, pid: pid)
+        // Only one preview at a time — switching kinds dismisses the other immediately.
+        switch kind {
+        case .windows:
+            folderStack.close()
+            guard let pid = pid(for: tile) else { windowPeek.scheduleHide(); return }
+            presentWindowPeek(tile: tile, pid: pid)
+        case .folder:
+            windowPeek.hide()
+            presentFolderStack(for: tile)
+        }
     }
 
     private func presentWindowPeek(tile: DockTile, pid: pid_t) {
@@ -372,15 +397,13 @@ final class DockController {
     }
 
     private func open(_ tile: DockTile) {
-        // Any tap other than (re)opening a folder dismisses an open stack.
-        if tile.kind != .folder { folderStack.close() }
+        // A click dismisses any hover-opened folder stack. A folder opens in Finder like
+        // a file — its contents are previewed on hover instead of on click.
+        folderStack.close()
         switch tile.kind {
         case .application:
             openApplication(tile)
-        case .folder:
-            presentFolderStack(for: tile)
-            return   // keep the dock revealed while the stack is open
-        case .file, .url:
+        case .file, .folder, .url:
             if let url = liveURL(for: tile) { NSWorkspace.shared.open(url) }
         case .trash:
             AppLauncher.openTrash()
@@ -426,20 +449,21 @@ final class DockController {
         }
     }
 
-    /// Opens the folder-stack popover for a folder tile, anchored near the pointer on
-    /// the screen it's on, oriented to that display's dock edge (MF-2).
+    /// Shows the folder-stack contents popover for a folder tile (on hover, or from the
+    /// context menu), anchored to the tile on the screen it's on and oriented to that
+    /// display's dock edge (MF-2).
     private func presentFolderStack(for tile: DockTile) {
         guard let url = liveURL(for: tile) else { return }
-        let point = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
-        guard let screen else { return }
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let uuid = registry.key(for: screen)
         let edge = effectiveAnchor(forUUID: uuid).edge
-        // Open the popover clear of the dock strip (using the dock's actual on-screen
-        // frame), not overlapping it.
-        let dockFrame = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: point, size: .zero)
-        folderStack.toggle(folder: url, style: tile.folderDisplay ?? .grid,
-                           near: point, dock: dockFrame, screen: screen, edge: edge)
+        // Place the popover clear of the dock strip, anchored to the folder's icon (like
+        // the window-peek) so it sits above the tile rather than tracking the cursor.
+        let dock = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: mouse, size: .zero)
+        let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
+        folderStack.show(folder: url, style: tile.folderDisplay ?? .grid,
+                         near: anchor, dock: dock, screen: screen, edge: edge)
     }
 
     private func handleDrop(_ urls: [URL], on tile: DockTile) {
@@ -502,9 +526,9 @@ final class DockController {
                 })
             }
         case .file, .folder, .url:
-            actions.append(DockContextAction(title: tile.kind == .folder ? "Show Stack" : "Open") { [weak self] in self?.open(tile) })
-            if tile.kind == .folder, let url = tile.url {
-                actions.append(DockContextAction(title: "Open in Finder") { NSWorkspace.shared.open(url) })
+            actions.append(DockContextAction(title: tile.kind == .folder ? "Open in Finder" : "Open") { [weak self] in self?.open(tile) })
+            if tile.kind == .folder {
+                actions.append(DockContextAction(title: "Show Contents") { [weak self] in self?.presentFolderStack(for: tile) })
             }
             if let url = tile.url, url.isFileURL {
                 actions.append(DockContextAction(title: "Show in Finder") {

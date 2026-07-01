@@ -154,6 +154,9 @@ struct FolderStackView: View {
     var onSelect: (FolderEntry) -> Void
     var onBack: () -> Void
     var onOpenInFinder: () -> Void
+    /// Reports whether the pointer is over the popover, so a hover-opened stack can stay
+    /// up while the user reaches into it (mirrors the window-peek).
+    var onHoverChange: ((Bool) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -181,6 +184,7 @@ struct FolderStackView: View {
                             cornerRadius: 16)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onHover { onHoverChange?($0) }
     }
 
     private var header: some View {

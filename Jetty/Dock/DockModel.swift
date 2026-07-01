@@ -56,8 +56,9 @@ final class DockModel: ObservableObject {
     /// File/folder URLs dropped on the dock strip background (not a specific tile) —
     /// pin them as new items.
     var onAddDroppedItems: (([URL]) -> Void)?
-    /// Hover entered/left a running application tile — drives the window-peek popover.
-    var onHoverApp: ((DockTile, Bool) -> Void)?
+    /// Hover entered/left a tile that shows a preview on hover — a running app (window
+    /// peek) or a folder (contents stack). Drives the matching popover.
+    var onHoverTile: ((DockTile, Bool) -> Void)?
 
     /// Count of pinned tiles (those with a backing item). Pinned tiles precede
     /// running-only ones in `tiles`. Kept for tests / sizing.

@@ -363,13 +363,13 @@ computed by `DockModel` from `DockDocument` + `RunningAppsModel`. Running apps s
 | Action | Result | API (permission) |
 |---|---|---|
 | Click an app tile | Launch if not running; else activate (bring forward) | `NSWorkspace.open` / `NSRunningApplication.activate` (none) |
-| Click a file/folder/url tile | Open it (folder → stack or reveal) | `NSWorkspace.open` (none) |
+| Click a file/folder/url tile | Open it in Finder / the default app (a folder opens in Finder; its contents preview on hover) | `NSWorkspace.open` (none) |
 | Drag a file onto an app tile | Open the file *with* that app | `NSWorkspace.open(_:withApplicationAt:)` (none) |
 | Drag a file/app/url into the dock | Pin it as a new item | bookmark capture (none) |
 | Right-click an app tile | Synthesized menu: Activate, Hide, Quit, Options ▸ (Keep in Dock, Open at Login\*), Show in Finder, Recent Documents\* | `NSRunningApplication`/`NSWorkspace`; recents via `.sfl2` parse\* (none) |
 | Drag tiles | Reorder; drag out to remove | (none) |
 | Click the Trash tile | Open Trash; **drop** files to delete; menu → Empty Trash | `FileManager`/`NSWorkspace` (none) |
-| Hover an app tile | (v1) tooltip with name; (later) live window previews | (later: Screen Recording) |
+| Hover a tile | Running app → window peek (names, or live thumbnails); folder → contents stack; optional name label | (thumbnails: Screen Recording) |
 | Click the Jetty Menu tile / hotkey | Open the Start-menu launcher | (none; power cmds: Automation) |
 
 \* Recent-documents and "Open at Login" parity are best-effort/later (the app's *own*

@@ -17,17 +17,21 @@ final class FolderStackController {
     private(set) var isOpen = false
     private var rootFolder: URL?
 
+    /// Hover lifecycle (the stack is opened by hovering a folder tile): a pending hide is
+    /// cancelled when the pointer moves into the popover, so it stays up while browsed.
+    private var hideWork: DispatchWorkItem?
+    private var hoveringPanel = false
+
     init(preferences: Preferences) {
         self.preferences = preferences
     }
 
-    /// Opens the stack for `folder`, or closes it if it's already showing that folder.
-    func toggle(folder: URL, style: FolderStackStyle, near point: CGPoint, dock: CGRect, screen: NSScreen, edge: DockEdge) {
-        if isOpen, rootFolder == folder { close(); return }
-        show(folder: folder, style: style, near: point, dock: dock, screen: screen, edge: edge)
-    }
-
+    /// Shows the stack for `folder` (hover-driven). Re-showing the folder that's already
+    /// on screen just keeps it up (cancelling a pending hide), so hover jitter doesn't
+    /// rebuild and flicker the popover; a different folder rebuilds.
     func show(folder: URL, style: FolderStackStyle, near point: CGPoint, dock: CGRect, screen: NSScreen, edge: DockEdge) {
+        hideWork?.cancel(); hideWork = nil
+        if isOpen, rootFolder == folder { return }
         close()
 
         let model = FolderStackModel(style: style)
@@ -35,7 +39,11 @@ final class FolderStackController {
             model: model, preferences: preferences,
             onSelect: { [weak self] entry in self?.select(entry) },
             onBack: { model.goBack() },
-            onOpenInFinder: { [weak self] in self?.openInFinder() })
+            onOpenInFinder: { [weak self] in self?.openInFinder() },
+            onHoverChange: { [weak self] inside in
+                self?.hoveringPanel = inside
+                if !inside { self?.scheduleHide() }
+            })
 
         let size = FolderStack.panelSize(style: style)
         let hosting = NSHostingController(rootView: root)
@@ -65,8 +73,10 @@ final class FolderStackController {
     }
 
     func close() {
+        hideWork?.cancel(); hideWork = nil
         guard isOpen else { return }
         isOpen = false
+        hoveringPanel = false
         rootFolder = nil
         model = nil
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
@@ -74,6 +84,18 @@ final class FolderStackController {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    /// Hides after a short grace period unless the pointer moved into the popover — so a
+    /// hover-opened stack survives the gap between the folder tile and the popover.
+    func scheduleHide() {
+        hideWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.hoveringPanel else { return }
+            self.close()
+        }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
     }
 
     // MARK: Actions

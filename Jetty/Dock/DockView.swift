@@ -283,7 +283,10 @@ struct DockView: View {
             onTap: { model.onOpenTile?(tile) },
             onHoverChanged: { inside in
                 hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID)
-                if tile.kind == .application && tile.isRunning { model.onHoverApp?(tile, inside) }
+                // Running apps peek their windows; folders peek their contents.
+                if (tile.kind == .application && tile.isRunning) || tile.kind == .folder {
+                    model.onHoverTile?(tile, inside)
+                }
             },
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },
             contextActions: { model.onRequestContextActions?(tile) ?? [] }

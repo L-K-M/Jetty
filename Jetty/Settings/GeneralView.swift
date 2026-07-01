@@ -17,7 +17,13 @@ struct GeneralView: View {
                 Toggle("Hide the macOS Dock while Jetty runs", isOn: $preferences.manageSystemDock)
                 Text("Jetty can't remove Apple's Dock (no app can), so it hides it with auto-hide and a long reveal delay. Mission Control and minimize keep working. Use Restore if anything looks off.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Restore System Dock") { systemDock.restoreSystemDock() }
+                Button("Restore System Dock") {
+                    // Clear the management preference *first* (matching the menu-bar item) —
+                    // restoring while `manageSystemDock` stays true left `isManaging == false`,
+                    // so the very next preference change re-hid the Dock the user just restored.
+                    preferences.manageSystemDock = false
+                    systemDock.restoreSystemDock()
+                }
             }
 
             Section("Position") {

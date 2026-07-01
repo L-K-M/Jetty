@@ -19,7 +19,7 @@ struct DisplaysView: View {
                     ForEach(DisplayScope.allCases) { Text($0.label).tag($0) }
                 }
                 if preferences.displayScope == .mainOnly {
-                    Text("Only the main display (whichever currently has keyboard focus) gets a dock, so it can appear to jump to a different screen each launch and the per-display options below have no effect. Choose “All displays” to give every screen its own dock.")
+                    Text("Only the main display (whichever currently has keyboard focus) shows a dock right now — that's why it can seem to move between screens. Switch to “All displays” to give every screen its own dock. Turning a screen off below switches to that mode automatically.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text("Every connected display gets its own dock. Give any display a custom edge and alignment below, or turn its dock off entirely — Jetty keeps at least one dock so you're never left without.")
@@ -30,7 +30,6 @@ struct DisplaysView: View {
             ForEach(screenEntries) { entry in
                 Section(entry.name) {
                     Toggle("Disable dock on this display", isOn: disabledBinding(entry.id))
-                        .disabled(preferences.displayScope == .mainOnly)
                     if store.isDisplayDisabled(forDisplayUUID: entry.id) {
                         Text("No dock will show here — unless this becomes the only connected display, so you're never left without a dock.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -88,7 +87,15 @@ struct DisplaysView: View {
     private func disabledBinding(_ uuid: String) -> Binding<Bool> {
         Binding(
             get: { store.isDisplayDisabled(forDisplayUUID: uuid) },
-            set: { store.setDisplayDisabled($0, forDisplayUUID: uuid) })
+            set: { disabled in
+                store.setDisplayDisabled(disabled, forDisplayUUID: uuid)
+                // Turning a specific display off only makes sense when each screen is
+                // controlled individually, so switch out of "main display only" — that's
+                // exactly the user's intent (dock everywhere except this screen).
+                if disabled, preferences.displayScope == .mainOnly {
+                    preferences.displayScope = .allDisplays
+                }
+            })
     }
 
     private func overrideBinding(_ uuid: String) -> Binding<Bool> {

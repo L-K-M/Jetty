@@ -26,6 +26,12 @@ final class NowPlayingService: ObservableObject {
             self?.inFlight = false
             self?.snapshot = Self.parse(info)
         }
+        // Safety net: if a half-present private framework never delivers, clear the flag
+        // so future refreshes aren't blocked forever (H17). Harmless if the callback
+        // already fired (`inFlight` is only reset to false).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            if self?.inFlight == true { self?.inFlight = false }
+        }
     }
 
     /// Builds a snapshot from the legacy-keyed MediaRemote dictionary. Pure.

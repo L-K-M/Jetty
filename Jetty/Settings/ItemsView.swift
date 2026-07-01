@@ -198,7 +198,11 @@ struct ItemsView: View {
 
         let raw = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return }
-        let normalized = raw.contains("://") ? raw : "https://\(raw)"
+        // Only prepend https:// when there's no URL scheme at all. Detecting the scheme
+        // (not just "://") keeps non-hierarchical links like mailto:/tel:/message: intact
+        // instead of mangling them to "https://mailto:…" (H18).
+        let hasScheme = raw.range(of: #"^[a-zA-Z][a-zA-Z0-9+.\-]*:"#, options: .regularExpression) != nil
+        let normalized = hasScheme ? raw : "https://\(raw)"
         guard let url = URL(string: normalized), url.scheme != nil else { return }
         store.addItem(DockItem.fromLink(url))
     }

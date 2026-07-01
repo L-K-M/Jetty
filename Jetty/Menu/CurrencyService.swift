@@ -51,7 +51,10 @@ final class CurrencyService: ObservableObject {
             let c = code.uppercased()
             return c == "USD" ? 1.0 : rates[c]
         }
-        guard let rf = rate(from), let rt = rate(to) else { return nil }
+        // Reject zero / non-finite rates so a malformed payload can't divide-by-zero
+        // into `"inf EUR"` (M32).
+        guard let rf = rate(from), let rt = rate(to),
+              rf.isFinite, rt.isFinite, rf != 0, rt != 0 else { return nil }
         return amount / rf * rt
     }
 
@@ -64,7 +67,11 @@ final class CurrencyService: ObservableObject {
               let rates = json["rates"] as? [String: Any] else { return nil }
         var out: [String: Double] = ["USD": 1.0]
         for (code, value) in rates {
-            if let number = (value as? NSNumber)?.doubleValue { out[code.uppercased()] = number }
+            // Skip non-positive / non-finite rates so a bad payload can't poison `convert`
+            // with a zero or NaN divisor (M32).
+            if let number = (value as? NSNumber)?.doubleValue, number.isFinite, number > 0 {
+                out[code.uppercased()] = number
+            }
         }
         return out.count > 1 ? out : nil
     }

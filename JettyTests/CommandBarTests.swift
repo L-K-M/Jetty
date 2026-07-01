@@ -36,6 +36,17 @@ final class CommandBarTests: XCTestCase {
         XCTAssertNil(UnitConverter.convert("2+2"))
     }
 
+    func testInchAliasAndInAsTarget() {   // M41
+        // `in` is usable as a target unit, and the `"` inch alias is reachable.
+        let toIn = UnitConverter.convert("10 m to in")
+        XCTAssertNotNil(toIn)
+        XCTAssertTrue(toIn?.value.hasSuffix("in") ?? false, toIn?.value ?? "nil")
+        let fromIn = UnitConverter.convert("12 in to cm")
+        XCTAssertTrue(fromIn?.value.hasSuffix("cm") ?? false, fromIn?.value ?? "nil")
+        XCTAssertTrue(fromIn?.value.hasPrefix("30") ?? false, fromIn?.value ?? "nil")
+        XCTAssertTrue(UnitConverter.convert(#"5 " to cm"#)?.value.hasSuffix("cm") ?? false)
+    }
+
     // MARK: Currency
 
     func testCurrencyRateParsing() {
@@ -50,6 +61,16 @@ final class CommandBarTests: XCTestCase {
         XCTAssertNil(CurrencyService.parseRates(nil))
         XCTAssertNil(CurrencyService.parseRates(Data("nope".utf8)))
         XCTAssertNil(CurrencyService.parseRates(Data("{}".utf8)))
+    }
+
+    func testCurrencyRejectsNonPositiveRates() {   // M32
+        let json = Data(#"{"base":"USD","rates":{"EUR":0,"GBP":-1,"JPY":150}}"#.utf8)
+        let rates = CurrencyService.parseRates(json)
+        XCTAssertNil(rates?["EUR"])                 // zero dropped
+        XCTAssertNil(rates?["GBP"])                 // negative dropped
+        XCTAssertEqual(rates?["JPY"], 150)          // valid kept
+        // A zero source rate must not divide-to-infinity.
+        XCTAssertNil(CurrencyService.convert(amount: 1, from: "EUR", to: "USD", rates: ["USD": 1, "EUR": 0]))
     }
 
     func testCurrencyQueryParsing() {

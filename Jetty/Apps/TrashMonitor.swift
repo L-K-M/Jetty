@@ -9,7 +9,6 @@ final class TrashMonitor {
     var onChange: (() -> Void)?
 
     private var source: DispatchSourceFileSystemObject?
-    private var fileDescriptor: Int32 = -1
 
     func start() {
         guard source == nil else { return }
@@ -19,15 +18,13 @@ final class TrashMonitor {
 
         let descriptor = open(path, O_EVTONLY)
         guard descriptor >= 0 else { return }
-        fileDescriptor = descriptor
 
         let src = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: [.write, .delete, .rename, .extend], queue: .main)
         src.setEventHandler { [weak self] in self?.onChange?() }
-        src.setCancelHandler { [weak self] in
-            if let fd = self?.fileDescriptor, fd >= 0 { close(fd) }
-            self?.fileDescriptor = -1
-        }
+        // Capture the fd *by value* so a rapid stop()/start() can't make this handler
+        // close a descriptor that a new monitor is already using (fd reuse race) — H23.
+        src.setCancelHandler { if descriptor >= 0 { close(descriptor) } }
         source = src
         src.resume()
     }
@@ -36,4 +33,6 @@ final class TrashMonitor {
         source?.cancel()   // the cancel handler closes the descriptor
         source = nil
     }
+
+    deinit { stop() }
 }

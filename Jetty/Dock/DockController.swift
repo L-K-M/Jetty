@@ -22,6 +22,10 @@ final class DockController {
     private let toggleHotkey = CarbonHotkey(identifier: 1)
     private let menuHotkey = CarbonHotkey(identifier: 2)
 
+    /// Token for the block-based wake observer, so `teardown()` can remove it (otherwise
+    /// every start/teardown cycle stacks another live observer) — H24.
+    private var wakeObserver: NSObjectProtocol?
+
     /// Last-seen "structural" preference signatures, so a preference mutation only
     /// does the work it actually needs: pure-appearance tweaks (opacity/tint/corner/
     /// magnification-magnitude…) flow to the views via `@ObservedObject` and touch no
@@ -85,6 +89,10 @@ final class DockController {
         folderStack.close()
         panels.values.forEach { $0.close() }
         panels.removeAll()
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
         // Leave the system Dock as the user expects: restore it on quit if we hid it.
         if systemDock.isManaging { systemDock.restoreSystemDock() }
     }
@@ -116,7 +124,7 @@ final class DockController {
             }
             .store(in: &cancellables)
 
-        NSWorkspace.shared.notificationCenter.addObserver(
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.systemDock.reassertIfManaging()
         }
@@ -588,7 +596,16 @@ final class DockController {
         }
     }
 
-    func toggleAllDocks() { panels.values.forEach { $0.toggle() } }
+    /// Global toggle: if *any* panel is revealed, hide them all; otherwise reveal them
+    /// all. Toggling each panel independently would swap mixed states (hide the one the
+    /// pointer revealed while revealing the rest) — not what the user means (M34).
+    func toggleAllDocks() {
+        if panels.values.contains(where: { $0.isRevealed }) {
+            panels.values.forEach { $0.hideForToggle() }
+        } else {
+            panels.values.forEach { $0.reveal() }
+        }
+    }
 
     func openJettyMenu() {
         // Open on the screen the pointer is on (where the Jetty button was clicked, or

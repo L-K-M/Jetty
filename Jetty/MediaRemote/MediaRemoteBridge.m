@@ -14,6 +14,7 @@ typedef void (*MRGetInfoFn)(dispatch_queue_t, void (^)(CFDictionaryRef));
 /// Maps the 15.4+ controller `response` object into a legacy-keyed info dictionary.
 static NSDictionary *JettyBuildInfoFromResponse(id response) {
     if (!response) return nil;
+    @try {
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
 
     NSNumber *rateNum = [response valueForKey:@"playbackRate"];
@@ -54,6 +55,11 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
     add(@"elapsedTime",     @"kMRMediaRemoteNowPlayingInfoElapsedTime");
 
     return (info.count > 0) ? info : nil;
+    } @catch (NSException *ex) {
+        // A renamed/removed private selector must fail closed (return nil → plain glyph),
+        // never take down the menu-bar agent (C4).
+        return nil;
+    }
 }
 
 @implementation JettyNowPlaying
@@ -86,6 +92,7 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
     Class controllerCls = NSClassFromString(@"MRNowPlayingController");
     if (!destClass || !configClass || !controllerCls) { completion(nil); return; }
 
+    @try {
     // Route `init…` through a typed objc_msgSend (not -performSelector:), so ARC keeps
     // the alloc/init ownership balanced and doesn't over-release the instance.
     id (*msgSendInit)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
@@ -109,19 +116,31 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
                               (uint64_t)(kControllerPollIntervalMs / 10) * NSEC_PER_MSEC);
     dispatch_source_set_event_handler(timer, ^{
         if (done) { dispatch_source_cancel(timer); return; }
-        pollCount++;
-        id response = [controller valueForKey:@"response"];
-        NSDictionary *info = JettyBuildInfoFromResponse(response);
-        BOOL hasData = (info != nil && info.count > 0);
-        if (hasData || pollCount >= kControllerMaxPolls) {
+        @try {
+            pollCount++;
+            id response = [controller valueForKey:@"response"];
+            NSDictionary *info = JettyBuildInfoFromResponse(response);
+            BOOL hasData = (info != nil && info.count > 0);
+            if (hasData || pollCount >= kControllerMaxPolls) {
+                done = YES;
+                dispatch_source_cancel(timer);
+                [controller performSelector:NSSelectorFromString(@"endLoadingUpdates")];
+                controller = nil;
+                completion(info);
+            }
+        } @catch (NSException *ex) {
+            // A renamed private selector must fail closed, not crash the agent (C4).
             done = YES;
             dispatch_source_cancel(timer);
-            [controller performSelector:NSSelectorFromString(@"endLoadingUpdates")];
             controller = nil;
-            completion(info);
+            completion(nil);
         }
     });
     dispatch_resume(timer);
+    } @catch (NSException *ex) {
+        // Any renamed/removed private selector in the setup path → fail closed (C4).
+        completion(nil);
+    }
 }
 
 @end

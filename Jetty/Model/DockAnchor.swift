@@ -30,7 +30,7 @@ struct DockAnchor: Codable, Equatable {
         self.displayUUID = displayUUID
         self.edge = edge
         self.alignment = alignment
-        self.offset = offset
+        self.offset = DockAnchor.clampOffset(offset)
         self.inset = DockAnchor.clampInset(inset)
     }
 
@@ -39,7 +39,7 @@ struct DockAnchor: Codable, Equatable {
         displayUUID = try c.decodeIfPresent(String.self, forKey: .displayUUID) ?? ""
         edge = try c.decodeIfPresent(DockEdge.self, forKey: .edge) ?? .bottom
         alignment = try c.decodeIfPresent(DockAlignment.self, forKey: .alignment) ?? .center
-        offset = try c.decodeIfPresent(Double.self, forKey: .offset) ?? 0
+        offset = DockAnchor.clampOffset(try c.decodeIfPresent(Double.self, forKey: .offset) ?? 0)
         inset = DockAnchor.clampInset(try c.decodeIfPresent(Double.self, forKey: .inset) ?? 0)
     }
 
@@ -49,5 +49,12 @@ struct DockAnchor: Codable, Equatable {
     static func clampInset(_ value: Double) -> Double {
         guard value.isFinite else { return 0 }
         return Swift.max(0, Swift.min(value, 400))
+    }
+
+    /// Keeps the offset finite and within the Settings slider range (corrupted or
+    /// hand-edited storage can't push the dock arbitrarily far off-screen) — H6.
+    static func clampOffset(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        return Swift.max(-600, Swift.min(value, 600))
     }
 }

@@ -23,20 +23,32 @@ product items distilled from `PLAN.md` (see
 has been removed; `PLAN.md` stays the design/feasibility record and now points here
 for live status.
 
-The findings below were written against `main @ be22407`; a few have since been fixed:
+The findings were written against `main @ be22407`. The following have since been
+**implemented and removed** from the lists below (2026-07-01):
 
-- **H10 (`mainScreenUUID()` key collisions)** — resolved: `mainScreenUUID()` was
-  removed entirely when the display-scope control was dropped; display keying now runs
-  through `DisplayRegistry.key(for:)`, which already disambiguates UUID collisions.
-- **M2 (diagnostic `NSLog` in production paths)** — resolved: the temporary
-  multi-display `[Jetty]` diagnostics were removed.
-- **Display-scope control removed** — the "Show dock on (main / all displays)" enum is
-  gone; which screens show a dock is now decided entirely by per-screen **"Show dock on
-  this display"** toggles (on by default, at least one screen always kept).
+- **Critical:** C4 (MediaRemote controller path now fails closed with `@try/@catch`).
+- **High:** H1 (guard `sizingOptions` on macOS 13), H3 (scan `~/Applications`),
+  H5 (index the localized bundle display name), H6 (clamp `offset` in `Preferences` +
+  `DockAnchor`), H10 (`mainScreenUUID()` was already removed with the display-scope
+  cleanup), H11 (cancel a queued reveal when the pointer leaves the screen mid-dwell),
+  H17 (`NowPlayingService` in-flight safety timeout), H18 (keep non-`://` URL schemes
+  like `mailto:`), H19 (clamp `ColorHex` channels), H23 (capture the Trash fd by value
+  + `deinit`), H24 (remove the wake observer in `teardown`).
+- **Medium:** M2 (temporary `[Jetty]` diagnostics removed), M6 (release the
+  `mach_host_self` port), M27 (reject non-theme imports), M28 (validate imported preset
+  hex), M32 (reject zero/non-finite currency rates), M34 (unify toggle-all),
+  M40 (guard force-unwrapped URLs), M41 (`UnitConverter`: `"` alias + `in` as a target).
+- **Low:** L16 (obsolete — the display-scope copy it referenced was removed).
 
-One **new** known issue since the review: a `layoutSubtreeIfNeeded` recursion warning
-in the console, originating from the tile-scroll `GeometryReader` added for horizontal
-overflow-scroll. No user-visible breakage observed, but worth resolving.
+Everything **not** listed above is still open. I deliberately left the release-infra
+items (**C1/C2/C3**), the larger visual/perf reworks (**H8** magnify-shift, the
+**H7/H16/H20** MediaRemote/caching perf work, the threading items **M1/M3/M4/M5/M7**),
+and UX changes that want on-device testing — none of which are safe to land without a
+build + GUI session here.
+
+One known issue since the review: a `layoutSubtreeIfNeeded` recursion warning in the
+console from the tile-scroll `GeometryReader` (horizontal overflow-scroll). No
+user-visible breakage observed, but worth resolving.
 
 ---
 
@@ -115,42 +127,9 @@ release. Combined with C1+C2, that's a complete silent-compromise chain.
 **Fix:** pin every third-party action to a SHA digest
 (`softprops/action-gh-release@<full-sha> # v2.x.y`).
 
-### C4. MediaRemote "controller" path crashes instead of failing closed
-**`Jetty/MediaRemote/MediaRemoteBridge.m:83-125` + `JettyBuildInfoFromResponse` 15-57** · BUG/SECURITY
-
-The header and `AGENTS.md` both promise the bridge **fails closed** (returns nil
-→ plain glyph). The legacy `dlopen` path honors this. The 15.4+ controller path
-**does not**. It calls `performSelector(NSSelectorFromString(@"userSelectedDestination"))`,
-`NSSelectorFromString(@"initWithDestination:")`, `setValue:forKey:@"singleShot"`,
-`@"requestPlaybackState"`, `@"requestPlaybackQueue"`, `beginLoadingUpdates`,
-`endLoadingUpdates`, `valueForKey:@"response"`, and (in
-`JettyBuildInfoFromResponse`) `valueForKey:@"playbackRate" / @"playbackState" /
-@"playbackQueue" / @"contentItems" / @"location" / @"metadata"` — **none of it
-wrapped in `@try/@catch`**.
-
-macOS point releases (especially across Tahoe → 26.x → 27) regularly rename
-private-framework selectors. When one shifts, the opt-in now-playing tile will
-**kill the whole menu-bar agent** the first time it polls — the opposite of
-fail-closed.
-
-**Fix:** wrap the entire controller path body and `JettyBuildInfoFromResponse`
-in `@try { … } @catch (NSException *ex) { completion(nil); }`. Add
-`-respondsToSelector:` guards before each `performSelector:`. Better:
-introspect the class once at first use with `class_copyMethodList` and skip the
-controller path entirely if the expected names are absent.
-
 ---
 
 ## High
-
-### H1. `hosting.sizingOptions` is macOS-14+ but the deployment target is 13.0
-**`Jetty/Settings/SettingsWindowController.swift:39`** · BUG
-
-`NSHostingController.sizingOptions` was added in macOS 14.0, but
-`MACOSX_DEPLOYMENT_TARGET = 13.0` and `AGENTS.md` claims a macOS-13 min target.
-This will crash on macOS 13 at runtime (or fails to compile against the 13 SDK).
-
-**Fix:** wrap in `if #available(macOS 14.0, *) { hosting.sizingOptions = [.minSize] }`.
 
 ### H2. Pressing Return on a calculation silently leaks the query to Google
 **`Jetty/Menu/JettyMenuModel.swift:108-116`** · BUG/PRIVACY
@@ -172,22 +151,6 @@ if let currency    { onCopyCurrency?(currency); return }
 ```
 Wire to the same copy-to-clipboard body the banner's click handler uses.
 
-### H3. `~/Applications` is never scanned
-**`Jetty/Menu/AppIndex.swift:23-32`** · BUG
-
-The scan covers `/Applications`, `/Applications/Utilities`, `/System/Applications`,
-`/System/Applications/Utilities`, and
-`FileManager.url(for: .applicationDirectory, in: .userDomainMask)`. For a
-**non-sandboxed** app (which Jetty is), that last call returns `/Applications`
-(the local domain), **not** `~/Applications`. Any app installed for "current user
-only" — many Homebrew casks, some drag-installs — is missing from the launcher.
-This is the single most user-visible bug in the menu.
-
-**Fix:** explicitly append
-`URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications")`
-and consider `/System/Library/CoreServices`. Canonical source is LaunchServices
-(`_LSCopyAllApplicationURLs` / Spotlight) — a later refinement.
-
 ### H4. App search is not diacritic-insensitive (nor width-insensitive)
 **`Jetty/Menu/AppSearch.swift:39-72`** · BUG/UX
 
@@ -198,31 +161,6 @@ width by default — a real gap on any non-ASCII install.
 **Fix:** fold both sides with
 `.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)`
 and switch the sort to `localizedStandardCompare`.
-
-### H5. App display name is the filename, not the localized `CFBundleDisplayName`
-**`Jetty/Menu/AppIndex.swift:42-43`** · BUG/UX
-
-`AppSearchItem.name = url.deletingPathExtension().lastPathComponent`. On a
-localized macOS install, `/System/Applications/Calculator.app` shows as
-`Calculator`, not `计算器` — so typing pinyin won't match. Brand-renamed apps
-(think "  Thing" with a leading space) lose that.
-
-**Fix:** read `CFBundleDisplayName` (then `CFBundleName`) from
-`Bundle(url:)`, falling back to the filename. Index both names so the user can
-search by either.
-
-### H6. `~/Library/Preferences`-style corruption: `Preferences.offset` is never clamped
-**`Jetty/Model/Preferences.swift:158, 245`** · BUG
-
-Every other numeric preference is loaded with `Self.clamp(...)`; `offset` is just
-`double(Key.offset, d.offset)`. The Settings slider ranges `-600...600`, but a
-hand-edited plist value of `50_000` loads and is applied by `DockLayout` (which
-also doesn't clamp). The slider visually pins to −600 while the persisted value
-stays enormous. Same gap on the per-display `DockAnchor` override (`inset` is
-clamped, `offset` isn't).
-
-**Fix:** `offset = Self.clamp(double(Key.offset, d.offset), -600, 600)`, and
-clamp the per-display override too.
 
 ### H7. MediaRemote controller path polls a fresh private controller every 5 s
 **`Jetty/Menu/NowPlayingWidgetView.swift:12-14` + `MediaRemoteBridge.m:6-7,100-124`** · PERFORMANCE
@@ -264,36 +202,6 @@ edge-swipe hotspots. Measurable dead zones at every targeted screen edge.
 **Fix:** set `sensorPanel.ignoresMouseEvents = true` (drag tracking is independent
 of `ignoresMouseEvents` in AppKit — verify empirically). At minimum drop the
 window level to just above app windows instead of `.popUpMenu − 1`.
-
-### H10. `mainScreenUUID()` returns the wrong key under UUID collisions
-**`Jetty/Screens/DisplayRegistry.swift:38-44, 56-59`** · BUG
-
-`rebuild()` disambiguates duplicate hardware UUIDs by suffixing `#2`, `#3`, …, so
-both displays stay in `screensByUUID`. But `mainScreenUUID()` returns
-`Self.key(for: main)` — the **raw, undisambiguated** UUID. If `NSScreen.main` is
-the *second* of two displays that share a UUID, the lookup returns the *first*
-screen. In `.mainOnly` scope the user's main dock renders on the wrong monitor.
-
-**Fix:** walk the dictionary and return the key whose value `=== main`:
-```swift
-func mainScreenUUID() -> String? {
-    guard let main = NSScreen.main else { return screensByUUID.keys.first }
-    return screensByUUID.first(where: { $0.value === main })?.key
-}
-```
-
-### H11. Auto-reveal "ghost fires" when the pointer leaves the screen mid-dwell
-**`Jetty/Dock/DockPanelController.swift:192-217`** · BUG
-
-In `handleMouseMoved`, the off-screen (seam) branch only cancels `revealWork` when
-`pointerCrossedDockEdge(point, band: 24)` is true. If the pointer was in the
-reveal zone (so a 60 ms reveal is queued) then moves off-screen *sideways* onto
-another display rather than past the dock edge, the function returns without
-touching `revealWork`. The pending reveal fires anyway, popping the dock on a
-screen the pointer has already left.
-
-**Fix:** cancel any pending reveal at the top of the off-screen branch when
-you're not going to reveal.
 
 ### H12. Pomodoro completes instantly after the Mac sleeps
 **`Jetty/Widgets/PomodoroTimer.swift:31,57-68`** · BUG
@@ -361,42 +269,6 @@ documented as expensive). Over a long lifetime both leak meaningfully.
 `LRUImageCache`/`LRUImageCacheByKey` in `Common/`. Cache one shared `CIContext`
 in a `static let`. Add `clearCache()` and call from `DockStore` on item changes.
 
-### H17. `NowPlayingService.inFlight` can stick `true` forever
-**`Jetty/Widgets/NowPlayingService.swift:19,22-29`** · BUG
-
-`refresh()` sets `inFlight = true`, then relies on the bridge completion *always*
-firing. On the controller path, if a half-present private framework never
-delivers, `inFlight` is never reset → every subsequent refresh is a silent no-op
-→ the tile freezes forever. (C4's crash class is the worst case; this is the
-hang case.)
-
-**Fix:** add a safety timeout
-`DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in if self?.inFlight == true { self?.inFlight = false } }`.
-
-### H18. `addLink()` mangles non-HTTP URL schemes
-**`Jetty/Settings/ItemsView.swift:201-203`** · BUG
-
-`let normalized = raw.contains("://") ? raw : "https://\(raw)"`. A user typing
-`mailto:foo@bar.com` gets `https://mailto:foo@bar.com`. Same for `message:`,
-`facetime:`, `maps:`, `app-prefs:`. Branching on `://` only works for
-hierarchical URLs.
-
-**Fix:** detect an existing scheme with `URL(string: raw)?.scheme != nil` (or a
-regex `^\w+:`). Only prepend `https://` if no scheme is present. Consider an
-allow-list to reject `javascript:`/`file:`.
-
-### H19. `ColorHex.hexString` can produce invalid output for wide-gamut/HDR colors
-**`Jetty/Model/ColorHex.swift:35-38`** · BUG
-
-`Int((c.redComponent * 255).rounded())`. After `usingColorSpace(.sRGB)` components
-*should* be `[0,1]`, but for extended-range sources they can exceed 1.0.
-`Int(1.5 * 255) = 382`, then `String(format:"#%02X%02X%02X", 382, …)` produces an
-invalid hex string that round-trips through `NSColor(hex:)` as failure →
-`.clear`. A picked color silently becomes transparent. (Bonus: alpha is discarded
-on write — see L9.)
-
-**Fix:** clamp each component to `0...1` before scaling.
-
 ### H20. WindowPeek's 1-second screen-capture timer is expensive
 **`Jetty/Windows/WindowPeek.swift:29-31`** · PERFORMANCE
 
@@ -435,30 +307,6 @@ immediate. With the very common "5 minutes" setting, the screen turns off
 Lock-Screen item use:
 `/System/Library/CoreServices/ScreenSaverEngine.app/Contents/MacOS/ScreenSaverEngine`.
 
-### H23. Trash `DispatchSource` cancel-handler races fd reuse
-**`Jetty/Apps/TrashMonitor.swift:14-38`** · BUG
-
-The cancel handler reads `self?.fileDescriptor` at *cancel time*, not capture
-time. Sequence that breaks it: `stop()` → `source.cancel()` (async); `start()`
-runs immediately → opens a new fd → assigns `fileDescriptor = newFd` → installs
-the new source; the *old* cancel handler finally runs → reads the now-overwritten
-`fileDescriptor` → `close(newFd)`. The new monitor watches a closed fd, and the
-integer may be reused by an unrelated `open()`.
-
-**Fix:** capture the fd by value in the closure: `let fd = descriptor; src.setCancelHandler { if fd >= 0 { close(fd) } }`. Don't store `fileDescriptor` on `self`
-for closing. Add `deinit { stop() }` mirroring `EdgeHoverMonitor`.
-
-### H24. `NSWorkspace.didWakeNotification` observer leaks; never removed
-**`Jetty/Dock/DockController.swift:119-122`** · BUG
-
-The block observer is registered but the returned token is discarded, so it can
-never be removed in `teardown()`. `[weak self]` prevents a cycle, but the
-observer (and block) stay registered forever — across `teardown`/`start` cycles,
-every relaunch stacks another. In tests this also causes callbacks into
-half-torn-down controllers.
-
-**Fix:** store the token; `removeObserver` in `teardown`.
-
 ### H25. `AppIndex.reload()` has no in-flight tracking; rapid opens race
 **`Jetty/Menu/AppIndex.swift:14-19`** · BUG/PERFORMANCE
 
@@ -486,15 +334,6 @@ tile kinds/counts, which don't change on a plain focus flip.
 **Fix:** resolve first-time icons on a background queue and merge back to main.
 Diff slot/tile structure and skip `relayoutPanels()` when only `isRunning`/
 `isActive` flags changed (extend the `prefSig` idea to model changes).
-
-### M2. Diagnostic `NSLog` calls left in production paths
-**`Jetty/Dock/DockController.swift:219-221, 241` + `DockPanelController.swift:166-168`** · CLEANNESS
-
-Three `NSLog("[Jetty] …")` calls marked "TEMP DIAGNOSTIC (remove once confirmed)"
-are still in. `reconcilePanels` runs on every screen change and `reveal` on every
-reveal — they spam `system.log`/Console.app, including `NSStringFromRect` formatting.
-
-**Fix:** wrap in `#if DEBUG` or switch to `os_log` with `.debug`.
 
 ### M3. `panel.invalidateShadow()` runs on every non-animated relayout
 **`Jetty/Dock/DockPanelController.swift:410`** · PERFORMANCE
@@ -530,16 +369,6 @@ thing that produces micro-hitches while the dock animates.
 
 **Fix:** sample on `DispatchQueue.global(qos: .utility)`, hop to main only to
 assign `@Published` properties.
-
-### M6. `mach_host_self()` leaks a Mach port right every call
-**`Jetty/Widgets/SystemStats.swift:68, 75`** · LEAK
-
-`host_statistics64(mach_host_self(), …)` — each `mach_host_self()` returns a send
-right and nothing calls `mach_port_deallocate`. Called every 2 s, this leaks a
-port reference per sample. Ports are finite per-task resources.
-
-**Fix:** cache `mach_host_self()` once for the task lifetime, or
-`mach_port_deallocate(mach_task_self_, host)` after the call.
 
 ### M7. Edge-hover monitor fires on every mouse move with no throttle
 **`Jetty/Dock/EdgeHoverMonitor.swift:18-28` + `DockController.swift:61-64`** · PERFORMANCE
@@ -745,25 +574,6 @@ before trimming to 128.
 **Fix:** sort first (using only `name` + `isDirectory` from one
 `resourceValues` call), `.prefix(limit)`, then load icons only for the 128 kept.
 
-### M27. `AppearancePreset.decode` never reports a bad file
-**`Jetty/Model/AppearancePreset.swift:118-127` + `AppearanceView.swift:132-135`** · UX/BUG
-
-`init(from:)` uses `decodeIfPresent ?? default` for every field, so an empty `{}`
-or `{"foo":"bar"}` produces a valid "Imported" preset full of defaults. The error
-"That file isn't a Jetty or Zap theme" is unreachable. A user importing a totally
-wrong file gets a silent theme switch.
-
-**Fix:** require at least one recognized key, else return nil.
-
-### M28. `apply(_:)` doesn't validate hex strings
-**`Jetty/Model/Preferences.swift:313-334`** · BUG
-
-Imported/edited presets can put any string into `tintHex`/`gradientHex`/
-`indicatorHex`/`glyphHex`. `Color(hexString:)` falls back to `.clear`, so a
-malformed preset silently paints the dock transparent.
-
-**Fix:** validate each hex against `NSColor(hex:) != nil`; fall back to the default.
-
 ### M29. Clock 30 s cadence can lag up to 30 s
 **`Jetty/Widgets/ClockWidgetView.swift:11-13` + `WorldClockWidgetView.swift:15`** · VISUAL
 
@@ -795,18 +605,6 @@ goes to frankfurter.app. `AGENTS.md` doesn't flag this.
 **Fix:** fetch lazily only when `computeCurrency()` parses a query but rates are
 empty. Add an on/off toggle in Settings.
 
-### M32. Currency rates not persisted; no offline/stale indication; no timeout
-**`Jetty/Menu/CurrencyService.swift:14-36`** · UX
-
-Every app launch starts with `rates = [:]`; offline-at-launch = unavailable until
-the 6 h cache ticks. `parseRates` accepts any NSNumber including `0`/negatives →
-a malformed payload makes `convert` divide by zero → `"inf EUR"`. `URLSession.shared`
-defaults to a 60 s timeout.
-
-**Fix:** persist last-known-good rates to `UserDefaults` with a timestamp; show
-as "stale" past 48 h; add a 10 s timeout; in `parseRates`, skip rates `<= 0` or
-non-finite; in `convert`, return nil if either rate is zero/non-finite.
-
 ### M33. Pomodoro completion: only a sound, no notification
 **`Jetty/Widgets/PomodoroTimer.swift:57-63`** · MISSING
 
@@ -818,15 +616,6 @@ has no idea their Pomodoro finished. `mm:ss` also overflows the tile for session
 **Fix:** post a `UNUserNotification` ("Pomodoro complete — take a break!"). For
 the label, switch to `H:MM:SS` (or `2h00m`) past 60 min, or
 `.lineLimit(1).minimumScaleFactor(0.5)`.
-
-### M34. `toggleAllDocks` flips each panel independently
-**`Jetty/Dock/DockController.swift:604` + `DockPanelController.swift:178-180`** · UX
-
-The global hotkey calls `toggle()` on each panel. Mixed states (panel A revealed
-because the pointer is on its screen, panel B hidden) → the hotkey swap-hides A
-and swap-reveals B — almost certainly not the user's intent.
-
-**Fix:** define toggle as "if ANY panel is revealed, hide all; else reveal all".
 
 ### M35. AppleScript power commands: no per-command confirmation wording
 **`Jetty/Menu/JettyMenuController.swift:102-111`** · UX
@@ -881,24 +670,6 @@ toward Swift 6, these race if any view ever composes on a background queue.
 
 **Fix:** wrap in a `final class` actor or `@MainActor` singleton.
 
-### M40. Force-try / force-unwrap on constructed URLs
-**`Jetty/Updates/GitHubReleaseClient.swift:42`, `Jetty/Hotkeys/AccessibilityAuthorizer.swift:29`** · BUG
-
-`URL(string: "https://api.github.com/repos/\(owner)/\(repo)/…")!` traps if
-`owner`/`repo` ever contain URL-breaking chars. Safe today (constants), but
-violates the repo's "no force-unwraps outside tests" rule.
-
-**Fix:** `guard let url = URL(string: …) else { throw … }`.
-
-### M41. `UnitConverter` dead `"` alias; `in` reserved so `10 m to in` fails
-**`Jetty/Menu/UnitConverter.swift:32, 49-50, 63`** · BUG
-
-The regex `[\w°]+` never matches `"`, so the registered `"` (inch) alias is
-unreachable. And because `in` is the separator, `10 m to in` returns nil (units
-only register `inch`/`inches`).
-
-**Fix:** extend the regex to `[\w°"]+`; register `in` as a *target* unit only.
-
 ---
 
 ## Low / polish
@@ -946,9 +717,6 @@ only register `inch`/`inches`).
 - **L15 — `VisualEffectBlur` forces `.state = .active`**
   (`Common/VisualEffectView.swift:13,19`): when the panel loses key the blur
   still renders active — slight mismatch with system panels.
-- **L16 — `DisplayScope.mainOnly` copy is misleading**
-  (`Settings/DisplaysView.swift:21-23`): "whichever currently has keyboard focus"
-  is wrong — it's the `NSScreen.main` (key-window screen). Reword.
 - **L17 — World-clock zone label gives region, not city** (`WorldClockWidgetView.swift:42-45`):
   `US/Eastern` → `Eastern`; no day/night glyph.
 - **L18 — Weather `(0,0)` sentinel + no city name shown**

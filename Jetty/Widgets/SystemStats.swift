@@ -63,9 +63,13 @@ enum SystemStats {
     static func memoryUsedFraction() -> Double {
         var stats = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride)
+        // `mach_host_self()` hands back a send right on every call; release it so the
+        // 2 s sampler doesn't leak a port reference each tick (M6).
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
         let kr = withUnsafeMutablePointer(to: &stats) { pointer -> kern_return_t in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPtr in
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, reboundPtr, &count)
+                host_statistics64(host, HOST_VM_INFO64, reboundPtr, &count)
             }
         }
         guard kr == KERN_SUCCESS else { return 0 }

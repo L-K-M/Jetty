@@ -30,17 +30,26 @@ final class AppIndex: ObservableObject {
                                       appropriateFor: nil, create: false) {
             dirs.append(userApps)
         }
+        // For a non-sandboxed app, `.applicationDirectory`/`.userDomainMask` resolves to
+        // `/Applications` (the local domain), *not* `~/Applications` — so add the real
+        // per-user folder explicitly (many Homebrew casks / drag-installs live there) — H3.
+        dirs.append(URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications"))
 
         var items: [AppSearchItem] = []
         var seen = Set<String>()
 
         func add(_ url: URL) {
-            let bundleID = Bundle(url: url)?.bundleIdentifier
+            let bundle = Bundle(url: url)
+            let bundleID = bundle?.bundleIdentifier
             let key = bundleID ?? url.path
             guard !seen.contains(key) else { return }
             seen.insert(key)
-            items.append(AppSearchItem(name: url.deletingPathExtension().lastPathComponent,
-                                       bundleID: bundleID, url: url))
+            // Prefer the localized display name (`CFBundleDisplayName`, then `CFBundleName`)
+            // over the raw filename so search matches what the user actually sees — H5.
+            let name = (bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            items.append(AppSearchItem(name: name, bundleID: bundleID, url: url))
         }
 
         for dir in dirs {

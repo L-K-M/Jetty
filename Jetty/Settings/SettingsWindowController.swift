@@ -36,7 +36,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let root = SettingsView(preferences: preferences, store: store,
                                     systemDock: systemDock, registry: registry, updateChecker: updateChecker)
             let hosting = NSHostingController(rootView: root)
-            hosting.sizingOptions = [.minSize]
+            // `sizingOptions` is only guaranteed on macOS 14+; guard it so a macOS-13
+            // run can't trap (H1).
+            if #available(macOS 14.0, *) { hosting.sizingOptions = [.minSize] }
 
             let window = NSWindow(contentViewController: hosting)
             window.title = "Jetty Settings"

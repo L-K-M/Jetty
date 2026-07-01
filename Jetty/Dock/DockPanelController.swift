@@ -176,6 +176,10 @@ final class DockPanelController {
         if isRevealed { hideIgnoringAutoHide() } else { reveal() }
     }
 
+    /// Force-hide regardless of the auto-hide setting — lets the global toggle-all
+    /// hotkey hide even a pinned, always-shown dock (M34).
+    func hideForToggle() { hideIgnoringAutoHide() }
+
     private func hideIgnoringAutoHide(animated: Bool = true) {
         revealWork?.cancel(); revealWork = nil
         guard isRevealed else { return }
@@ -209,6 +213,11 @@ final class DockPanelController {
             } else if pointerCrossedDockEdge(point, band: 24) {
                 revealWork?.cancel(); revealWork = nil
                 reveal()
+            } else {
+                // The pointer left this screen without crossing the dock edge (e.g. it
+                // slid sideways onto a neighbour mid-dwell). Drop any queued reveal so the
+                // dock doesn't "ghost fire" on a screen the pointer has already left (H11).
+                cancelScheduledReveal()
             }
             return
         }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 /// User-facing settings, backed by `UserDefaults`.
@@ -239,7 +240,7 @@ final class Preferences: ObservableObject {
 
         edge = DockEdge(rawValue: string(Key.edge, d.edge.rawValue)) ?? d.edge
         alignment = DockAlignment(rawValue: string(Key.alignment, d.alignment.rawValue)) ?? d.alignment
-        offset = double(Key.offset, d.offset)
+        offset = Self.clamp(double(Key.offset, d.offset), -600, 600)
         inset = DockAnchor.clampInset(double(Key.inset, d.inset))
 
         autoHide = bool(Key.autoHide, d.autoHide)
@@ -308,8 +309,8 @@ final class Preferences: ObservableObject {
     /// Applies a preset's appearance values (leaves position/behavior untouched).
     func apply(_ preset: AppearancePreset) {
         material = preset.material
-        tintHex = preset.tintHex
-        gradientHex = preset.gradientHex
+        tintHex = Self.validHex(preset.tintHex, fallback: Default.tintHex)
+        gradientHex = Self.validHex(preset.gradientHex, fallback: Default.gradientHex)
         gradientAngle = preset.gradientAngle
         backgroundOpacity = Self.clamp(preset.backgroundOpacity, 0, 1)
         iconSize = Self.clamp(preset.iconSize, 24, 128)
@@ -318,8 +319,8 @@ final class Preferences: ObservableObject {
         magnificationEnabled = preset.magnificationEnabled
         magnification = Self.clamp(preset.magnification, 1, 2.5)
         indicatorStyle = preset.indicatorStyle
-        indicatorHex = preset.indicatorHex
-        glyphHex = preset.glyphHex
+        indicatorHex = Self.validHex(preset.indicatorHex, fallback: Default.indicatorHex)
+        glyphHex = Self.validHex(preset.glyphHex, fallback: Default.glyphHex)
         showLabels = preset.showLabels
         decorationStyle = DecorationStyle(rawValue: preset.decorationStyle) ?? .none
         decorationPosition = DecorationPosition(rawValue: preset.decorationPosition) ?? .topTrailing
@@ -363,5 +364,11 @@ final class Preferences: ObservableObject {
     static func clamp(_ value: Double, _ lower: Double, _ upper: Double) -> Double {
         guard value.isFinite else { return lower }
         return Swift.min(Swift.max(value, lower), upper)
+    }
+
+    /// Returns `hex` only if it parses as a color, else `fallback` — so an imported
+    /// preset with a malformed hex can't silently paint the dock transparent (M28).
+    static func validHex(_ hex: String, fallback: String) -> String {
+        NSColor(hex: hex) != nil ? hex : fallback
     }
 }

@@ -28,8 +28,9 @@ enum UnitConverter {
     // MARK: Parsing
 
     private static let regex: NSRegularExpression = {
-        // <number> <unit>  (in|to)  <unit>
-        let pattern = #"^(-?\d+(?:\.\d+)?)\s*([a-zA-Z°]+)\s+(?:in|to)\s+([a-zA-Z°]+)$"#
+        // <number> <unit>  (in|to)  <unit>. The unit class includes `"` so the inch
+        // alias is reachable (M41).
+        let pattern = #"^(-?\d+(?:\.\d+)?)\s*([a-zA-Z°"]+)\s+(?:in|to)\s+([a-zA-Z°"]+)$"#
         // Pattern is a compile-time constant, so this never fails.
         return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }()
@@ -46,8 +47,9 @@ enum UnitConverter {
 
     // MARK: Unit registry
 
-    /// alias → (dimension tag, Foundation unit, display label). "in" is reserved as a
-    /// separator, so inches are "inch"/"inches"/`"` only.
+    /// alias → (dimension tag, Foundation unit, display label). `in` doubles as the
+    /// separator, but the anchored regex captures the target unit as a distinct group,
+    /// so registering `in` as an inch alias makes `10 m to in` work (M41).
     private static let units: [String: (dim: String, unit: Dimension, label: String)] = {
         var map: [String: (String, Dimension, String)] = [:]
         func add(_ aliases: [String], _ dim: String, _ unit: Dimension, _ label: String) {
@@ -60,7 +62,7 @@ enum UnitConverter {
         add(["mm", "millimeter", "millimeters"], "len", UnitLength.millimeters, "mm")
         add(["mi", "mile", "miles"], "len", UnitLength.miles, "mi")
         add(["ft", "foot", "feet"], "len", UnitLength.feet, "ft")
-        add(["inch", "inches", "\""], "len", UnitLength.inches, "in")
+        add(["inch", "inches", "\"", "in"], "len", UnitLength.inches, "in")
         add(["yd", "yard", "yards"], "len", UnitLength.yards, "yd")
         // Mass
         add(["kg", "kilogram", "kilograms"], "mass", UnitMass.kilograms, "kg")

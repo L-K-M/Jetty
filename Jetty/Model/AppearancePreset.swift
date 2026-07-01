@@ -122,6 +122,10 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
             if !hasJettyKeys, hasZapKeys, let zap = try? JSONDecoder().decode(ZapTheme.self, from: data) {
                 return zap.asJettyPreset
             }
+            // A JSON object with none of the recognized keys isn't a theme — reject it
+            // rather than let the fully-tolerant decoder return an all-defaults preset,
+            // so importing a wrong file surfaces an error instead of a silent swap (M27).
+            guard hasJettyKeys else { return nil }
         }
         return try? JSONDecoder().decode(AppearancePreset.self, from: data)
     }

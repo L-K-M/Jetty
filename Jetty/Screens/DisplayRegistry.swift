@@ -52,12 +52,6 @@ final class DisplayRegistry {
     /// All currently-connected display keys.
     func allUUIDs() -> [String] { Array(screensByUUID.keys) }
 
-    /// The key of the main display (the one with the menu bar / key window), if known.
-    func mainScreenUUID() -> String? {
-        guard let main = NSScreen.main else { return screensByUUID.keys.first }
-        return Self.key(for: main)
-    }
-
     /// The hardware UUID for a display, or nil if the system doesn't report one.
     static func uuid(for screen: NSScreen) -> String? {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {

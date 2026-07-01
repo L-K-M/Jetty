@@ -71,18 +71,3 @@ enum WindowPreviewMode: String, Codable, CaseIterable, Identifiable {
 
     var capturesThumbnails: Bool { self == .thumbnails }
 }
-
-/// Which displays get a Jetty dock.
-enum DisplayScope: String, Codable, CaseIterable, Identifiable {
-    case mainOnly
-    case allDisplays
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .mainOnly: return "Main display only"
-        case .allDisplays: return "All displays"
-        }
-    }
-}

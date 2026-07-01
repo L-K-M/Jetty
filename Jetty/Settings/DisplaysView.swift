@@ -15,21 +15,13 @@ struct DisplaysView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Show dock on", selection: $preferences.displayScope) {
-                    ForEach(DisplayScope.allCases) { Text($0.label).tag($0) }
-                }
-                if preferences.displayScope == .mainOnly {
-                    Text("Only the main display (whichever currently has keyboard focus) shows a dock right now — that's why it can seem to move between screens. Switch to “All displays” to give every screen its own dock. Turning a screen off below switches to that mode automatically.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text("Every connected display gets its own dock. Give any display a custom edge and alignment below, or turn its dock off entirely — Jetty keeps at least one dock so you're never left without.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Text("Every connected display gets its own dock. Turn a display's dock off below, or give it a custom edge and alignment. Jetty always keeps at least one dock, so turning a display off has no effect while it's the only one connected.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             ForEach(screenEntries) { entry in
                 Section(entry.name) {
-                    Toggle("Disable dock on this display", isOn: disabledBinding(entry.id))
+                    Toggle("Show dock on this display", isOn: shownBinding(entry.id))
                     if store.isDisplayDisabled(forDisplayUUID: entry.id) {
                         Text("No dock will show here — unless this becomes the only connected display, so you're never left without a dock.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -84,18 +76,12 @@ struct DisplaysView: View {
         store.setAnchor(a, forDisplayUUID: uuid)
     }
 
-    private func disabledBinding(_ uuid: String) -> Binding<Bool> {
+    /// Whether this display shows a dock — the inverse of the stored "disabled" opt-out,
+    /// so the toggle reads "Show dock on this display" and defaults to on for every screen.
+    private func shownBinding(_ uuid: String) -> Binding<Bool> {
         Binding(
-            get: { store.isDisplayDisabled(forDisplayUUID: uuid) },
-            set: { disabled in
-                store.setDisplayDisabled(disabled, forDisplayUUID: uuid)
-                // Turning a specific display off only makes sense when each screen is
-                // controlled individually, so switch out of "main display only" — that's
-                // exactly the user's intent (dock everywhere except this screen).
-                if disabled, preferences.displayScope == .mainOnly {
-                    preferences.displayScope = .allDisplays
-                }
-            })
+            get: { !store.isDisplayDisabled(forDisplayUUID: uuid) },
+            set: { shown in store.setDisplayDisabled(!shown, forDisplayUUID: uuid) })
     }
 
     private func overrideBinding(_ uuid: String) -> Binding<Bool> {

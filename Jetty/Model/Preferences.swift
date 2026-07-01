@@ -46,7 +46,6 @@ final class Preferences: ObservableObject {
         static let revealTrigger = RevealTrigger.both
         static let revealDelayMs = 60.0
         static let hideDelayMs = 350.0
-        static let displayScope = DisplayScope.mainOnly
         static let showRunningApps = true
         static let manageSystemDock = true
         static let animationMs = 140.0
@@ -103,7 +102,6 @@ final class Preferences: ObservableObject {
         static let revealTrigger = "revealTrigger"
         static let revealDelayMs = "revealDelayMs"
         static let hideDelayMs = "hideDelayMs"
-        static let displayScope = "displayScope"
         static let showRunningApps = "showRunningApps"
         static let manageSystemDock = "manageSystemDock"
         static let animationMs = "animationMs"
@@ -164,7 +162,6 @@ final class Preferences: ObservableObject {
     @Published var revealTrigger: RevealTrigger { didSet { defaults.set(revealTrigger.rawValue, forKey: Key.revealTrigger) } }
     @Published var revealDelayMs: Double { didSet { defaults.set(revealDelayMs, forKey: Key.revealDelayMs) } }
     @Published var hideDelayMs: Double { didSet { defaults.set(hideDelayMs, forKey: Key.hideDelayMs) } }
-    @Published var displayScope: DisplayScope { didSet { defaults.set(displayScope.rawValue, forKey: Key.displayScope) } }
     @Published var showRunningApps: Bool { didSet { defaults.set(showRunningApps, forKey: Key.showRunningApps) } }
     @Published var manageSystemDock: Bool { didSet { defaults.set(manageSystemDock, forKey: Key.manageSystemDock) } }
     @Published var animationMs: Double { didSet { defaults.set(animationMs, forKey: Key.animationMs) } }
@@ -249,7 +246,6 @@ final class Preferences: ObservableObject {
         revealTrigger = RevealTrigger(rawValue: string(Key.revealTrigger, d.revealTrigger.rawValue)) ?? d.revealTrigger
         revealDelayMs = Self.clamp(double(Key.revealDelayMs, d.revealDelayMs), 0, 1000)
         hideDelayMs = Self.clamp(double(Key.hideDelayMs, d.hideDelayMs), 0, 2000)
-        displayScope = DisplayScope(rawValue: string(Key.displayScope, d.displayScope.rawValue)) ?? d.displayScope
         showRunningApps = bool(Key.showRunningApps, d.showRunningApps)
         manageSystemDock = bool(Key.manageSystemDock, d.manageSystemDock)
         animationMs = Self.clamp(double(Key.animationMs, d.animationMs), 0, 600)

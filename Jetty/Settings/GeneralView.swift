@@ -37,9 +37,6 @@ struct GeneralView: View {
                     Slider(value: $preferences.inset, in: 0...80)
                     Text("\(Int(preferences.inset))").monospacedDigit().frame(width: 44, alignment: .trailing)
                 }
-                Picker("Show on", selection: $preferences.displayScope) {
-                    ForEach(DisplayScope.allCases) { Text($0.label).tag($0) }
-                }
             }
 
             Section("Behavior") {

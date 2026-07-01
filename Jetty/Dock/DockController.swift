@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import os
 
 /// The orchestrator: merges pinned + running apps into the shared `DockModel`,
 /// resolves each target display's anchor into a `DockPanelController`, forwards
@@ -214,14 +215,6 @@ final class DockController {
     private func reconcilePanels() {
         let targets = Set(targetUUIDs())
 
-        // TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed).
-        // Values are interpolated into the message (not passed as %@ args) so macOS does
-        // NOT redact them to <private> in Console.
-        let screenList = NSScreen.screens
-            .map { "\(DisplayRegistry.key(for: $0))@\(NSStringFromRect($0.frame))" }
-            .joined(separator: " | ")
-        NSLog("[Jetty] reconcile scope=\(preferences.displayScope.rawValue) NSScreens=\(NSScreen.screens.count) registry=\(registry.screensByUUID.count) targets=\(targets.count) :: \(screenList)")
-
         // Remove panels for displays no longer targeted/connected.
         for (uuid, panel) in panels where !targets.contains(uuid) {
             panel.close()
@@ -239,11 +232,27 @@ final class DockController {
                 panel.onDropToPin = { [weak self] urls in self?.pinDroppedURLs(urls) }
                 panels[uuid] = panel
                 panel.showInitial()
-                // TEMP DIAGNOSTIC (remove once confirmed): one line per display that gets a panel.
-                NSLog("[Jetty] created panel uuid=\(uuid) screenFrame=\(NSStringFromRect(screen.frame))")
             }
         }
         updateLiveStats()
+        logReconcileDiagnostics(targets: targets)
+    }
+
+    /// TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed). Uses
+    /// `os.Logger` with `.public` privacy so the values actually appear in Console (a
+    /// runtime-composed `NSLog` string is redacted to `<private>`). One line summarizes
+    /// every screen macOS reports, how the registry keyed them, which are disabled/targeted,
+    /// and which panels now exist — enough to pinpoint whether a display is undetected,
+    /// key-collided, disabled, or created-but-not-revealing.
+    private func logReconcileDiagnostics(targets: Set<String>) {
+        let screens = NSScreen.screens
+            .map { "\(DisplayRegistry.key(for: $0))@\(NSStringFromRect($0.frame))" }
+            .joined(separator: " | ")
+        let disabled = store.document.disabledDisplayUUIDs.sorted().joined(separator: ",")
+        let panelKeys = panels.keys.sorted().joined(separator: ",")
+        let targetKeys = targets.sorted().joined(separator: ",")
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jetty", category: "diag").notice(
+            "[Jetty] reconcile scope=\(self.preferences.displayScope.rawValue, privacy: .public) NSScreens=\(NSScreen.screens.count, privacy: .public) registry=\(self.registry.screensByUUID.count, privacy: .public) targets=[\(targetKeys, privacy: .public)] disabled=[\(disabled, privacy: .public)] panels=[\(panelKeys, privacy: .public)] screens=[\(screens, privacy: .public)]")
     }
 
     // MARK: Interactions

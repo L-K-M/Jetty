@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import QuartzCore
+import os
 
 /// An `NSHostingView` that accepts the first mouse click even when its window is
 /// not key, so a click on the (background-app) dock registers immediately.
@@ -61,6 +62,8 @@ final class DockPanelController {
 
     private var revealWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
+    /// TEMP DIAGNOSTIC: log only the first time the pointer enters this panel's screen.
+    private var loggedPointerInScreen = false
 
     /// A thin edge window that catches file drags while the dock is auto-hidden
     /// (present only when auto-hide + edge-hover are on). See `DragRevealSensorView`.
@@ -164,7 +167,8 @@ final class DockPanelController {
         guard !isRevealed else { return }
         isRevealed = true
         // TEMP DIAGNOSTIC (remove once confirmed): which display actually reveals, and where.
-        NSLog("[Jetty] reveal uuid=\(displayUUID) panelFrame=\(NSStringFromRect(panel.frame)) onScreen=\(NSStringFromRect(panel.screen?.frame ?? .zero))")
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jetty", category: "diag").notice(
+            "[Jetty] reveal uuid=\(self.displayUUID, privacy: .public) panelFrame=\(NSStringFromRect(self.panel.frame), privacy: .public) onScreen=\(NSStringFromRect(self.panel.screen?.frame ?? .zero), privacy: .public)")
         applyRevealState(animated: animated)
     }
 
@@ -188,6 +192,13 @@ final class DockPanelController {
     /// Pointer moved (global coordinates) — decide whether to reveal or hide.
     func handleMouseMoved(to point: NSPoint) {
         guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else { return }
+        // TEMP DIAGNOSTIC: confirm this panel exists AND receives pointer samples on its
+        // own screen (distinguishes "panel not created" from "created but never reveals").
+        if !loggedPointerInScreen, NSMouseInRect(point, screen.frame, false) {
+            loggedPointerInScreen = true
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jetty", category: "diag").notice(
+                "[Jetty] pointer entered screen uuid=\(self.displayUUID, privacy: .public) screenFrame=\(NSStringFromRect(self.screen.frame), privacy: .public)")
+        }
         guard NSMouseInRect(point, screen.frame, false) else {
             // The pointer is off this screen. A dock on a display stacked directly against
             // another (e.g. this screen sits ABOVE another) lives on an *internal seam*:

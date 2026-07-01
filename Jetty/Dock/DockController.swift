@@ -214,6 +214,12 @@ final class DockController {
     private func reconcilePanels() {
         let targets = Set(targetUUIDs())
 
+        // TEMP DIAGNOSTIC (remove once the multi-display dock bug is confirmed fixed):
+        // shows the effective scope and whether every physical screen produced a target.
+        NSLog("[Jetty] reconcile scope=%@ targets=%d allUUIDs=%d screensByUUID=%d NSScreen.screens=%d",
+              preferences.displayScope.rawValue, targets.count, registry.allUUIDs().count,
+              registry.screensByUUID.count, NSScreen.screens.count)
+
         // Remove panels for displays no longer targeted/connected.
         for (uuid, panel) in panels where !targets.contains(uuid) {
             panel.close()
@@ -231,6 +237,8 @@ final class DockController {
                 panel.onDropToPin = { [weak self] urls in self?.pinDroppedURLs(urls) }
                 panels[uuid] = panel
                 panel.showInitial()
+                // TEMP DIAGNOSTIC (remove once confirmed): one line per display that gets a panel.
+                NSLog("[Jetty] created panel uuid=%@ screenFrame=%@", uuid, NSStringFromRect(screen.frame))
             }
         }
         updateLiveStats()
@@ -289,9 +297,9 @@ final class DockController {
     private func presentWindowPeek(tile: DockTile, pid: pid_t) {
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
-        let uuid = registry.uuid(for: screen)
-        let edge = uuid.map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
-        let dock = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: mouse, size: .zero)
+        let uuid = registry.key(for: screen)
+        let edge = effectiveAnchor(forUUID: uuid).edge
+        let dock = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: mouse, size: .zero)
         // Anchor to the app's icon (not the cursor) so the selector doesn't track the mouse.
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
@@ -430,11 +438,11 @@ final class DockController {
         let point = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
         guard let screen else { return }
-        let uuid = registry.uuid(for: screen)
-        let edge = uuid.map { effectiveAnchor(forUUID: $0).edge } ?? preferences.edge
+        let uuid = registry.key(for: screen)
+        let edge = effectiveAnchor(forUUID: uuid).edge
         // Open the popover clear of the dock strip (using the dock's actual on-screen
         // frame), not overlapping it.
-        let dockFrame = uuid.flatMap { panels[$0]?.revealedScreenFrame } ?? CGRect(origin: point, size: .zero)
+        let dockFrame = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: point, size: .zero)
         folderStack.toggle(folder: url, style: tile.folderDisplay ?? .grid,
                            near: point, dock: dockFrame, screen: screen, edge: edge)
     }

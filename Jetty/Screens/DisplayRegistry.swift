@@ -29,25 +29,36 @@ final class DisplayRegistry {
     func rebuild() {
         var map: [String: NSScreen] = [:]
         for screen in NSScreen.screens {
-            if let uuid = Self.uuid(for: screen) { map[uuid] = screen }
+            // A physical display must NEVER be dropped from the registry — otherwise it
+            // gets no dock panel at all (BUG: a side-by-side display showed no dock). Some
+            // displays don't report a hardware UUID (`CGDisplayCreateUUIDFromDisplayID`
+            // returns nil for certain virtual/adapter/small displays), and in rare cases
+            // two report the same one. Use a never-nil key and disambiguate collisions so
+            // every connected screen keeps its own entry.
+            var uniqueKey = Self.key(for: screen)
+            var n = 2
+            while map[uniqueKey] != nil { uniqueKey = "\(Self.key(for: screen))#\(n)"; n += 1 }
+            map[uniqueKey] = screen
         }
         screensByUUID = map
     }
 
     func screen(forUUID uuid: String) -> NSScreen? { screensByUUID[uuid] }
 
-    func uuid(for screen: NSScreen) -> String? { Self.uuid(for: screen) }
+    /// The stable key Jetty anchors a dock to for `screen` — its hardware UUID when the
+    /// system provides one, else a per-screen fallback so a screen is never dropped.
+    func key(for screen: NSScreen) -> String { Self.key(for: screen) }
 
-    /// All currently-connected display UUIDs.
+    /// All currently-connected display keys.
     func allUUIDs() -> [String] { Array(screensByUUID.keys) }
 
-    /// The UUID of the main display (the one with the menu bar / key window), if known.
+    /// The key of the main display (the one with the menu bar / key window), if known.
     func mainScreenUUID() -> String? {
         guard let main = NSScreen.main else { return screensByUUID.keys.first }
-        return Self.uuid(for: main)
+        return Self.key(for: main)
     }
 
-    /// Stable UUID string for a screen, via its `CGDirectDisplayID`.
+    /// The hardware UUID for a display, or nil if the system doesn't report one.
     static func uuid(for screen: NSScreen) -> String? {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             return nil
@@ -55,5 +66,14 @@ final class DisplayRegistry {
         let displayID = CGDirectDisplayID(number.uint32Value)
         guard let cfUUID = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() else { return nil }
         return CFUUIDCreateString(nil, cfUUID) as String
+    }
+
+    /// A stable, non-nil key for a display: its hardware UUID, else a fallback derived
+    /// from its `CGDirectDisplayID` (unique within a session), so a screen without a
+    /// reported UUID still gets its own dock and its own settings entry.
+    static func key(for screen: NSScreen) -> String {
+        if let uuid = uuid(for: screen) { return uuid }
+        let number = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
+        return "screen:\(number)"
     }
 }

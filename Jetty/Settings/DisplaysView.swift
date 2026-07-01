@@ -64,8 +64,8 @@ struct DisplaysView: View {
     // MARK: Screens
 
     private var screenEntries: [ScreenEntry] {
-        NSScreen.screens.enumerated().compactMap { index, screen in
-            guard let uuid = registry.uuid(for: screen) else { return nil }
+        NSScreen.screens.enumerated().map { index, screen in
+            let uuid = registry.key(for: screen)
             let name: String
             if #available(macOS 14.0, *) { name = screen.localizedName } else { name = "Display \(index + 1)" }
             return ScreenEntry(id: uuid, name: name)

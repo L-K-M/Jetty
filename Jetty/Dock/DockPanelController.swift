@@ -163,6 +163,9 @@ final class DockPanelController {
         hideWork?.cancel(); hideWork = nil
         guard !isRevealed else { return }
         isRevealed = true
+        // TEMP DIAGNOSTIC (remove once confirmed): which display actually reveals, and where.
+        NSLog("[Jetty] reveal uuid=%@ panelFrame=%@ onScreen=%@", displayUUID,
+              NSStringFromRect(panel.frame), NSStringFromRect(panel.screen?.frame ?? .zero))
         applyRevealState(animated: animated)
     }
 

@@ -113,7 +113,13 @@ struct AnalogClockFace: View {
 
     private func point(center: CGPoint, angle: Double, distance: CGFloat) -> CGPoint {
         // angle 0 = straight up; y grows downward in the canvas.
-        CGPoint(x: center.x + sin(angle) * distance, y: center.y - cos(angle) * distance)
+        // Annotate the results as Double so `sin`/`cos` resolve unambiguously — mixing
+        // the Double `angle` with the CGFloat `distance` lets the Xcode 26 type-checker
+        // see both the Double and CGFloat overloads as equally valid ("ambiguous use of
+        // 'sin'"), which broke the build.
+        let dx: Double = sin(angle)
+        let dy: Double = cos(angle)
+        return CGPoint(x: center.x + CGFloat(dx) * distance, y: center.y - CGFloat(dy) * distance)
     }
 
     private func handPath(center: CGPoint, angle: Double, length: CGFloat) -> Path {

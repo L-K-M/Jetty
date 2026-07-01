@@ -151,6 +151,15 @@ final class DockController {
             relayoutPanels()                                              // frame size only
         }
         if sig.hotkeys != previous.hotkeys { registerHotkeys() }          // shortcut bindings
+
+        // Auto-hide is OFF: make sure every panel is actually revealed. A panel's
+        // reveal state is only seeded at creation, so turning auto-hide off while a
+        // dock was hidden re-applied the hidden (click-through) transform forever —
+        // edge hover is gated on `autoHide`, and nothing else calls `reveal()`.
+        // `reveal()` no-ops when already revealed, so this is idempotent.
+        if !preferences.autoHide {
+            panels.values.forEach { $0.reveal(animated: false) }
+        }
     }
 
     /// The subset of preferences that change the dock's structure, split by the work

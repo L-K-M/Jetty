@@ -15,13 +15,22 @@ struct DisplaysView: View {
     var body: some View {
         Form {
             Section {
-                Text("Give any display its own dock edge and alignment. Displays without a custom position follow the General settings. Set “Show on” to All displays in General to show a dock on more than the main screen.")
-                    .font(.callout).foregroundStyle(.secondary)
+                Picker("Show dock on", selection: $preferences.displayScope) {
+                    ForEach(DisplayScope.allCases) { Text($0.label).tag($0) }
+                }
+                if preferences.displayScope == .mainOnly {
+                    Text("Only the main display (whichever currently has keyboard focus) gets a dock, so it can appear to jump to a different screen each launch and the per-display options below have no effect. Choose “All displays” to give every screen its own dock.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Every connected display gets its own dock. Give any display a custom edge and alignment below, or turn its dock off entirely — Jetty keeps at least one dock so you're never left without.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             ForEach(screenEntries) { entry in
                 Section(entry.name) {
                     Toggle("Disable dock on this display", isOn: disabledBinding(entry.id))
+                        .disabled(preferences.displayScope == .mainOnly)
                     if store.isDisplayDisabled(forDisplayUUID: entry.id) {
                         Text("No dock will show here — unless this becomes the only connected display, so you're never left without a dock.")
                             .font(.caption).foregroundStyle(.secondary)

@@ -13,6 +13,33 @@ risk)**, which I'd fix before anything else.
 
 ---
 
+## Consolidation & status update (2026-07-01)
+
+This file is now the **single consolidated review + roadmap** for Jetty. It folds in
+the earlier *GPT-is-awesome* review (its BUG/ISSUE history — all resolved — and its
+delight ideas; see [Earlier review history](#earlier-review-history)) and the open
+product items distilled from `PLAN.md` (see
+[Roadmap & open product items](#roadmap--open-product-items)). `GPT-is-awesome.md`
+has been removed; `PLAN.md` stays the design/feasibility record and now points here
+for live status.
+
+The findings below were written against `main @ be22407`; a few have since been fixed:
+
+- **H10 (`mainScreenUUID()` key collisions)** — resolved: `mainScreenUUID()` was
+  removed entirely when the display-scope control was dropped; display keying now runs
+  through `DisplayRegistry.key(for:)`, which already disambiguates UUID collisions.
+- **M2 (diagnostic `NSLog` in production paths)** — resolved: the temporary
+  multi-display `[Jetty]` diagnostics were removed.
+- **Display-scope control removed** — the "Show dock on (main / all displays)" enum is
+  gone; which screens show a dock is now decided entirely by per-screen **"Show dock on
+  this display"** toggles (on by default, at least one screen always kept).
+
+One **new** known issue since the review: a `layoutSubtreeIfNeeded` recursion warning
+in the console, originating from the tile-scroll `GeometryReader` added for horizontal
+overflow-scroll. No user-visible breakage observed, but worth resolving.
+
+---
+
 ## Table of contents
 
 - [Critical](#critical)
@@ -21,6 +48,8 @@ risk)**, which I'd fix before anything else.
 - [Low / polish](#low--polish)
 - [Delightful feature ideas](#delightful-feature-ideas)
 - [What's done well](#whats-done-well)
+- [Roadmap & open product items](#roadmap--open-product-items)
+- [Earlier review history](#earlier-review-history)
 
 ---
 
@@ -1147,6 +1176,70 @@ polish, not rework:
 - **Combine subscriptions consistently use `[weak self]`**; `LiveSystemStats`
   correctly centralizes what would otherwise be N independent timer storms; the
   32-bit counter wrap is *caught* (clamped to 0) rather than producing garbage.
+
+---
+
+## Roadmap & open product items
+
+Distilled from `PLAN.md` — the product/roadmap items a code review doesn't otherwise
+capture. (Feature-level *ideas* live under
+[Delightful feature ideas](#delightful-feature-ideas).)
+
+**Later / opt-in features not yet built**
+
+- **Badge / unread-count mirroring** (`PLAN.md` Phase 11) — best-effort via the
+  undocumented AX `AXStatusLabel` / `lsappinfo`; Accessibility-gated, private-API-aware.
+- **Taskbar / multi-row mode** (`PLAN.md` Phase 12). Horizontal overflow-scroll shipped
+  as the interim answer to "too many tiles."
+- **Spaces / Stage Manager tuning** — overlay there is best-effort; the default is hide
+  + hover/hotkey reveal.
+
+Window peeking (Phase 9) and live ScreenCaptureKit previews (Phase 10) have already
+**shipped** as opt-in features.
+
+**Release engineering (maintainer step)**
+
+- On-device GUI verification each release (windowing, multi-monitor, reveal/auto-hide,
+  Dock-hide, Liquid Glass, drag-and-drop, power commands — none unit-testable).
+- Developer ID signing + notarization — CI publishes an unsigned ad-hoc build. Overlaps
+  the **C1/C2** findings above.
+
+**Permanent non-goals (platform constraints)**
+
+- No true replacement / disabling of the system Dock (SIP-protected, no public API).
+- No screen-space reservation / window-nudging in the core (keeps the dock
+  permission-free — the load-bearing design decision).
+- No App Store build (the sandbox precludes the Accessibility the window features need).
+
+**Standing risks**
+
+- Auto-hide fragility on Tahoe (26.0–26.1) — mitigated by re-asserting the
+  `com.apple.dock` defaults on launch / wake / screen-change plus one-click Restore.
+- Private-API drift — the MediaRemote bridge (and any future `_AXUIElementGetWindow` /
+  `AXStatusLabel`) stays isolated, `dlopen`/weak-imported, opt-in, fail-closed; re-test
+  each macOS beta. See **C4 / H7** for the current MediaRemote issues.
+
+---
+
+## Earlier review history
+
+The first external review (*"GPT is awesome"*, 2026-06-28, previously in
+`GPT-is-awesome.md`, now folded here) is fully addressed:
+
+- **BUG-1 … BUG-13** (implement-now bugs) — all fixed.
+- **ISSUE-1 … ISSUE-9** (design-level) — all fixed: activate bundle-less apps by PID
+  (1); magnified end-tile clipping (2); now-playing opt-in / isolated / fail-closed (3);
+  off-main-thread folder stacks (4); one shared throttled sampler `LiveSystemStats` (5);
+  app-index refresh on menu open + one level deeper (6); stale bookmarks written back to
+  `DockStore` (7); tolerant/lossy document decoding (8); `.bak` protected from a corrupt
+  primary (9).
+
+Its delight ideas (IDEA-1…5) are captured under
+[Delightful feature ideas](#delightful-feature-ideas) above — edge reveal heat map
+(IDEA-1), per-display personalities (IDEA-2), dock "breathing" on wake (IDEA-3). Still
+open and worth keeping: **stack spatial memory** (IDEA-4 — folder stacks bias focus to
+the last-hovered item) and **Trash mood** (IDEA-5 — empty/full is already live via
+`TrashMonitor`; remaining: a brief "hot" state after a drop and a poof on empty).
 
 ---
 

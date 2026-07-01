@@ -12,8 +12,8 @@ world clock, Pomodoro, CPU/RAM, now-playing — folder-stack popovers, and a
 Start-menu-style **Jetty Menu** / command bar with app search, calculator,
 unit/currency conversion, and power commands). It is the third app in the L-K-M family alongside
 **Zap** (app switcher) and **MacDring** (edge-tab launcher) and reuses their house
-style. See `PLAN.md` for the full design and the feasibility analysis; `README.md`
-for the user view.
+style. See `PLAN.md` for the full design and the feasibility analysis; `REVIEW.md`
+for the current status and open backlog; `README.md` for the user view.
 
 ## The one load-bearing design decision
 
@@ -111,8 +111,8 @@ Mirrors `PLAN.md §11`:
 - **No scary permissions for the core dock.** Apps/launch/icons use `NSWorkspace`;
   reveal uses a global **mouse** monitor (allowed) + Carbon hotkeys. **Never** add a
   *global key* monitor or a `CGEventTap` to the core path — that needs Accessibility
-  and breaks the no-permission promise. Window peeking / live previews are *later*,
-  *opt-in* features behind their own permissions.
+  and breaks the no-permission promise. Window peeking / live previews have shipped
+  as **opt-in** features behind their own permissions (Accessibility / Screen Recording).
 - **Dock/menu panels must stay non-activating** (`NSPanel` with `.nonactivatingPanel`).
   Clicking a tile must never steal focus from the user's frontmost app. (The Jetty
   Menu is the one exception — it briefly activates to focus its search field and
@@ -149,7 +149,8 @@ Mirrors `PLAN.md §11`:
 
 ## Do / Don't
 
-- **Do** update `PLAN.md` when the design changes, and keep `README.md` in sync.
+- **Do** update `PLAN.md` when the design changes, keep `REVIEW.md`'s status/backlog
+  current, and keep `README.md` in sync.
 - **Do** assume Developer ID + notarization (not the App Store) — the sandbox can't
   grant the Accessibility access the later window features need.
 - **Don't** add heavy dependencies; prefer system frameworks.

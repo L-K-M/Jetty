@@ -434,7 +434,7 @@ and bundled into **shareable presets**.
 | Label on hover | toggle | tile name tooltip/label |
 | Auto-hide | toggle + reveal/hide delays | §4 |
 | Reveal trigger | edge-hover / hotkey / both | §4 |
-| Show on all displays / per-display | enum | §5 |
+| Per-display dock on/off | toggle (per screen) | each display's dock can be turned off; at least one is always kept, §5 |
 
 - **Liquid Glass** is rendered with an `NSGlassEffectContainerView` wrapping per-tile/
   panel `NSGlassEffectView` (the correct grouping so tiles sample the background once and
@@ -608,11 +608,17 @@ Jetty/
 > shortcuts, rename / custom-icon per item, retro flourishes (decorations + CRT), the
 > Jetty-Menu command bar (calculator, unit/currency conversion, web-search fallback,
 > quick toggles), a family of **info tiles** (battery, weather, world clock, Pomodoro,
-> CPU/RAM, and an **opt-in now-playing** tile via an isolated MediaRemote bridge), and
-> the app icon (Phase 12). Still genuinely later/opt-in: window peeking (Phase 9) and
-> live previews (Phase 10). Pure logic is unit-tested; windowing, multi-monitor, reveal,
+> CPU/RAM with an optional time-series graph + network throughput, and an **opt-in
+> now-playing** tile via an isolated MediaRemote bridge), per-display dock on/off
+> toggles, horizontal overflow-scroll, and the app icon (Phase 12). **Window peeking
+> (Phase 9) and live previews (Phase 10) have since shipped** as opt-in features
+> (window names need no permission; live thumbnails use ScreenCaptureKit). Genuinely
+> still later: badge / unread mirroring (Phase 11) and taskbar/multi-row + Stage-Manager
+> tuning (Phase 12). Pure logic is unit-tested; windowing, multi-monitor, reveal,
 > Dock-hide, Liquid Glass, drag-and-drop, and power commands still want manual GUI
 > verification on each release (same policy as the siblings).
+>
+> **For the live project status and the open backlog, see [`REVIEW.md`](REVIEW.md).**
 
 1. **Skeleton** — Xcode project (synchronized groups, `.accessory`, `LSUIElement`,
    hardened runtime), menu-bar `NSStatusItem`, Settings window, `Preferences` + `ColorHex`,

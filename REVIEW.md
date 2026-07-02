@@ -104,19 +104,21 @@ shapes and black-outlined hands; jelly a gloss arc and rainbow dot markers; and
 **Color Time** landed — a 70s Chromachron-style black dial whose 30° hour wedge
 reveals a hidden color wheel (drawn by clipping the wheel to the wedge).
 
-A **Face size** zoom (100–160%, Widgets ▸ Clock) lets a watch face float out over
+A **Face size** zoom (100–250%, Widgets ▸ Clock) lets a watch face float out over
 the glass strip like a permanently magnified tile: the face pins to the dock edge
-and grows inward; the panel window gains matching headroom
-(`DockLayout.clockZoomHeadroom`, pure + unit-tested; face style/zoom joined the
-layout preference signature so the window resizes live); hover magnification skips
-a zoomed clock so zoom × magnification can't compound past the window bounds, and
-the overflow-scroll dock suspends the zoom (its viewport clips, the same reason
-magnification pauses there).
-Horizontal docks only — on vertical docks the face would overlap its along-axis
-neighbors — and capped at 160% so the square dial stays inside the clock tile's
-1.6×-wide footprint.
+and grows inward. The clock tile widens with the face
+(`DockLayout.clockTileWidthFactor`, mirrored by `DockTileView.tileWidth`) so it
+never overlaps neighbors, and zoomed faces still hover-magnify — the panel budgets
+across headroom for zoom × magnification (`clockZoomHeadroom`) and along headroom
+for the widest tile (`widestTileFactor`/`magnificationAlongExtra`, which also fixed
+the pre-existing end-of-dock magnification clip for wide tiles like now-playing;
+the accent-glow lead offset uses the same math so glows stay aligned). Face
+style/zoom joined the layout preference signature so the window resizes live; the
+overflow-scroll dock suspends the zoom (its viewport clips). Horizontal docks only
+— on vertical docks the face would overlap its along-axis neighbors. All the
+geometry is pure and unit-tested.
 
-### System-monitor graph readability (2026-07-02)
+### System-monitor graph readability + styles (2026-07-02)
 
 The graph style's sparklines used to float straight on the dock glass — unreadable
 over busy content, and a dark tint made the CPU line and its legend number nearly
@@ -125,6 +127,15 @@ clock dial / LCD screen) with faint 25/50/75% gridlines; the legend is colored d
 + white numbers instead of tint-colored text; and the CPU series lifts its color
 toward white when the tint's perceived luminance is too low for the plate
 (`SystemMonitorGraph.whiteLift`, pure + unit-tested).
+
+The monitor then grew a family of looks in the spirit of the clock faces
+(`SystemMonitorStyle`): **Scope** (a green-phosphor oscilloscope — glow-stroked
+traces on a gridded near-black CRT), **LEDs** (a hi-fi meter: stacked
+green/amber/red segments per metric, unlit segments faintly visible), and
+**Gauges** (two tiny cream analog dials with tick scales, a redline over the last
+15%, and swinging slate needles). The lit-count/zone and needle-angle math is pure
+(`SystemMonitorGraph.litSegments`/`ledZone`/`gaugeAngle`, unit-tested); network
+series apply to the time-series styles (graph, scope) only.
 
 ---
 

@@ -63,8 +63,8 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = false
         static let clockShowWeekday = false
         static let clockFace = ClockFaceStyle.digital
-        /// Watch-face zoom (1.0–1.6×). Capped at 1.6 so the square analog face
-        /// never outgrows the clock tile's 1.6×-wide footprint (no neighbor overlap).
+        /// Watch-face zoom (1.0–2.5×). The clock tile widens with the face
+        /// (`DockLayout.clockTileWidthFactor`) so it never overlaps neighbors.
         static let clockFaceZoom = 1.0
         // System Monitor tile
         static let systemMonitorStyle = SystemMonitorStyle.bars
@@ -291,7 +291,7 @@ final class Preferences: ObservableObject {
         } else {
             clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace
         }
-        clockFaceZoom = Self.clamp(double(Key.clockFaceZoom, d.clockFaceZoom), 1.0, 1.6)
+        clockFaceZoom = Self.clamp(double(Key.clockFaceZoom, d.clockFaceZoom), 1.0, 2.5)
         systemMonitorStyle = SystemMonitorStyle(rawValue: string(Key.systemMonitorStyle, d.systemMonitorStyle.rawValue)) ?? d.systemMonitorStyle
         systemMonitorShowNetwork = bool(Key.systemMonitorShowNetwork, d.systemMonitorShowNetwork)
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)
@@ -316,6 +316,11 @@ final class Preferences: ObservableObject {
 
     /// The effective magnification factor (1.0 when disabled).
     var effectiveMagnification: CGFloat { magnificationEnabled ? CGFloat(magnification) : 1.0 }
+
+    /// The clock's face zoom where it applies: watch faces only — the digital
+    /// text never zooms. (Vertical docks additionally ignore the zoom at the
+    /// call sites: the face would grow along the dock into its neighbors.)
+    var effectiveClockZoom: Double { clockFace == .digital ? 1.0 : clockFaceZoom }
 
     /// The global default anchor for a display that has no stored override.
     func defaultAnchor(forDisplayUUID uuid: String) -> DockAnchor {

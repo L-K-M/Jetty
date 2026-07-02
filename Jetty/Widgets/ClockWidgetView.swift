@@ -29,12 +29,14 @@ struct ClockWidgetView: View {
             case .digital:
                 digital(date: context.date)
             case .lcd:
-                // The LCD zooms across-axis only; its case grows toward square
-                // and its width stays capped by the tile, so neighbors are safe.
+                // The LCD's box tracks the (zoom-widened) tile width; its case
+                // sizes itself inside, so it grows with the face but never
+                // outgrows the tile.
                 faceBox(LCDClockFace(date: context.date,
                                      use24Hour: preferences.clockUse24Hour,
                                      showSeconds: preferences.clockShowSeconds),
-                        width: height * 1.6, faceHeight: height * zoom)
+                        width: height * DockLayout.clockTileWidthFactor(zoom: zoom),
+                        faceHeight: height * zoom)
             default:
                 faceBox(AnalogClockFace(date: context.date,
                                         style: face,
@@ -49,8 +51,8 @@ struct ClockWidgetView: View {
     /// horizontal docks. Vertical docks stay at 1× — there the face would grow
     /// *along* the dock and overlap the neighboring tiles.
     private var zoom: CGFloat {
-        guard allowsZoom, preferences.clockFace != .digital, edge.isHorizontal else { return 1 }
-        return CGFloat(preferences.clockFaceZoom)
+        guard allowsZoom, edge.isHorizontal else { return 1 }
+        return CGFloat(preferences.effectiveClockZoom)
     }
 
     /// Frames a watch face and, when zoomed, pins it to the dock's edge side so

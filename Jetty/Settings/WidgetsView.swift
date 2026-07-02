@@ -18,14 +18,14 @@ struct WidgetsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if preferences.clockFace != .digital {
                     HStack {
-                        Slider(value: $preferences.clockFaceZoom, in: 1.0...1.6) {
+                        Slider(value: $preferences.clockFaceZoom, in: 1.0...2.5) {
                             Text("Face size")
                         }
                         Text("\(Int((preferences.clockFaceZoom * 100).rounded()))%")
                             .monospacedDigit().foregroundStyle(.secondary)
                             .frame(width: 44, alignment: .trailing)
                     }
-                    Text("Bigger faces float out over the dock's edge, like a magnified icon. (Bottom/top docks; hover magnification skips a zoomed clock.)")
+                    Text("Bigger faces float out over the dock's edge — and still magnify on hover. The clock tile widens with the face. (Bottom/top docks.)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if preferences.clockFace == .digital {
@@ -59,13 +59,11 @@ struct WidgetsView: View {
                     ForEach(SystemMonitorStyle.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                if preferences.systemMonitorStyle == .graph {
+                Text(preferences.systemMonitorStyle.caption + " The widget is permission-free.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if preferences.systemMonitorStyle.supportsNetwork {
                     Toggle("Include network activity", isOn: $preferences.systemMonitorShowNetwork)
                 }
-                Text(preferences.systemMonitorStyle == .graph
-                     ? "Plots CPU and memory (and, optionally, total network throughput) over the last couple of minutes. The widget is permission-free."
-                     : "Two slim gauges for CPU load and memory usage. Switch to Graph for a sparkline of the trend over time.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Weather") {

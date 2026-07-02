@@ -319,28 +319,37 @@ final class DockPanelController {
 
     private func contentSize() -> CGSize {
         let icon = CGFloat(preferences.iconSize)
-        let base = DockLayout.contentSize(tiles: model.tiles.map(\.kind),
+        let kinds = model.tiles.map(\.kind)
+        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+        let base = DockLayout.contentSize(tiles: kinds,
                                           iconSize: icon,
                                           spacing: CGFloat(preferences.tileSpacing),
                                           padding: DockView.padding,
-                                          edge: anchor.edge)
-        // Headroom so magnified tiles aren't clipped by the window bounds. The extra
-        // goes on *both* axes: perpendicular for the grow-away-from-edge scale, and
-        // along the dock axis so the first/last tiles (which scale about their centre)
-        // don't clip at the window ends (ISSUE-2).
-        var extra = preferences.magnificationEnabled
-            ? (preferences.effectiveMagnification - 1) * icon : 0
-        // A zoomed watch face (Widgets ▸ Clock ▸ Face size) pokes past the strip
-        // like a permanently magnified tile — give it the same kind of headroom.
+                                          edge: anchor.edge,
+                                          clockWidthFactor: clockFactor)
+        let magFactor = preferences.effectiveMagnification
+        // Along the dock: magnified tiles grow about their centre, so the ends
+        // need room for the *widest* tile (a zoomed clock, now-playing) — a
+        // square-tile budget clipped those at the window ends (ISSUE-2).
+        let widest = anchor.edge.isHorizontal
+            ? DockLayout.widestTileFactor(kinds: kinds, clockWidthFactor: clockFactor) : 1
+        let along = DockLayout.magnificationAlongExtra(iconSize: icon, magnification: magFactor,
+                                                       widestFactor: widest)
+        // Across the dock: the larger of plain magnification and the zoomed
+        // clock face — which itself magnifies on hover, so the two compound.
         // Horizontal docks only; `ClockWidgetView` ignores the zoom elsewhere.
+        var across = max(0, (magFactor - 1) * icon)
         if anchor.edge.isHorizontal, preferences.clockFace != .digital,
-           model.tiles.contains(where: { $0.kind == .clock }) {
-            extra = max(extra, DockLayout.clockZoomHeadroom(
+           kinds.contains(.clock) {
+            across = max(across, DockLayout.clockZoomHeadroom(
                 iconSize: icon, padding: DockView.padding,
-                zoom: CGFloat(preferences.clockFaceZoom)))
+                zoom: CGFloat(preferences.clockFaceZoom),
+                magnification: magFactor))
         }
-        guard extra > 0 else { return base }
-        return CGSize(width: base.width + extra, height: base.height + extra)
+        guard along > 0 || across > 0 else { return base }
+        return anchor.edge.isHorizontal
+            ? CGSize(width: base.width + along, height: base.height + across)
+            : CGSize(width: base.width + across, height: base.height + along)
     }
 
     // Cached revealed frame so per-mouse-move hit-testing is pure rect math (no

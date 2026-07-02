@@ -225,6 +225,10 @@ struct DockTileView: View {
     private var tileWidth: CGFloat {
         switch tile.kind {
         case .separator: return edge.isHorizontal ? 12 : baseSize
+        case .clock where edge.isHorizontal:
+            // Widens with a zoomed watch face — keep in sync with
+            // `DockLayout.tileExtent` so panel sizing and rendering agree.
+            return baseSize * DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
         default: return baseSize * tile.kind.tileWidthFactor
         }
     }

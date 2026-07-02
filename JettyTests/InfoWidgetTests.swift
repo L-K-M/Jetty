@@ -153,6 +153,33 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(SystemMonitorGraph.whiteLift(forLuminance: 0), 0.55, accuracy: 0.0001)
     }
 
+    func testLEDSegmentsRoundAndClamp() {
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0, count: 8), 0)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 1, count: 8), 8)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.5, count: 8), 4)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 2.0, count: 8), 8)   // clamped
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: -1, count: 8), 0)    // clamped
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.5, count: 0), 0)   // degenerate
+    }
+
+    func testLEDZonesMatchTheBarThresholds() {
+        // 8-segment column: centers at 6.25%, 18.75%, … — green below 60%,
+        // amber to 85%, red above.
+        XCTAssertEqual(SystemMonitorGraph.ledZone(index: 0, count: 8), .green)
+        XCTAssertEqual(SystemMonitorGraph.ledZone(index: 4, count: 8), .green)   // 56.25%
+        XCTAssertEqual(SystemMonitorGraph.ledZone(index: 5, count: 8), .amber)   // 68.75%
+        XCTAssertEqual(SystemMonitorGraph.ledZone(index: 6, count: 8), .amber)   // 81.25%
+        XCTAssertEqual(SystemMonitorGraph.ledZone(index: 7, count: 8), .red)     // 93.75%
+    }
+
+    func testGaugeAngleSweep() {
+        // ±60° sweep centered on 12 o'clock, clamped outside 0…1.
+        XCTAssertEqual(SystemMonitorGraph.gaugeAngle(0), -.pi / 3, accuracy: 1e-9)
+        XCTAssertEqual(SystemMonitorGraph.gaugeAngle(0.5), 0, accuracy: 1e-9)
+        XCTAssertEqual(SystemMonitorGraph.gaugeAngle(1), .pi / 3, accuracy: 1e-9)
+        XCTAssertEqual(SystemMonitorGraph.gaugeAngle(7), .pi / 3, accuracy: 1e-9)
+    }
+
     // MARK: Tile geometry
 
     func testWideWidgetsAreWiderThanSquareTiles() {

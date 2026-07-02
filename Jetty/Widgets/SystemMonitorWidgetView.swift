@@ -23,6 +23,9 @@ struct SystemMonitorWidgetView: View {
             switch style {
             case .bars:  barsBody
             case .graph: graphBody
+            case .scope: scopeBody
+            case .led:   SystemMonitorLEDView(cpu: stats.load, ram: stats.memory, height: height)
+            case .gauges: SystemMonitorGaugeView(cpu: stats.load, ram: stats.memory, height: height)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -30,8 +33,22 @@ struct SystemMonitorWidgetView: View {
         .help(helpText)
     }
 
+    private var scopeBody: some View {
+        let samples = stats.history
+        return SystemMonitorScopeView(
+            cpu: samples.map(\.load),
+            ram: samples.map(\.memory),
+            net: SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
+                                               floor: SystemMonitorGraph.netFloor),
+            cpuValue: stats.load,
+            ramValue: stats.memory,
+            netRate: currentNetRate,
+            showNetwork: showNetwork,
+            height: height)
+    }
+
     private var helpText: String {
-        style == .graph
+        style.supportsNetwork
             ? "CPU, memory\(showNetwork ? ", and network" : "") over the last couple of minutes"
             : "CPU load and memory usage"
     }
@@ -235,6 +252,34 @@ enum SystemMonitorGraph {
     /// need none; dark ones get a fixed lift that preserves their hue. Pure.
     static func whiteLift(forLuminance luminance: Double) -> Double {
         luminance >= 0.35 ? 0 : 0.55
+    }
+
+    // MARK: LED-meter + gauge math (pure)
+
+    /// A hi-fi meter's color zones, bottom to top: green, amber, red.
+    enum LEDZone: Equatable { case green, amber, red }
+
+    /// How many of an `count`-segment LED column light for `value` (0…1).
+    static func litSegments(value: Double, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return Int((Swift.min(Swift.max(value, 0), 1) * Double(count)).rounded())
+    }
+
+    /// The zone of segment `index` (0 = bottom) in an `count`-segment column:
+    /// green below 60% of the scale, amber to 85%, red above — matching the
+    /// bars style's thresholds.
+    static func ledZone(index: Int, count: Int) -> LEDZone {
+        guard count > 0 else { return .green }
+        let fraction = (Double(index) + 0.5) / Double(count)
+        if fraction >= 0.85 { return .red }
+        if fraction >= 0.6 { return .amber }
+        return .green
+    }
+
+    /// The gauge needle's angle for `value` (0…1), in radians clockwise from
+    /// 12 o'clock (`ClockGeometry.point` convention): a ±60° sweep centered up.
+    static func gaugeAngle(_ value: Double) -> Double {
+        (Swift.min(Swift.max(value, 0), 1) - 0.5) * (2 * .pi / 3)
     }
 
     /// A compact throughput label: `0`, `64K`, `1.2M` (1024-based, bytes/s).

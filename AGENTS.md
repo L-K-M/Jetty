@@ -129,8 +129,11 @@ Mirrors `PLAN.md §11`:
   `[.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]` on the panels.
 - **Liquid Glass is macOS 26 only.** Gate it `@available(macOS 26, *)` and fall back
   to `NSVisualEffectView`; honor Reduce Transparency.
-- **Keep `LSUIElement = true`**; Settings/Jetty-Menu temporarily go `.regular` and
-  revert to `.accessory` on close (shared `ActivationPolicy` guard).
+- **Keep `LSUIElement = true`**; **Settings** temporarily goes `.regular` and reverts
+  to `.accessory` on close (shared `ActivationPolicy` guard). The **Jetty Menu** does
+  *not* switch activation policy — it uses a key, non-activating panel and briefly
+  activates the app to focus its search field, handing activation back on close (no
+  Dock-icon flash). Don't "fix" the menu to toggle `.regular`.
 
 ## Testing Notes
 

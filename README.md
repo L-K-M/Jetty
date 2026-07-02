@@ -34,8 +34,8 @@ launcher).
 - **Pinned + running apps**, with live running indicators, one-click launch/activate,
   drag-a-file-onto-an-app to open it there, drag-to-pin, in-dock reorder, drag-out to
   remove (with the classic *poof*), a per-tile accent glow, and a right-click menu
-  (Show / Hide / Quit / Keep in Dock / Show in Finder). **Folders** open as a grid /
-  list / fan **stack** popover.
+  (Show / Hide / Quit / Keep in Dock / Show in Finder). **Folders** preview their
+  contents as a grid / list / fan **stack** on hover; a click opens them in Finder.
 - **Live info tiles** right in the dock — a date/time tile (12/24-hour, seconds,
   weekday, date, or an analog face), plus **battery**, **weather** (no location
   permission — you supply coordinates), a **world clock**, a **Pomodoro** timer, a
@@ -102,8 +102,9 @@ xcodebuild -project Jetty.xcodeproj -scheme Jetty -destination 'platform=macOS' 
 
 ## Usage
 
-1. Launch Jetty — it appears as a dock glyph in the menu bar and (with your consent)
-   hides the system Dock.
+1. Launch Jetty — it appears as a dock glyph in the menu bar and hides the system
+   Dock (on by default; turn it off any time in **Settings → General → Hide the
+   macOS Dock**, or with **Restore System Dock**).
 2. Push the pointer to the bottom of the screen to reveal the dock, or open
    **Jetty Settings…** from the menu-bar item to choose an edge, alignment, and look.
 3. Open the **Jetty Menu** from its dock tile, the menu-bar item, or ⌃⌥⌘Space (the
@@ -117,9 +118,10 @@ toggle ask for **Automation** the first time (to tell System Events to sleep / r
 toggle appearance). The optional **now-playing** tile (which you add yourself; it is not
 in the default dock) reads the system's current track via Apple's private MediaRemote
 framework — it stays local, is never transmitted, and fails closed (shows a plain music
-glyph) if the framework is unavailable. Optional, *coming-soon* window-preview /
-window-management features will ask for **Screen Recording** / **Accessibility** — and
-Jetty works fully without them.
+glyph) if the framework is unavailable. **Hover window previews** (opt-in) show an app's
+windows when you hover its tile: the default **Window names** mode needs nothing;
+**Live thumbnails** ask for **Screen Recording**, and click-to-raise / minimize a
+specific window asks for **Accessibility**. Jetty works fully without either.
 
 ## Distribution
 

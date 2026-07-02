@@ -79,6 +79,16 @@ final class CodableModelTests: XCTestCase {
         XCTAssertEqual(DockAnchor(inset: 99999).inset, 400)
     }
 
+    func testDockAnchorClampsOffset() {
+        // Init and the JSON decode path both clamp to the Settings slider range (H6).
+        XCTAssertEqual(DockAnchor(offset: 99999).offset, 600)
+        XCTAssertEqual(DockAnchor(offset: -99999).offset, -600)
+        XCTAssertEqual(DockAnchor(offset: .nan).offset, 0)
+        let decoded = try? JSONDecoder().decode(
+            DockAnchor.self, from: Data(#"{ "offset": 5000 }"#.utf8))
+        XCTAssertEqual(decoded?.offset, 600)
+    }
+
     func testDockAnchorDecodesMissingFieldsToDefaults() throws {
         let anchor = try JSONDecoder().decode(DockAnchor.self, from: Data("{}".utf8))
         XCTAssertEqual(anchor.edge, .bottom)
@@ -102,6 +112,48 @@ final class CodableModelTests: XCTestCase {
         let preset = AppearancePreset.builtIns.first { $0.name == "Vapor" }!
         let data = try JSONEncoder().encode(preset)
         XCTAssertEqual(AppearancePreset.decode(from: data), preset)
+    }
+
+    func testPresetToleratesUnknownEnumRawValues() throws {
+        // A future material / indicator style must fall back to defaults, not fail the
+        // whole decode (F-M8) — decodeIfPresent throws on a present-but-unknown value.
+        let json = Data("""
+        { "material": "frostedGlass", "indicatorStyle": "sparkles", "tintHex": "#123456" }
+        """.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        XCTAssertEqual(preset.material, Preferences.Default.material)
+        XCTAssertEqual(preset.indicatorStyle, Preferences.Default.indicatorStyle)
+        XCTAssertEqual(preset.tintHex, "#123456")   // the valid fields still land
+    }
+
+    func testPresetRejectsNonThemeJSON() {
+        // An object with none of the recognized theme keys (e.g. an exported dock.json)
+        // is rejected rather than silently returning an all-defaults preset (M27).
+        XCTAssertNil(AppearancePreset.decode(from: Data(#"{ "version": 1, "items": [] }"#.utf8)))
+    }
+
+    func testAccentGlowRoundTrips() throws {
+        // The accent-glow toggle now survives export/import (F-M8).
+        var preset = AppearancePreset.builtIns[0]
+        preset.accentGlow = false
+        let data = try JSONEncoder().encode(preset)
+        XCTAssertEqual(try JSONDecoder().decode(AppearancePreset.self, from: data).accentGlow, false)
+        // A theme predating the field decodes to the default (true), not false.
+        let legacy = Data(#"{ "material": "liquidGlass", "tintHex": "#0A7AFF" }"#.utf8)
+        XCTAssertEqual(try XCTUnwrap(AppearancePreset.decode(from: legacy)).accentGlow,
+                       Preferences.Default.accentGlow)
+    }
+
+    func testNormalizeAngleWrapsAndGuards() {
+        XCTAssertEqual(Preferences.normalizeAngle(370), 10, accuracy: 0.001)
+        XCTAssertEqual(Preferences.normalizeAngle(-90), 270, accuracy: 0.001)
+        XCTAssertEqual(Preferences.normalizeAngle(45), 45, accuracy: 0.001)
+        // Non-finite inputs (the AngleDial crash trigger, F-H5) map to 0.
+        XCTAssertEqual(Preferences.normalizeAngle(.infinity), 0)
+        XCTAssertEqual(Preferences.normalizeAngle(.nan), 0)
+        // A huge but finite value stays in range, so Int(_:) can't trap on it.
+        let big = Preferences.normalizeAngle(1e300)
+        XCTAssertTrue(big >= 0 && big < 360, "normalized angle must be in [0,360)")
     }
 
     func testImportsZapTheme() throws {

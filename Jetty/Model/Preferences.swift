@@ -224,7 +224,7 @@ final class Preferences: ObservableObject {
         material = DockMaterial(rawValue: string(Key.material, d.material.rawValue)) ?? d.material
         tintHex = string(Key.tintHex, d.tintHex)
         gradientHex = string(Key.gradientHex, d.gradientHex)
-        gradientAngle = double(Key.gradientAngle, d.gradientAngle)
+        gradientAngle = Self.normalizeAngle(double(Key.gradientAngle, d.gradientAngle))
         backgroundOpacity = Self.clamp(double(Key.backgroundOpacity, d.backgroundOpacity), 0, 1)
         iconSize = Self.clamp(double(Key.iconSize, d.iconSize), 24, 128)
         tileSpacing = Self.clamp(double(Key.tileSpacing, d.tileSpacing), 0, 32)
@@ -300,7 +300,7 @@ final class Preferences: ObservableObject {
                          gradientAngle: gradientAngle, backgroundOpacity: backgroundOpacity, iconSize: iconSize,
                          tileSpacing: tileSpacing, cornerRadius: cornerRadius, magnificationEnabled: magnificationEnabled,
                          magnification: magnification, indicatorStyle: indicatorStyle, indicatorHex: indicatorHex,
-                         showLabels: showLabels, glyphHex: glyphHex,
+                         showLabels: showLabels, accentGlow: accentGlow, glyphHex: glyphHex,
                          decorationStyle: decorationStyle.rawValue, decorationPosition: decorationPosition.rawValue,
                          decorationOpacity: decorationOpacity, decorationSize: decorationSize,
                          crtEnabled: crtEnabled, crtIntensity: crtIntensity)
@@ -311,7 +311,7 @@ final class Preferences: ObservableObject {
         material = preset.material
         tintHex = Self.validHex(preset.tintHex, fallback: Default.tintHex)
         gradientHex = Self.validHex(preset.gradientHex, fallback: Default.gradientHex)
-        gradientAngle = preset.gradientAngle
+        gradientAngle = Self.normalizeAngle(preset.gradientAngle)
         backgroundOpacity = Self.clamp(preset.backgroundOpacity, 0, 1)
         iconSize = Self.clamp(preset.iconSize, 24, 128)
         tileSpacing = Self.clamp(preset.tileSpacing, 0, 32)
@@ -322,6 +322,7 @@ final class Preferences: ObservableObject {
         indicatorHex = Self.validHex(preset.indicatorHex, fallback: Default.indicatorHex)
         glyphHex = Self.validHex(preset.glyphHex, fallback: Default.glyphHex)
         showLabels = preset.showLabels
+        accentGlow = preset.accentGlow
         decorationStyle = DecorationStyle(rawValue: preset.decorationStyle) ?? .none
         decorationPosition = DecorationPosition(rawValue: preset.decorationPosition) ?? .topTrailing
         decorationOpacity = Self.clamp(preset.decorationOpacity, 0, 1)
@@ -364,6 +365,15 @@ final class Preferences: ObservableObject {
     static func clamp(_ value: Double, _ lower: Double, _ upper: Double) -> Double {
         guard value.isFinite else { return lower }
         return Swift.min(Swift.max(value, lower), upper)
+    }
+
+    /// Normalizes an angle into `[0, 360)`, preserving wrap semantics. Guards against a
+    /// non-finite or wildly out-of-range value from an imported preset that would
+    /// otherwise trap `Int(angle)` in `AngleDial` and brick the Appearance pane (F-H5).
+    static func normalizeAngle(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        let mod = value.truncatingRemainder(dividingBy: 360)
+        return mod < 0 ? mod + 360 : mod
     }
 
     /// Returns `hex` only if it parses as a color, else `fallback` — so an imported

@@ -19,6 +19,11 @@ enum TileAccent {
 }
 
 private extension NSImage {
+    /// One shared `CIContext` for all dominant-color sampling. `CIContext` is
+    /// documented as expensive to build (it wires up a full render pipeline), and
+    /// the old code allocated a fresh one on *every* call — cache it once instead.
+    static let jettyAccentContext = CIContext(options: [.workingColorSpace: NSNull()])
+
     /// The image's average color, pushed toward a vivid accent. `nil` if it can't be
     /// rasterized (e.g. an empty image).
     func jettyDominantColor() -> NSColor? {
@@ -31,8 +36,7 @@ private extension NSImage {
               let output = filter.outputImage else { return nil }
 
         var pixel = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: NSNull()])
-        context.render(output, toBitmap: &pixel, rowBytes: 4,
+        Self.jettyAccentContext.render(output, toBitmap: &pixel, rowBytes: 4,
                        bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                        format: .RGBA8, colorSpace: nil)
 

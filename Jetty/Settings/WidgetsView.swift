@@ -5,7 +5,8 @@ import SwiftUI
 struct WidgetsView: View {
     @ObservedObject var preferences: Preferences
 
-    private var zoneIdentifiers: [String] { TimeZone.knownTimeZoneIdentifiers.sorted() }
+    // Sorted once — re-sorting ~600 zone ids on every Settings render was pure waste (F-P5).
+    private static let zoneIdentifiers: [String] = TimeZone.knownTimeZoneIdentifiers.sorted()
 
     var body: some View {
         Form {
@@ -21,7 +22,7 @@ struct WidgetsView: View {
 
             Section("World Clock") {
                 Picker("Time zone", selection: $preferences.worldClockTimeZone) {
-                    ForEach(zoneIdentifiers, id: \.self) { Text($0).tag($0) }
+                    ForEach(Self.zoneIdentifiers, id: \.self) { Text($0).tag($0) }
                 }
                 Text("Shows the time in another zone. The 12/24-hour and seconds options above apply here too.")
                     .font(.caption).foregroundStyle(.secondary)

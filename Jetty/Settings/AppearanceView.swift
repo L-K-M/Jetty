@@ -28,6 +28,10 @@ struct AppearanceView: View {
                     Text("Background opacity")
                     Slider(value: $preferences.backgroundOpacity, in: 0...1)
                 }
+                if !preferences.material.usesTintAndOpacity {
+                    Text("Tint and background opacity aren't used by Liquid Glass or Clear — those follow the system glass. Choose Tinted, Solid, or Gradient to apply them.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             Section("Size") {

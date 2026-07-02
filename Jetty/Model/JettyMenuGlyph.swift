@@ -38,6 +38,9 @@ enum JettyMenuGlyph {
     }
 
     /// The curated options that actually resolve on this OS (so the picker never shows
-    /// a blank cell if a name is unavailable on an older system).
-    static var availableOptions: [String] { options.filter(isValid) }
+    /// a blank cell if a name is unavailable on an older system). Computed once —
+    /// symbol availability can't change mid-process, and the old computed property
+    /// re-validated ~47 symbols (an `NSImage` alloc each) on every Settings render,
+    /// including every keystroke in the custom-symbol field (F-P5).
+    static let availableOptions: [String] = options.filter(isValid)
 }

@@ -12,12 +12,17 @@ struct HotkeyRecorder: NSViewRepresentable {
         let button = RecorderButton()
         button.onChange = { binding = $0 }
         button.binding = binding
+        button.isEnabled = context.environment.isEnabled
         return button
     }
 
     func updateNSView(_ nsView: RecorderButton, context: Context) {
         nsView.binding = binding
         nsView.onChange = { binding = $0 }
+        // Forward SwiftUI's `.disabled(...)` to the button — an NSViewRepresentable
+        // doesn't propagate it automatically, so a switched-off recorder still recorded
+        // and rewrote the binding despite looking dimmed (F-M10).
+        nsView.isEnabled = context.environment.isEnabled
         nsView.refreshTitle()
     }
 }

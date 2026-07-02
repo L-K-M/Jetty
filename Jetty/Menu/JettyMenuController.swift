@@ -129,9 +129,12 @@ final class JettyMenuController {
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
         // URLComponents leaves '+' literal (it's a valid query character), but Google
         // decodes '+' in a query as a space — so "c++" would search for "c  ". Percent-
-        // encode it so plus signs survive (F-L3).
-        components?.percentEncodedQuery = components?.percentEncodedQuery?
-            .replacingOccurrences(of: "+", with: "%2B")
+        // encode it so plus signs survive (F-L3). Read into a local first: mutating
+        // `percentEncodedQuery` while also reading it in the same statement is an
+        // overlapping access to the `components` value and won't compile.
+        if let encoded = components?.percentEncodedQuery {
+            components?.percentEncodedQuery = encoded.replacingOccurrences(of: "+", with: "%2B")
+        }
         if let url = components?.url {
             NSWorkspace.shared.open(url)
         }

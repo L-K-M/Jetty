@@ -144,6 +144,15 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(SystemMonitorGraph.formatRate(2 * 1024 * 1024), "2.0M")
     }
 
+    func testGraphWhiteLiftOnlyForDarkColors() {
+        // Bright series colors keep their exact hue/brightness…
+        XCTAssertEqual(SystemMonitorGraph.whiteLift(forLuminance: 0.9), 0, accuracy: 0.0001)
+        XCTAssertEqual(SystemMonitorGraph.whiteLift(forLuminance: 0.35), 0, accuracy: 0.0001)
+        // …dark ones get lifted toward white so they read on the dark plate.
+        XCTAssertEqual(SystemMonitorGraph.whiteLift(forLuminance: 0.1), 0.55, accuracy: 0.0001)
+        XCTAssertEqual(SystemMonitorGraph.whiteLift(forLuminance: 0), 0.55, accuracy: 0.0001)
+    }
+
     // MARK: Tile geometry
 
     func testWideWidgetsAreWiderThanSquareTiles() {

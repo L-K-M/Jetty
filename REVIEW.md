@@ -116,6 +116,16 @@ Horizontal docks only — on vertical docks the face would overlap its along-axi
 neighbors — and capped at 160% so the square dial stays inside the clock tile's
 1.6×-wide footprint.
 
+### System-monitor graph readability (2026-07-02)
+
+The graph style's sparklines used to float straight on the dock glass — unreadable
+over busy content, and a dark tint made the CPU line and its legend number nearly
+invisible. The graph now sits on a dark glassy plate (same treatment as the classic
+clock dial / LCD screen) with faint 25/50/75% gridlines; the legend is colored dots
++ white numbers instead of tint-colored text; and the CPU series lifts its color
+toward white when the tint's perceived luminance is too low for the plate
+(`SystemMonitorGraph.whiteLift`, pure + unit-tested).
+
 ---
 
 ## Table of contents

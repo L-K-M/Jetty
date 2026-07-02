@@ -20,6 +20,16 @@ enum DockMaterial: String, Codable, CaseIterable, Identifiable {
         case .gradient: return "Gradient"
         }
     }
+
+    /// Whether the Tint and Background-opacity controls actually affect this material.
+    /// On macOS 26, `liquidGlass`/`glassClear` render as system glass and ignore both —
+    /// so the Settings UI can flag those controls as inert rather than looking broken (M11).
+    var usesTintAndOpacity: Bool {
+        switch self {
+        case .liquidGlass, .glassClear: return false
+        case .glassTinted, .solid, .gradient: return true
+        }
+    }
 }
 
 /// How a running app is marked on its tile.

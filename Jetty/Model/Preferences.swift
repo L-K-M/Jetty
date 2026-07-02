@@ -196,8 +196,23 @@ final class Preferences: ObservableObject {
 
     @Published var worldClockTimeZone: String { didSet { defaults.set(worldClockTimeZone, forKey: Key.worldClockTimeZone) } }
     @Published var pomodoroMinutes: Double { didSet { defaults.set(pomodoroMinutes, forKey: Key.pomodoroMinutes) } }
-    @Published var weatherLatitude: Double { didSet { defaults.set(weatherLatitude, forKey: Key.weatherLatitude) } }
-    @Published var weatherLongitude: Double { didSet { defaults.set(weatherLongitude, forKey: Key.weatherLongitude) } }
+    // Clamp at the write site (not only in `init`) so a typo like 377.7 in the Settings
+    // TextField can't persist an out-of-range coordinate that errors the API all session
+    // and then silently snaps to a different wrong value on next launch (F-M9).
+    @Published var weatherLatitude: Double {
+        didSet {
+            let c = Self.clamp(weatherLatitude, -90, 90)
+            if c != weatherLatitude { weatherLatitude = c; return }
+            defaults.set(weatherLatitude, forKey: Key.weatherLatitude)
+        }
+    }
+    @Published var weatherLongitude: Double {
+        didSet {
+            let c = Self.clamp(weatherLongitude, -180, 180)
+            if c != weatherLongitude { weatherLongitude = c; return }
+            defaults.set(weatherLongitude, forKey: Key.weatherLongitude)
+        }
+    }
     @Published var weatherUseCelsius: Bool { didSet { defaults.set(weatherUseCelsius, forKey: Key.weatherUseCelsius) } }
 
     // MARK: Launch at login

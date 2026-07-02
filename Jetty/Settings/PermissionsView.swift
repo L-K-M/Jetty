@@ -54,8 +54,8 @@ struct PermissionsView: View {
         .formStyle(.grouped)
         .onAppear(perform: refresh)
         // Poll so granting a permission in System Settings reflects here without a
-        // manual refresh or reopening the tab.
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in refresh() }
+        // manual refresh — at a gentler 5 s cadence than the old 2 s (M25).
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in refresh() }
     }
 
     private var modeExplanation: String {

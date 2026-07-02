@@ -63,6 +63,12 @@ struct GeneralView: View {
                     Text("\(Int(preferences.hideDelayMs)) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
                 .disabled(!preferences.autoHide)
+                HStack {
+                    Text("Animation")
+                    Slider(value: $preferences.animationMs, in: 0...600)
+                    Text("\(Int(preferences.animationMs)) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
+                }
+                .disabled(!preferences.autoHide)
                 Toggle("Show running apps that aren't pinned", isOn: $preferences.showRunningApps)
             }
 

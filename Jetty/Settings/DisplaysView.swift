@@ -55,11 +55,11 @@ struct DisplaysView: View {
     // MARK: Screens
 
     private var screenEntries: [ScreenEntry] {
-        NSScreen.screens.enumerated().map { index, screen in
-            let uuid = registry.key(for: screen)
-            let name: String
-            if #available(macOS 14.0, *) { name = screen.localizedName } else { name = "Display \(index + 1)" }
-            return ScreenEntry(id: uuid, name: name)
+        NSScreen.screens.map { screen in
+            // `localizedName` has existed since macOS 10.15 — the old `#available(macOS 14)`
+            // gate wrongly degraded exactly the min-target OS (13) to "Display 1/2" on the
+            // pane whose whole job is telling displays apart (F-L9).
+            ScreenEntry(id: registry.key(for: screen), name: screen.localizedName)
         }
     }
 

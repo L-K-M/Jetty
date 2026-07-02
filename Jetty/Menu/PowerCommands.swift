@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin   // dlopen / dlsym / dlclose for the isolated loginwindow lock symbol
 
 /// The power / session commands offered in the Jetty Menu's bottom row. The
 /// command → action mapping is a pure, unit-tested value; execution is a thin,

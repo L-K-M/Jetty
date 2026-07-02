@@ -5,10 +5,17 @@ on:
   push:
     branches: [main]
 
-# Cancel an in-progress run when a branch is pushed again.
+# Least privilege: the build/test job only needs to read the repo. Uploading test
+# results uses the artifact API, which doesn't need extra token scopes.
+permissions:
+  contents: read
+
+# Cancel an in-progress run when a *PR branch* is pushed again — but never cancel a
+# push to main, or that commit is left with a permanently "cancelled" status (masking
+# breakage and putting holes in CI-status bisection).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PROJECT: Jetty.xcodeproj
@@ -18,6 +25,7 @@ jobs:
   build-test:
     name: Build & Test
     runs-on: macos-26
+    timeout-minutes: 30   # a wedged xcodebuild (a documented failure mode) shouldn't burn 6h of 10x-billed runner time
     steps:
       - uses: actions/checkout@v4
 

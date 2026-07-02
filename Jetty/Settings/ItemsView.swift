@@ -7,19 +7,27 @@ import UniformTypeIdentifiers
 /// that aren't pinned appear automatically and aren't listed here. See PLAN.md §7.
 struct ItemsView: View {
     @ObservedObject var store: DockStore
+    @State private var selection: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 0) {
-            List {
+            List(selection: $selection) {
                 ForEach(store.items) { item in
-                    row(item)
+                    row(item).tag(item.id)
                 }
                 .onMove { store.moveItem(fromOffsets: $0, toOffset: $1) }
                 .onDelete { offsets in
-                    for index in offsets where store.items.indices.contains(index) {
-                        store.removeItem(id: store.items[index].id)
-                    }
+                    // Resolve ids *before* mutating — deleting by index while the array
+                    // shifts under us would remove the wrong rows on a multi-row delete.
+                    let ids = offsets.compactMap { store.items.indices.contains($0) ? store.items[$0].id : nil }
+                    ids.forEach { store.removeItem(id: $0) }
                 }
+            }
+            // Make the ⌫ shortcut the footer promises actually work: with no List
+            // selection there was nothing for the delete key to act on (F-L8).
+            .onDeleteCommand {
+                selection.forEach { store.removeItem(id: $0) }
+                selection.removeAll()
             }
 
             Divider()
@@ -33,7 +41,12 @@ struct ItemsView: View {
                     Button("Separator") { store.addItem(DockItem(kind: .separator)) }
                     Button("Clock") { store.addItem(DockItem(kind: .clock, displayName: "Clock")) }
                     Button("Jetty Menu") { store.addItem(DockItem(kind: .jettyMenu, displayName: "Jetty Menu")) }
-                    Button("Running Apps") { store.addItem(DockItem(kind: .runningApps, displayName: "Running Apps")) }
+                    Button("Running Apps") {
+                        // Only one running-apps sentinel — a second would re-emit the whole
+                        // running group with duplicate tile ids (F-M1).
+                        guard !store.items.contains(where: { $0.kind == .runningApps }) else { return }
+                        store.addItem(DockItem(kind: .runningApps, displayName: "Running Apps"))
+                    }
                     Button("Trash") { store.addItem(DockItem(kind: .trash, displayName: "Trash")) }
                     Divider()
                     Menu("Info Widget") {
@@ -162,6 +175,9 @@ struct ItemsView: View {
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
             var item = DockItem.application(at: url)
+            // Skip an app already pinned (by bundle id) so we don't mint a duplicate
+            // tile id for the same app (F-M1).
+            if let bid = item.bundleIdentifier, store.contains(bundleIdentifier: bid) { continue }
             item.bookmark = BookmarkResolver.bookmark(for: url)
             store.addItem(item)
         }

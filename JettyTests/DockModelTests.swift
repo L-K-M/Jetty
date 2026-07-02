@@ -44,6 +44,33 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(Set(tiles.map(\.id)).count, tiles.count)   // all ids unique
     }
 
+    func testDuplicatePinnedAppYieldsUniqueTileIDs() {
+        // Pinning the same app twice (or two on-disk copies) must not mint two tiles
+        // with the same "app:<bundleID>" id — that desyncs id-keyed magnification /
+        // hover / glow. The second falls back to its unique item id (F-M1).
+        let a = finderItem()
+        let b = DockItem(kind: .application, displayName: "Finder", bundleIdentifier: "com.apple.finder")
+        let tiles = DockModel.makeTiles(pinned: [a, b], running: [], showRunningApps: true)
+        XCTAssertEqual(tiles.count, 2)
+        XCTAssertEqual(Set(tiles.map(\.id)).count, 2)          // ids are unique
+        XCTAssertEqual(tiles[0].id, "app:com.apple.finder")
+        XCTAssertEqual(tiles[1].id, "item:\(b.id.uuidString)") // second falls back to item id
+    }
+
+    func testSecondRunningAppsSentinelDoesNotDuplicateGroup() {
+        // A stray second .runningApps sentinel must not re-emit the whole running group
+        // (which would duplicate every running tile id) (F-M1).
+        let pinned = [
+            finderItem(),
+            DockItem(kind: .runningApps, displayName: "Running Apps"),
+            DockItem(kind: .runningApps, displayName: "Running Apps"),
+        ]
+        let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)]
+        let tiles = DockModel.makeTiles(pinned: pinned, running: running, showRunningApps: true)
+        XCTAssertEqual(tiles.map(\.id), ["app:com.apple.finder", "app:com.apple.Safari"])
+        XCTAssertEqual(Set(tiles.map(\.id)).count, tiles.count)
+    }
+
     func testRunningOnlyAppsHiddenWhenDisabled() {
         let pinned = [finderItem()]
         let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)]

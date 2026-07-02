@@ -7,7 +7,7 @@ import Combine
 /// (`onKeyPress` is 14+). See PLAN.md §8.2.
 final class JettyMenuModel: ObservableObject {
 
-    @Published var query: String = "" { didSet { recompute() } }
+    @Published var query: String = "" { didSet { userMovedSelection = false; recompute() } }
     @Published private(set) var results: [AppSearchItem] = []
     /// An inline calculator result when the query is an arithmetic expression
     /// (e.g. `2+2`), else `nil`. See `ExpressionEvaluator` / improvement ND-1.
@@ -19,6 +19,10 @@ final class JettyMenuModel: ObservableObject {
     /// A matched quick toggle (e.g. typing "dark"), else `nil` (ND-9).
     @Published private(set) var command: MenuCommand?
     @Published var selectedIndex: Int = 0
+    /// Whether the user has explicitly arrow-keyed the selection since the query last
+    /// changed. When they have, Return launches that app rather than being hijacked by a
+    /// matched command or a calc banner (F-H4). Reset on every query edit.
+    private(set) var userMovedSelection = false
 
     let maxResults = 12
 
@@ -32,6 +36,8 @@ final class JettyMenuModel: ObservableObject {
     var onWebSearch: ((String) -> Void)?
     /// Runs a matched quick toggle (ND-9).
     var onRunCommand: ((MenuCommand) -> Void)?
+    /// Copies a calc/conversion/currency result to the clipboard on Return (H2).
+    var onCopyValue: ((String) -> Void)?
     /// Supplies recently-launched apps to surface first on an empty query (MF-5).
     var recentsProvider: (() -> [AppSearchItem])?
 
@@ -50,13 +56,21 @@ final class JettyMenuModel: ObservableObject {
     }
 
     func recompute() {
+        // Preserve the selection across a recompute by *identity*, not position, so
+        // narrowing the results (or an async apps/rates update) doesn't jump the
+        // highlight back to row 0 (M18).
+        let previouslySelectedID = results.indices.contains(selectedIndex) ? results[selectedIndex].id : nil
         calculation = ExpressionEvaluator.evaluate(query)
         conversion = (calculation == nil) ? UnitConverter.convert(query) : nil
         currency = computeCurrency()
         command = MenuCommand.match(query)
         results = Array(Self.rankedResults(query: query, apps: appIndex.apps,
                                            recents: recentsProvider?() ?? []).prefix(maxResults))
-        if selectedIndex >= results.count { selectedIndex = 0 }
+        if let previouslySelectedID, let idx = results.firstIndex(where: { $0.id == previouslySelectedID }) {
+            selectedIndex = idx
+        } else if selectedIndex >= results.count {
+            selectedIndex = 0
+        }
     }
 
     /// A currency conversion result string, when the query parses as one and the
@@ -100,19 +114,26 @@ final class JettyMenuModel: ObservableObject {
     }
 
     func moveSelection(_ delta: Int) {
+        userMovedSelection = true
         selectedIndex = AppSearch.nextIndex(current: selectedIndex, delta: delta, count: results.count)
     }
 
-    /// The Return key: a matched quick toggle wins (the command row advertises "⏎
-    /// run"), then the selected app, then a web search (ND-9 / BUG-5).
+    /// The Return key. Priority:
+    /// 1. An app the user explicitly arrow-selected — never hijacked (F-H4).
+    /// 2. A calc/conversion/currency banner — copy it, the universal "use this answer"
+    ///    gesture, instead of leaking the query to a web search (H2).
+    /// 3. A matched quick toggle (its row advertises "⏎ run").
+    /// 4. Otherwise the selected app, then a web search (ND-9 / BUG-5).
     func activateSelection() {
-        if let command {
-            onRunCommand?(command)
-        } else if results.indices.contains(selectedIndex) {
-            onLaunch?(results[selectedIndex])
-        } else if let query = webSearchQuery {
-            onWebSearch?(query)
+        if userMovedSelection, results.indices.contains(selectedIndex) {
+            onLaunch?(results[selectedIndex]); return
         }
+        if let calculation { onCopyValue?(calculation.value); return }
+        if let conversion { onCopyValue?(conversion.value); return }
+        if let currency { onCopyValue?(currency); return }
+        if let command { onRunCommand?(command); return }
+        if results.indices.contains(selectedIndex) { onLaunch?(results[selectedIndex]); return }
+        if let query = webSearchQuery { onWebSearch?(query) }
     }
 
     /// Directly launches the app at `index` — used by a row *click*, which targets a

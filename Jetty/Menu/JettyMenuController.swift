@@ -49,6 +49,11 @@ final class JettyMenuController {
         model.onClose = { [weak self] in self?.close() }
         model.onWebSearch = { [weak self] query in self?.webSearch(query) }
         model.onRunCommand = { [weak self] command in self?.runCommand(command) }
+        model.onCopyValue = { [weak self] value in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(value, forType: .string)
+            self?.close()
+        }
         CurrencyService.shared.ensureFresh()
         appIndex.reload()   // pick up newly installed/removed apps each open (ISSUE-6)
 

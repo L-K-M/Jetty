@@ -25,11 +25,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !Self.isRunningTests else { return }
+        // Single-instance guard: a second copy (e.g. the one the updater drops in
+        // ~/Downloads) fighting over the shared `com.apple.dock` defaults and the shared
+        // `SystemDock.isManaging` flag corrupts the hide/restore state — hand off to the
+        // instance already running instead of starting a second one (F-H6).
+        if let other = NSRunningApplication.runningApplications(
+            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .first(where: { $0 != .current }) {
+            AppLauncher.activate(other)
+            NSApp.terminate(nil)
+            return
+        }
         installMainMenu()
         setUpStatusItem()
         controller.start()
         updateChecker.start()
     }
+
+    /// Re-launching the (already-running) app — double-clicking it again, or `open`ing
+    /// it — surfaces Settings instead of silently doing nothing (F-H6).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        settingsWindow.show()
+        return false
+    }
+
+    /// Opt into secure state restoration to silence the macOS 14+ launch warning; Jetty
+    /// stores no custom restorable state, so this is free (F-L18).
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
         guard !Self.isRunningTests else { return }
@@ -48,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        // Settings… (⌘,) in the *main* menu so the shortcut routes app-wide — the
+        // status-item copy only fires while that menu is open (F-L17).
+        let settings = appMenu.addItem(withTitle: "Jetty Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Jetty", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
@@ -63,6 +90,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(withTitle: "Select All", action: Selector(("selectAll:")), keyEquivalent: "a")
         editItem.submenu = editMenu
         mainMenu.addItem(editItem)
+
+        // A Window menu with Close (⌘W) so the shortcut closes the key window (Settings)
+        // instead of beeping. `performClose:` routes through the responder chain (F-L17).
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = windowMenu
+        mainMenu.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
 
         NSApp.mainMenu = mainMenu
     }

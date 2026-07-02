@@ -115,22 +115,30 @@ final class DockModel: ObservableObject {
 
         var slots: [DockSlot] = []
         var emittedRunning = false
+        // The unique-tile-id invariant must hold across pinned items too, not just the
+        // running-only list above: a second pin of the same app would otherwise reuse
+        // `app:<bundleID>` and desync id-keyed magnification / hover / glow. Seed with the
+        // running tile ids so a pin can't collide with a running-only tile either (F-M1).
+        var seenTileIDs = Set(runningOnly.map(\.id))
 
         for item in pinned {
             if item.kind == .runningApps {
-                guard showRunningApps else { emittedRunning = true; continue }
-                if !runningOnly.isEmpty {
+                // Emit the running-apps group at most once — a stray second `.runningApps`
+                // sentinel must not re-emit the whole group (duplicating every tile id).
+                if showRunningApps, !emittedRunning, !runningOnly.isEmpty {
                     slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                           tiles: runningOnly, isRunningGroup: true))
                 }
                 emittedRunning = true
                 continue
             }
-            let tileID: String
-            if item.kind == .application, let bundleID = item.bundleIdentifier {
-                tileID = "app:\(bundleID)"
-            } else {
+            // `dedupKey` is `app:<bundleID>` for apps (so a pin merges with its running
+            // instance) else `item:<uuid>`. On a collision, fall back to the always-unique
+            // item id so a duplicate pin can't break rendering (F-M1).
+            var tileID = item.dedupKey
+            if !seenTileIDs.insert(tileID).inserted {
                 tileID = "item:\(item.id.uuidString)"
+                seenTileIDs.insert(tileID)
             }
             let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
             let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,

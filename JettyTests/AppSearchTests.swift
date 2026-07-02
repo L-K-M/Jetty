@@ -52,6 +52,16 @@ final class AppSearchTests: XCTestCase {
         }
     }
 
+    func testDiacriticAndWidthInsensitive() {
+        // ASCII query matches accented / full-width names (H4).
+        XCTAssertNotNil(AppSearch.score("cafe", "Café"))
+        XCTAssertNotNil(AppSearch.score("resume", "Résumé"))
+        XCTAssertNotNil(AppSearch.score("n", "ñ"))
+        XCTAssertEqual(AppSearch.score("Café", "Café"), AppSearch.score("cafe", "Café"))
+        // Accented query still finds the accented name.
+        XCTAssertNotNil(AppSearch.score("café", "Café"))
+    }
+
     func testNextIndexWraps() {
         XCTAssertEqual(AppSearch.nextIndex(current: 2, delta: 1, count: 3), 0)
         XCTAssertEqual(AppSearch.nextIndex(current: 0, delta: -1, count: 3), 2)

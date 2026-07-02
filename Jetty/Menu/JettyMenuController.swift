@@ -42,6 +42,9 @@ final class JettyMenuController {
         model.recentsProvider = { RecentAppsStore.shared.recentItems() }
         model.onLaunch = { [weak self] item in
             RecentAppsStore.shared.record(name: item.name, bundleID: item.bundleID, url: item.url)
+            // The launched app is being given focus (config.activates) — don't let close()
+            // restore the previously-frontmost app over it (F-M3).
+            self?.appToRestoreOnClose = nil
             AppLauncher.launchApplication(at: item.url)
             self?.close()
         }
@@ -74,8 +77,10 @@ final class JettyMenuController {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver); self.resignObserver = nil }
         panel?.orderOut(nil)
-        // Hand activation back so Jetty doesn't linger as the frontmost app.
-        if let restore = appToRestoreOnClose { AppLauncher.activate(restore) }
+        // Hand activation back only if Jetty is still the active app — i.e. the menu was
+        // dismissed by Esc / copy / a command. If the user dismissed it by clicking
+        // another app, that app is already frontmost and must not be yanked away (F-M3).
+        if NSApp.isActive, let restore = appToRestoreOnClose { AppLauncher.activate(restore) }
         appToRestoreOnClose = nil
     }
 
@@ -122,6 +127,11 @@ final class JettyMenuController {
     private func webSearch(_ query: String) {
         var components = URLComponents(string: "https://www.google.com/search")
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        // URLComponents leaves '+' literal (it's a valid query character), but Google
+        // decodes '+' in a query as a space — so "c++" would search for "c  ". Percent-
+        // encode it so plus signs survive (F-L3).
+        components?.percentEncodedQuery = components?.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
         if let url = components?.url {
             NSWorkspace.shared.open(url)
         }
@@ -151,7 +161,15 @@ final class JettyMenuController {
 
     private func installKeyMonitor() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
+            guard let self, let panel = self.panel else { return event }
+            // Only act when the menu panel is key — the local monitor is app-global, so a
+            // focused Settings window or a modal alert must keep its own Esc/Return/arrows
+            // (M15).
+            guard panel.isKeyWindow else { return event }
+            // While an IME is composing (marked text in the field editor), let Return/Esc/
+            // arrows drive the candidate window instead of the menu — otherwise CJK input
+            // is unusable (F-M2).
+            if let editor = panel.firstResponder as? NSTextView, editor.hasMarkedText() { return event }
             switch event.keyCode {
             case 126: self.model.moveSelection(-1); return nil   // up
             case 125: self.model.moveSelection(1); return nil    // down

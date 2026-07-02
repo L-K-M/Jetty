@@ -82,6 +82,19 @@ One known issue: a `layoutSubtreeIfNeeded` recursion warning in the console from
 tile-scroll `GeometryReader` (horizontal overflow-scroll). No user-visible breakage
 observed, but worth resolving.
 
+### Clock faces + dial-clipping fix (2026-07-02)
+
+The analog clock's rim stroke was centered on the `Canvas` bounds circle, so the
+canvas clipped its outer half at 12/3/6/9 — visible flat spots ("icons cut off at
+top and bottom"). The dial is now inset by the overhanging half of the rim stroke,
+so every stroke stays inside the canvas. At the same time the
+`clockAnalog` boolean became a `ClockFaceStyle` (digital / LCD / classic / Swiss
+railway / retro Mac / Memphis / jelly): `AnalogClockFace` is a style-driven Canvas
+renderer, `LCDClockFace` draws a seven-segment retro LCD, and the pure
+`SevenSegment` + `ClockGeometry` + `ClockFormatter.displayHour` helpers are
+unit-tested (`ClockFaceTests`). Old installs with the analog toggle on migrate to
+`.classic`; a stored face style wins over the legacy key.
+
 ---
 
 ## Table of contents

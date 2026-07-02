@@ -62,7 +62,7 @@ final class Preferences: ObservableObject {
         static let clockShowSeconds = false
         static let clockUse24Hour = false
         static let clockShowWeekday = false
-        static let clockAnalog = false
+        static let clockFace = ClockFaceStyle.digital
         // System Monitor tile
         static let systemMonitorStyle = SystemMonitorStyle.bars
         static let systemMonitorShowNetwork = true
@@ -116,7 +116,9 @@ final class Preferences: ObservableObject {
         static let clockShowSeconds = "clockShowSeconds"
         static let clockUse24Hour = "clockUse24Hour"
         static let clockShowWeekday = "clockShowWeekday"
-        static let clockAnalog = "clockAnalog"
+        static let clockFace = "clockFace"
+        /// Legacy pre-face-styles key, read only to migrate old installs.
+        static let legacyClockAnalog = "clockAnalog"
         static let systemMonitorStyle = "systemMonitorStyle"
         static let systemMonitorShowNetwork = "systemMonitorShowNetwork"
         static let jettyMenuSymbol = "jettyMenuSymbol"
@@ -182,7 +184,7 @@ final class Preferences: ObservableObject {
     @Published var clockShowSeconds: Bool { didSet { defaults.set(clockShowSeconds, forKey: Key.clockShowSeconds) } }
     @Published var clockUse24Hour: Bool { didSet { defaults.set(clockUse24Hour, forKey: Key.clockUse24Hour) } }
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
-    @Published var clockAnalog: Bool { didSet { defaults.set(clockAnalog, forKey: Key.clockAnalog) } }
+    @Published var clockFace: ClockFaceStyle { didSet { defaults.set(clockFace.rawValue, forKey: Key.clockFace) } }
     @Published var systemMonitorStyle: SystemMonitorStyle { didSet { defaults.set(systemMonitorStyle.rawValue, forKey: Key.systemMonitorStyle) } }
     @Published var systemMonitorShowNetwork: Bool { didSet { defaults.set(systemMonitorShowNetwork, forKey: Key.systemMonitorShowNetwork) } }
     @Published var jettyMenuSymbol: String { didSet { defaults.set(jettyMenuSymbol, forKey: Key.jettyMenuSymbol) } }
@@ -276,7 +278,13 @@ final class Preferences: ObservableObject {
         clockShowSeconds = bool(Key.clockShowSeconds, d.clockShowSeconds)
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
         clockShowWeekday = bool(Key.clockShowWeekday, d.clockShowWeekday)
-        clockAnalog = bool(Key.clockAnalog, d.clockAnalog)
+        // Migrate the legacy "Analog face" toggle: an old install with it on gets the
+        // matching `.classic` dial; a stored face style always wins.
+        if let face = defaults.string(forKey: Key.clockFace).flatMap(ClockFaceStyle.init(rawValue:)) {
+            clockFace = face
+        } else {
+            clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace
+        }
         systemMonitorStyle = SystemMonitorStyle(rawValue: string(Key.systemMonitorStyle, d.systemMonitorStyle.rawValue)) ?? d.systemMonitorStyle
         systemMonitorShowNetwork = bool(Key.systemMonitorShowNetwork, d.systemMonitorShowNetwork)
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)

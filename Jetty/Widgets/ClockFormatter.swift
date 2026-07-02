@@ -43,6 +43,14 @@ enum ClockFormatter {
         return "\(hour)mm\(secs)\(ampm)"
     }
 
+    /// The hour a digit-based face (the LCD) shows for `hour24` (0–23): unchanged
+    /// in 24-hour mode, else folded to 12, 1–11 with an AM/PM marker. Pure.
+    static func displayHour(_ hour24: Int, use24Hour: Bool) -> (hour: Int, meridiem: String?) {
+        guard !use24Hour else { return (hour24, nil) }
+        let folded = hour24 % 12
+        return (folded == 0 ? 12 : folded, hour24 < 12 ? "AM" : "PM")
+    }
+
     // MARK: Cached formatters (H14)
 
     private static let cacheLock = NSLock()

@@ -394,6 +394,17 @@ A dock tile that renders the current time and (optionally) date, format configur
 small month popover). Pure formatting logic (`ClockFormatter`) is unit-tested; the view
 ticks on a coalesced timer aligned to the minute/second.
 
+The tile's look is a `ClockFaceStyle` (Widgets ▸ Clock ▸ Face): the plain **digital**
+text, a seven-segment **LCD** in the spirit of 80s Casios, or an analog dial — the
+minimal **classic** glass face, the **Swiss railway** station clock (bold batons, red
+lollipop second hand), the mid-90s rainbow-era **retro Mac** wristwatch (green triangle
+hour hand, red minute baton, yellow squiggle second hand), an 80s Memphis-style
+**Swatch** (cream dial, confetti markers), and an early-90s translucent **jelly** watch
+tinted with the accent color. Dials are drawn in `Canvas` (`AnalogClockFace`), inset so
+the rim stroke stays fully inside the canvas bounds (nothing clips); digit shapes
+(`SevenSegment`) and hand angles (`ClockGeometry`) are pure and unit-tested. The old
+`clockAnalog` boolean migrates to `.classic`.
+
 ### 8.2 The Jetty Menu (Windows-Start-style launcher)
 A separate borderless panel (`JettyMenuPanel`) summoned from its dock tile or a hotkey:
 
@@ -514,7 +525,11 @@ Jetty/
 │   │   ├── MagnificationCurve.swift  # pure Dock-style hover-zoom math (unit-tested)
 │   │   └── EdgeHoverMonitor.swift    # global mouse monitor → which screen edge is hovered
 │   ├── Widgets/
-│   │   ├── ClockWidgetView.swift     # date/time tile
+│   │   ├── ClockWidgetView.swift     # date/time tile (digital text + face dispatch)
+│   │   ├── AnalogClockFace.swift     # Canvas dials: classic/swiss/retroMac/memphis/jelly
+│   │   ├── LCDClockFace.swift        # Canvas seven-segment retro LCD face
+│   │   ├── SevenSegment.swift        # pure digit→segments lookup (unit-tested)
+│   │   ├── ClockGeometry.swift       # pure hand-angle/polar math (unit-tested)
 │   │   └── ClockFormatter.swift      # pure time/date formatting (unit-tested)
 │   ├── Menu/
 │   │   ├── JettyMenuController.swift  # the Start-menu launcher panel

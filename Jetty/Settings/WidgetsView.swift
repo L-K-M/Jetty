@@ -11,10 +11,16 @@ struct WidgetsView: View {
     var body: some View {
         Form {
             Section("Clock") {
-                Toggle("Analog face", isOn: $preferences.clockAnalog)
-                if !preferences.clockAnalog {
+                Picker("Face", selection: $preferences.clockFace) {
+                    ForEach(ClockFaceStyle.allCases) { Text($0.title).tag($0) }
+                }
+                Text(preferences.clockFace.caption)
+                    .font(.caption).foregroundStyle(.secondary)
+                if preferences.clockFace == .digital {
                     Toggle("Show date", isOn: $preferences.clockShowDate)
                     Toggle("Show weekday", isOn: $preferences.clockShowWeekday)
+                }
+                if preferences.clockFace.usesTimeDigits {
                     Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
                 }
                 Toggle("Show seconds", isOn: $preferences.clockShowSeconds)

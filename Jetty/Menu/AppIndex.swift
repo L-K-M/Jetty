@@ -9,12 +9,22 @@ final class AppIndex: ObservableObject {
 
     @Published private(set) var apps: [AppSearchItem] = []
 
+    /// Bumped on each `reload()` so an earlier, slower scan that finishes after a later
+    /// one can't clobber the newer result. `reload()` runs on the main thread (init /
+    /// menu open), so this is only ever touched there — no locking needed (H25).
+    private var reloadGeneration = 0
+
     init() { reload() }
 
     func reload() {
-        DispatchQueue.global(qos: .userInitiated).async {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Self.scan()
-            DispatchQueue.main.async { self.apps = found }
+            DispatchQueue.main.async {
+                guard let self, generation == self.reloadGeneration else { return }
+                self.apps = found
+            }
         }
     }
 
@@ -65,6 +75,19 @@ final class AppIndex: ObservableObject {
                     for child in sub where child.pathExtension == "app" { add(child) }
                 }
             }
+        }
+
+        // Finder lives in CoreServices, not an Applications folder, so a plain scan of
+        // the dirs above never finds it — typing "Finder" turned up nothing. Add it (and
+        // its CoreServices/Applications siblings like Screen Sharing) explicitly rather
+        // than scanning all of CoreServices, which is full of internal helper .apps (F-L4).
+        for path in ["/System/Library/CoreServices/Finder.app"] where fm.fileExists(atPath: path) {
+            add(URL(fileURLWithPath: path))
+        }
+        if let coreServiceApps = try? fm.contentsOfDirectory(
+            at: URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
+            includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+            for url in coreServiceApps where url.pathExtension == "app" { add(url) }
         }
         return items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

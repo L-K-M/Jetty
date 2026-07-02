@@ -19,6 +19,9 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     var indicatorStyle: IndicatorStyle
     var indicatorHex: String
     var showLabels: Bool
+    /// Whether the per-tile accent glow is on — the one Appearance-pane setting that
+    /// used to escape the shareable preset, so a theme silently lost it round-trip (F-M8).
+    var accentGlow: Bool
     /// Foreground color of the Jetty-menu dock glyph (separate from the background tint).
     var glyphHex: String
     // Retro flourishes (Zap parity)
@@ -45,6 +48,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
          indicatorStyle: IndicatorStyle,
          indicatorHex: String,
          showLabels: Bool,
+         accentGlow: Bool = Preferences.Default.accentGlow,
          glyphHex: String = Preferences.Default.glyphHex,
          decorationStyle: String = "none",
          decorationPosition: String = "topTrailing",
@@ -66,6 +70,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         self.indicatorStyle = indicatorStyle
         self.indicatorHex = indicatorHex
         self.showLabels = showLabels
+        self.accentGlow = accentGlow
         self.glyphHex = glyphHex
         self.decorationStyle = decorationStyle
         self.decorationPosition = decorationPosition
@@ -79,7 +84,12 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = Preferences.Default.self
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Imported"
-        material = try c.decodeIfPresent(DockMaterial.self, forKey: .material) ?? d.material
+        // Tolerate an *unknown* enum raw value, not just a missing key: `decodeIfPresent`
+        // throws `dataCorrupted` on a present-but-unrecognized value (e.g. a material a
+        // future Jetty added), which failed the whole import with a misleading "not a
+        // theme" error. Fall back to the default instead, matching DockItem's decode and
+        // this decoder's own "never fails" contract (F-M8).
+        material = ((try? c.decodeIfPresent(DockMaterial.self, forKey: .material)) ?? nil) ?? d.material
         tintHex = try c.decodeIfPresent(String.self, forKey: .tintHex) ?? d.tintHex
         gradientHex = try c.decodeIfPresent(String.self, forKey: .gradientHex) ?? d.gradientHex
         gradientAngle = try c.decodeIfPresent(Double.self, forKey: .gradientAngle) ?? d.gradientAngle
@@ -89,9 +99,10 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? d.cornerRadius
         magnificationEnabled = try c.decodeIfPresent(Bool.self, forKey: .magnificationEnabled) ?? d.magnificationEnabled
         magnification = try c.decodeIfPresent(Double.self, forKey: .magnification) ?? d.magnification
-        indicatorStyle = try c.decodeIfPresent(IndicatorStyle.self, forKey: .indicatorStyle) ?? d.indicatorStyle
+        indicatorStyle = ((try? c.decodeIfPresent(IndicatorStyle.self, forKey: .indicatorStyle)) ?? nil) ?? d.indicatorStyle
         indicatorHex = try c.decodeIfPresent(String.self, forKey: .indicatorHex) ?? d.indicatorHex
         showLabels = try c.decodeIfPresent(Bool.self, forKey: .showLabels) ?? d.showLabels
+        accentGlow = try c.decodeIfPresent(Bool.self, forKey: .accentGlow) ?? d.accentGlow
         glyphHex = try c.decodeIfPresent(String.self, forKey: .glyphHex) ?? d.glyphHex
         decorationStyle = try c.decodeIfPresent(String.self, forKey: .decorationStyle) ?? d.decorationStyle.rawValue
         decorationPosition = try c.decodeIfPresent(String.self, forKey: .decorationPosition) ?? d.decorationPosition.rawValue
@@ -104,7 +115,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case name, material, tintHex, gradientHex, gradientAngle, backgroundOpacity
         case iconSize, tileSpacing, cornerRadius, magnificationEnabled, magnification
-        case indicatorStyle, indicatorHex, showLabels, glyphHex
+        case indicatorStyle, indicatorHex, showLabels, accentGlow, glyphHex
         case decorationStyle, decorationPosition, decorationOpacity, decorationSize, crtEnabled, crtIntensity
     }
 

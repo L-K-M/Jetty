@@ -70,7 +70,8 @@ struct GlassBackground: View {
         NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
     }
 
-    // 0° = top→bottom, increasing clockwise (matches `AngleDial`).
+    // 0° = top→bottom, increasing counterclockwise on screen — 90° runs left→right
+    // (matches `AngleDial`; y grows downward so (sin, cos) puts 0° at the bottom).
     private var gradientStart: UnitPoint {
         let r = gradientAngle * .pi / 180
         return UnitPoint(x: 0.5 - sin(r) / 2, y: 0.5 - cos(r) / 2)

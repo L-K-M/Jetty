@@ -8,6 +8,9 @@ struct JettyMenuView: View {
     @ObservedObject var model: JettyMenuModel
     @ObservedObject var preferences: Preferences
     @FocusState private var searchFocused: Bool
+    /// Set when a hover changes the selection so the results list doesn't auto-scroll
+    /// under the cursor — only keyboard navigation scrolls (M11).
+    @State private var suppressScroll = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,8 +32,10 @@ struct JettyMenuView: View {
                 commandRow(command)
             }
             Divider().opacity(0.5)
-            results
-            if model.results.isEmpty, let query = model.webSearchQuery {
+            resultsOrEmptyState
+            // Always offer a web search for a non-empty query — not only when nothing
+            // matched — so "world cup 2026" is reachable even when two apps match (M11).
+            if let query = model.webSearchQuery {
                 Divider().opacity(0.5)
                 webSearchRow(query)
             }
@@ -138,6 +143,27 @@ struct JettyMenuView: View {
         .help("Search the web for \(query)")
     }
 
+    /// The results list, or a centered empty state when nothing matches (M17).
+    @ViewBuilder
+    private var resultsOrEmptyState: some View {
+        if model.results.isEmpty {
+            emptyState
+        } else {
+            results
+        }
+    }
+
+    private var emptyState: some View {
+        let hasQuery = !model.query.trimmingCharacters(in: .whitespaces).isEmpty
+        return VStack(spacing: 6) {
+            Image(systemName: hasQuery ? "magnifyingglass" : "square.grid.2x2")
+                .font(.title2).foregroundStyle(.secondary)
+            Text(hasQuery ? "No matching apps" : "Jetty hasn't found any apps yet")
+                .font(.callout).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var results: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -152,11 +178,22 @@ struct JettyMenuView: View {
                         resultRow(item, selected: index == model.selectedIndex)
                             .id(item.id)
                             .onTapGesture { model.selectedIndex = index; model.launch(at: index) }
+                            // Hover moves the highlight to the row under the pointer so a mouse
+                            // user isn't stuck on a keyboard-selected row (M11). Suppress the
+                            // auto-scroll for hover changes so the list doesn't jump under the
+                            // cursor — only keyboard navigation should scroll.
+                            .onHover { inside in
+                                if inside, model.selectedIndex != index {
+                                    suppressScroll = true
+                                    model.selectedIndex = index
+                                }
+                            }
                     }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 6)
             }
             .onChange(of: model.selectedIndex) { newValue in
+                if suppressScroll { suppressScroll = false; return }
                 guard model.results.indices.contains(newValue) else { return }
                 withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(model.results[newValue].id, anchor: .center) }
             }
@@ -173,8 +210,18 @@ struct JettyMenuView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(selected ? preferences.tintColor.opacity(0.85) : Color.clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .foregroundStyle(selected ? Color.white : Color.primary)
+        // Derive the selected-row text color from the tint's luminance — hard-coded white
+        // was unreadable on a light tint (white/yellow/pink are all supported) (M10).
+        .foregroundStyle(selected ? selectedForeground : Color.primary)
         .contentShape(Rectangle())
+    }
+
+    /// Black or white for the selected row, chosen by the tint's perceived luminance so
+    /// the label always contrasts against the highlight (M10).
+    private var selectedForeground: Color {
+        guard let rgb = NSColor(preferences.tintColor).usingColorSpace(.deviceRGB) else { return .white }
+        let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
+        return luminance > 0.6 ? .black : .white
     }
 
     private var powerRow: some View {

@@ -273,13 +273,22 @@ struct DockView: View {
     }
 
     private func tileView(_ tile: DockTile, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat], magnifies: Bool) -> some View {
-        DockTileView(
+        // A zoomed watch face is already oversize and the panel's headroom is
+        // budgeted for max(magnification, zoom) — not both compounded — so
+        // hover-magnifying it further would clip at the window bounds.
+        let zoomedClock = tile.kind == .clock && anchor.edge.isHorizontal
+            && preferences.clockFace != .digital && preferences.clockFaceZoom > 1.001
+        return DockTileView(
             tile: tile,
             preferences: preferences,
             baseSize: base,
-            scale: magnifies ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
+            scale: magnifies && !zoomedClock
+                ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
             isHovered: hoveredTileID == tile.id,
             edge: anchor.edge,
+            // The overflow-scroll state passes magnifies=false; its viewport
+            // clips, so the face zoom is suspended alongside magnification.
+            allowsClockZoom: magnifies,
             onTap: { model.onOpenTile?(tile) },
             onHoverChanged: { inside in
                 hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID)

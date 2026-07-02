@@ -14,6 +14,10 @@ struct DockTileView: View {
     /// The edge this dock is anchored to (from the panel's anchor, not the global
     /// preference) so per-display docks with different edges lay out correctly (BUG-4).
     let edge: DockEdge
+    /// Whether the clock tile may apply its face zoom. Off in the overflow-scroll
+    /// state, where the scroll viewport would clip the oversize face (the same
+    /// reason magnification is suspended there).
+    var allowsClockZoom: Bool = true
 
     var onTap: () -> Void
     var onHoverChanged: (Bool) -> Void
@@ -115,7 +119,8 @@ struct DockTileView: View {
                 .frame(width: edge.isHorizontal ? 1 : baseSize * 0.5,
                        height: edge.isHorizontal ? baseSize * 0.5 : 1)
         case .clock:
-            ClockWidgetView(preferences: preferences, height: baseSize)
+            ClockWidgetView(preferences: preferences, height: baseSize, edge: edge,
+                            allowsZoom: allowsClockZoom)
         case .battery:
             BatteryWidgetView(height: baseSize, tint: preferences.tintColor)
         case .systemMonitor:

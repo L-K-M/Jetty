@@ -63,6 +63,9 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = false
         static let clockShowWeekday = false
         static let clockFace = ClockFaceStyle.digital
+        /// Watch-face zoom (1.0–1.6×). Capped at 1.6 so the square analog face
+        /// never outgrows the clock tile's 1.6×-wide footprint (no neighbor overlap).
+        static let clockFaceZoom = 1.0
         // System Monitor tile
         static let systemMonitorStyle = SystemMonitorStyle.bars
         static let systemMonitorShowNetwork = true
@@ -117,6 +120,7 @@ final class Preferences: ObservableObject {
         static let clockUse24Hour = "clockUse24Hour"
         static let clockShowWeekday = "clockShowWeekday"
         static let clockFace = "clockFace"
+        static let clockFaceZoom = "clockFaceZoom"
         /// Legacy pre-face-styles key, read only to migrate old installs.
         static let legacyClockAnalog = "clockAnalog"
         static let systemMonitorStyle = "systemMonitorStyle"
@@ -185,6 +189,7 @@ final class Preferences: ObservableObject {
     @Published var clockUse24Hour: Bool { didSet { defaults.set(clockUse24Hour, forKey: Key.clockUse24Hour) } }
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
     @Published var clockFace: ClockFaceStyle { didSet { defaults.set(clockFace.rawValue, forKey: Key.clockFace) } }
+    @Published var clockFaceZoom: Double { didSet { defaults.set(clockFaceZoom, forKey: Key.clockFaceZoom) } }
     @Published var systemMonitorStyle: SystemMonitorStyle { didSet { defaults.set(systemMonitorStyle.rawValue, forKey: Key.systemMonitorStyle) } }
     @Published var systemMonitorShowNetwork: Bool { didSet { defaults.set(systemMonitorShowNetwork, forKey: Key.systemMonitorShowNetwork) } }
     @Published var jettyMenuSymbol: String { didSet { defaults.set(jettyMenuSymbol, forKey: Key.jettyMenuSymbol) } }
@@ -286,6 +291,7 @@ final class Preferences: ObservableObject {
         } else {
             clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace
         }
+        clockFaceZoom = Self.clamp(double(Key.clockFaceZoom, d.clockFaceZoom), 1.0, 1.6)
         systemMonitorStyle = SystemMonitorStyle(rawValue: string(Key.systemMonitorStyle, d.systemMonitorStyle.rawValue)) ?? d.systemMonitorStyle
         systemMonitorShowNetwork = bool(Key.systemMonitorShowNetwork, d.systemMonitorShowNetwork)
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)

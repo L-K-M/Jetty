@@ -66,6 +66,17 @@ enum DockLayout {
                                  : (along: frameHeight, across: frameWidth)
     }
 
+    /// Extra across-axis window headroom needed for a zoomed clock face
+    /// (Widgets ▸ Clock ▸ Face size). The zoomed face box is at most
+    /// `iconSize * zoom` across (the LCD; analog dials are 0.92× of that), sits
+    /// `0.04 * iconSize` off the edge-facing side of the tile
+    /// (`ClockWidgetView`'s edge padding — keep in sync), and the resting strip
+    /// is `iconSize + 2 * padding` — whatever pokes past the strip needs window
+    /// room so it isn't clipped at the panel bounds. Pure, unit-tested.
+    static func clockZoomHeadroom(iconSize: CGFloat, padding: CGFloat, zoom: CGFloat) -> CGFloat {
+        max(0, iconSize * (zoom + 0.04) - (iconSize + padding))
+    }
+
     // MARK: Revealed frame
 
     /// The frame of the fully-revealed dock for `anchor`, sized `contentSize`, within

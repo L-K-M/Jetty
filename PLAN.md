@@ -410,6 +410,17 @@ the rim stroke stays fully inside the canvas bounds (nothing clips); digit shape
 `clockAnalog` boolean migrates to `.classic`, and the retired `"swiss"` raw value maps
 onto Clock Face 2000.
 
+A **Face size** slider (Widgets ▸ Clock, 100–160%) lets a watch face float out past
+the glass strip like a permanently magnified tile: the face pins to the dock edge and
+grows inward, the panel gains matching across-axis headroom
+(`DockLayout.clockZoomHeadroom`, pure/unit-tested — the face style/zoom are part of
+the layout preference signature so the window resizes live), and hover magnification
+skips a zoomed clock so the two never compound past the window bounds (the
+overflow-scroll dock suspends the zoom too — its viewport clips). Horizontal
+docks only — on a vertical dock the face would grow along the dock into its
+neighbors. The 160% cap keeps the square dial inside the clock tile's 1.6×-wide
+footprint, so no along-axis layout changes are needed.
+
 ### 8.2 The Jetty Menu (Windows-Start-style launcher)
 A separate borderless panel (`JettyMenuPanel`) summoned from its dock tile or a hotkey:
 

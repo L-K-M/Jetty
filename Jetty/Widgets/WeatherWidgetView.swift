@@ -50,6 +50,16 @@ struct WeatherWidgetView: View {
                     .font(.system(size: max(9, height * 0.2), weight: .semibold, design: .rounded))
                     .monospacedDigit()
             }
+        } else if service.isOffline {
+            // A fetch failed and we have no reading for this location — show an offline
+            // glyph instead of an eternal spinner (H15).
+            VStack(spacing: 2) {
+                Image(systemName: "cloud.slash").font(.system(size: max(11, height * 0.3)))
+                    .foregroundStyle(.secondary)
+                Text("—").font(.system(size: max(8, height * 0.18), weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .help("Weather unavailable — tap to retry")
         } else {
             ProgressView().controlSize(.small)
         }

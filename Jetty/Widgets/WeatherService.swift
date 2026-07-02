@@ -24,6 +24,10 @@ final class WeatherService: ObservableObject {
     static let shared = WeatherService()
 
     @Published private(set) var snapshot: WeatherSnapshot?
+    /// True when the last fetch failed (offline, HTTP error, or unparseable). The tile
+    /// shows an offline glyph (keeping any stale reading) rather than an eternal
+    /// spinner (H15).
+    @Published private(set) var isOffline = false
 
     private var inFlightKey: String?
     private var requestedKey: String?
@@ -39,8 +43,13 @@ final class WeatherService: ObservableObject {
         guard latitude != 0 || longitude != 0 else { return }
         let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
         requestedKey = key
-        if snapshot?.key != key { snapshot = nil }
-        if key == lastKey, let last = lastFetch, Date().timeIntervalSince(last) < 15 * 60 { return }
+        // Deliberately do NOT clear `snapshot` here. The view only shows a snapshot whose
+        // key matches the current one, so a stale-keyed snapshot is harmless — and keeping
+        // it means flipping the unit/location back within the 15-minute freshness window
+        // instantly re-displays the still-fresh reading instead of stranding a spinner
+        // while the freshness gate below blocks a refetch (F-M5).
+        if key == lastKey, let last = lastFetch, Date().timeIntervalSince(last) < 15 * 60,
+           snapshot?.key == key { return }
         guard inFlightKey != key else { return }
         fetch(latitude: latitude, longitude: longitude, celsius: celsius, key: key)
     }
@@ -51,15 +60,24 @@ final class WeatherService: ObservableObject {
             + "&current=temperature_2m,weather_code&temperature_unit=\(unit)"
         guard let url = URL(string: string) else { return }
         inFlightKey = key
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            let parsed = Self.parse(data, celsius: celsius, key: key)
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            // Honor transport errors and non-2xx responses instead of silently swallowing
+            // them — otherwise a down network / API error left the tile spinning forever (H15).
+            let httpOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? true
+            let parsed = (error == nil && httpOK) ? Self.parse(data, celsius: celsius, key: key) : nil
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.inFlightKey == key { self.inFlightKey = nil }
-                guard let parsed, self.requestedKey == key else { return }
-                self.snapshot = parsed
-                self.lastKey = key
-                self.lastFetch = Date()
+                guard self.requestedKey == key else { return }
+                if let parsed {
+                    self.snapshot = parsed
+                    self.lastKey = key
+                    self.lastFetch = Date()
+                    self.isOffline = false
+                } else {
+                    // Keep any stale snapshot; just flag offline so the view can react.
+                    self.isOffline = true
+                }
             }
         }.resume()
     }

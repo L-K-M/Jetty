@@ -76,12 +76,18 @@ final class PreferencesTests: XCTestCase {
         defaults.set(true, forKey: "clockAnalog")
         XCTAssertEqual(Preferences(defaults: defaults).clockFace, .classic)
         // …but a stored face style always wins over the legacy flag.
-        defaults.set(ClockFaceStyle.swiss.rawValue, forKey: "clockFace")
-        XCTAssertEqual(Preferences(defaults: defaults).clockFace, .swiss)
+        defaults.set(ClockFaceStyle.face2000.rawValue, forKey: "clockFace")
+        XCTAssertEqual(Preferences(defaults: defaults).clockFace, .face2000)
         // Legacy flag off (or absent) stays digital.
         let plain = freshDefaults()
         plain.set(false, forKey: "clockAnalog")
         XCTAssertEqual(Preferences(defaults: plain).clockFace, .digital)
+    }
+
+    func testRetiredSwissRawValueMapsToFace2000() {
+        let defaults = freshDefaults()
+        defaults.set("swiss", forKey: "clockFace")
+        XCTAssertEqual(Preferences(defaults: defaults).clockFace, .face2000)
     }
 
     func testDefaultAnchorReflectsPosition() {

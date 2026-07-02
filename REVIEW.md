@@ -88,12 +88,21 @@ The analog clock's rim stroke was centered on the `Canvas` bounds circle, so the
 canvas clipped its outer half at 12/3/6/9 — visible flat spots ("icons cut off at
 top and bottom"). The dial is now inset by the overhanging half of the rim stroke,
 so every stroke stays inside the canvas. At the same time the
-`clockAnalog` boolean became a `ClockFaceStyle` (digital / LCD / classic / Swiss
-railway / retro Mac / Memphis / jelly): `AnalogClockFace` is a style-driven Canvas
-renderer, `LCDClockFace` draws a seven-segment retro LCD, and the pure
-`SevenSegment` + `ClockGeometry` + `ClockFormatter.displayHour` helpers are
-unit-tested (`ClockFaceTests`). Old installs with the analog toggle on migrate to
-`.classic`; a stored face style wins over the legacy key.
+`clockAnalog` boolean became a `ClockFaceStyle` (digital / LCD / classic / Clock
+Face 2000 / retro Mac / Memphis / jelly / Color Time): `AnalogClockFace` is a
+style-driven Canvas renderer, `LCDClockFace` draws a seven-segment retro LCD, and
+the pure `SevenSegment` + `ClockGeometry` + `ClockFormatter.displayHour` helpers
+are unit-tested (`ClockFaceTests`). Old installs with the analog toggle on migrate
+to `.classic`; a stored face style wins over the legacy key.
+
+A second pass made the faces more distinctive: the LCD gained a whole resin watch
+case with print accents; retro Mac its anodized-blue studded bezel, bolder hands,
+and a rainbow chip (no logo); "Swiss Railway" became **Clock Face 2000** — its own
+design (silvery dial, rounded batons, orange *ring* second hand), with the stored
+`"swiss"` value mapped over (`ClockFaceStyle.stored`); Memphis gained pastel
+shapes and black-outlined hands; jelly a gloss arc and rainbow dot markers; and
+**Color Time** landed — a 70s Chromachron-style black dial whose 30° hour wedge
+reveals a hidden color wheel (drawn by clipping the wheel to the wedge).
 
 ---
 

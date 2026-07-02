@@ -279,8 +279,9 @@ final class Preferences: ObservableObject {
         clockUse24Hour = bool(Key.clockUse24Hour, d.clockUse24Hour)
         clockShowWeekday = bool(Key.clockShowWeekday, d.clockShowWeekday)
         // Migrate the legacy "Analog face" toggle: an old install with it on gets the
-        // matching `.classic` dial; a stored face style always wins.
-        if let face = defaults.string(forKey: Key.clockFace).flatMap(ClockFaceStyle.init(rawValue:)) {
+        // matching `.classic` dial; a stored face style always wins (`stored` also
+        // maps the retired "swiss" raw value onto Clock Face 2000).
+        if let face = defaults.string(forKey: Key.clockFace).flatMap(ClockFaceStyle.stored) {
             clockFace = face
         } else {
             clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace

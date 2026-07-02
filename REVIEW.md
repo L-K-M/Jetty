@@ -1,72 +1,86 @@
 # Jetty — Code Review
 
-A thorough review of `main` (v1.0.1) covering bugs, security, performance,
+A thorough, living review of Jetty covering bugs, security, performance,
 visual/layout, UX, missing features, and delight-level ideas. Findings are
 prioritized by severity with concrete fixes and `file:line` references.
 
 The codebase is genuinely high quality — the pure/UI separation is clean, the
 "no permission for the core dock" promise is honored, lossy Codable decoding is
-defensive, and the `.bak`-guarded store is the right pattern. Most findings here
-are polish, robustness, and feature-completeness rather than structural problems.
-The exceptions are **§1 (update verification)** and **§2 (MediaRemote crash
-risk)**, which I'd fix before anything else.
+defensive, and the `.bak`-guarded store is the right pattern. Most open findings
+are polish, robustness, and feature-completeness rather than structural
+problems. The exceptions are the **update-security items (C1–C3)**, which are
+the top priority.
 
 ---
 
-## Consolidation & status update (2026-07-01)
+## Consolidation & status update (2026-07-02)
 
-This file is now the **single consolidated review + roadmap** for Jetty. It folds in
-the earlier *GPT-is-awesome* review (its BUG/ISSUE history — all resolved — and its
-delight ideas; see [Earlier review history](#earlier-review-history)) and the open
-product items distilled from `PLAN.md` (see
-[Roadmap & open product items](#roadmap--open-product-items)). `GPT-is-awesome.md`
-has been removed; `PLAN.md` stays the design/feasibility record and now points here
-for live status.
+This file is the **single consolidated review + roadmap** for Jetty. It folds in:
 
-The findings were written against `main @ be22407`. The following have since been
-**implemented and removed** from the lists below (2026-07-01):
+- the earliest *GPT-is-awesome* review (BUG/ISSUE history — all resolved — and its
+  delight ideas; see [Earlier review history](#earlier-review-history)); and
+- the later *Fable review* (`fable-is-awesome.md`, 2026-07-02), whose findings and
+  ideas have now been merged here. Like `GPT-is-awesome.md` before it,
+  `fable-is-awesome.md` has been **removed** — this file is the live record.
 
-- **Critical:** C4 (MediaRemote controller path now fails closed with `@try/@catch`).
-- **High:** H1 (guard `sizingOptions` on macOS 13), H3 (scan `~/Applications`),
-  H5 (index the localized bundle display name), H6 (clamp `offset` in `Preferences` +
-  `DockAnchor`), H10 (`mainScreenUUID()` was already removed with the display-scope
-  cleanup), H11 (cancel a queued reveal when the pointer leaves the screen mid-dwell),
-  H17 (`NowPlayingService` in-flight safety timeout), H18 (keep non-`://` URL schemes
-  like `mailto:`), H19 (clamp `ColorHex` channels), H23 (capture the Trash fd by value
-  + `deinit`), H24 (remove the wake observer in `teardown`).
-- **Medium:** M2 (temporary `[Jetty]` diagnostics removed), M6 (release the
-  `mach_host_self` port), M27 (reject non-theme imports), M28 (validate imported preset
-  hex), M32 (reject zero/non-finite currency rates), M34 (unify toggle-all),
-  M40 (guard force-unwrapped URLs), M41 (`UnitConverter`: `"` alias + `in` as a target).
-- **Low:** L16 (obsolete — the display-scope copy it referenced was removed).
+`PLAN.md` stays the design/feasibility record and points here for live status.
 
-Everything **not** listed above is still open. I deliberately left the release-infra
-items (**C1/C2/C3**), the larger visual/perf reworks (**H8** magnify-shift, the
-**H7/H16/H20** MediaRemote/caching perf work, the threading items **M1/M3/M4/M5/M7**),
-and UX changes that want on-device testing — none of which are safe to land without a
-build + GUI session here.
+### Implemented and removed (2026-07-02)
 
-One known issue since the review: a `layoutSubtreeIfNeeded` recursion warning in the
-console from the tile-scroll `GeometryReader` (horizontal overflow-scroll). No
-user-visible breakage observed, but worth resolving.
+Twenty fix branches from the Fable review landed on `main` together. The items
+they resolved have been **removed** from the lists below; the residual work from
+partially-resolved items has been reworded in place. Verified against the merged
+code (`main @ fd579a8`).
 
-### Corrections from the Fable review (2026-07-02)
+**Backlog items fully resolved:**
 
-A later review (`fable-is-awesome.md`) re-verified this backlog and corrected a few
-items — recorded here so this file stays accurate:
+- **High:** H2 (Return copies a calc/conversion/currency result instead of
+  leaking it to a web search), H4 (diacritic/width-insensitive app search),
+  H12 (Pomodoro survives sleep + persists across relaunch), H15 (weather surfaces
+  errors instead of an eternal spinner), H22 (Lock Screen actually locks via
+  loginwindow), H25 (`AppIndex.reload()` guards racing scans with a generation
+  token).
+- **Medium:** M10 (selected-row contrast from tint luminance), M11 (hover-to-select
+  + always-on web-search row), M17 (menu empty state), M18 (selection preserved by
+  id), M25 (PermissionsView poll relaxed to 5 s), M29 (clock cadence minute-aligned),
+  M30 (battery level glyph + low-battery emphasis).
+- **Low:** L6 (`AppSearch.score` folds the query once), L36 (the MediaRemote
+  controller-path fail-closed gap — C4 — is closed).
+- **Closed as invalid/moot:** L3 (`releaseNotes()` truncation strides by `Character`
+  = grapheme cluster; it cannot split one), M37 (its premise — "used on every tile
+  click" — is stale; that path is dead code, and the live click path already
+  refreshes bookmarks through `DockStore`. The remaining action is deleting the dead
+  code, tracked as **F-L14** below).
 
-- **L3 is invalid.** `releaseNotes()` truncation *cannot* split a grapheme cluster:
-  `String.count` and `String.index(_:offsetBy:)` on a `String` stride by `Character`
-  (an extended grapheme cluster), so a flag/ZWJ emoji counts as one step. Consider L3
-  closed — no code change needed.
-- **M37's premise is stale.** `AppLauncher.resolvedURL(_:)` is *not* "used on every tile
-  click" — that path is dead code. The live click path (`DockController.open` →
-  `openApplication` → `liveURL` → `DockStore.resolvedURL(forItemID:)`) already refreshes
-  and writes back stale bookmarks. The real fix is deleting the dead entry point.
-- **H7 / M4 file path.** Both cite `Jetty/Menu/NowPlayingWidgetView.swift`; the file
-  actually lives at `Jetty/Widgets/NowPlayingWidgetView.swift`.
-- **AGENTS.md activation-policy note** (now fixed there): the Jetty Menu never switches to
-  `.regular`; only Settings does. The menu's key, non-activating panel approach is correct.
+**Partially resolved — residual work reworded in place:** H14 (formatter caching
+landed; a minor `WorldClock` `TimeZone` recompute remains — see Low), H16 (shared
+`CIContext` landed; two unbounded caches remain), M15 (the app-global key-swallow
+bug is fixed; the typed/`⌘1–9` enhancement folds into M16), M33 (label overflow
+fixed; completion notification remains), M21/L14 (small a11y / fallback nits still
+open).
+
+**New fixes from the Fable review** (not previously in this backlog) — auto-hide-off
+now reveals the dock, Settings "Restore System Dock" sticks, imported presets are
+angle-clamped and tolerate unknown enums (and round-trip `accentGlow`), the menu
+`Return`/keyword-match no longer hijacks real app names, a single-instance guard,
+prerelease tags no longer ship as "latest", CI/release hardening (tests-on-release,
+least-privilege token, timeouts, PR-only cancellation), calculator `-2^2`/Unicode
+minus, Finder in app search, unique tile ids for duplicate pins, IME-safe menu keys,
+menu focus hand-off, weather unit flip-back, live Pomodoro length changes, weather
+coord clamping, `HotkeyRecorder` honoring `.disabled`, an inert-tint caption, the
+`⌘,`/`⌘W` main-menu items, secure restorable state, an Animation-duration slider,
+per-render Settings work cached, and the README/AGENTS/entitlements truth fixes.
+(Their former Fable ids are retained in commit history.)
+
+The remaining Fable findings that were **not** implemented — deliberately deferred
+(needs a live GUI, a compiler, or a product decision) or simply unstarted — are
+folded into the ranked lists below with their `F-*` ids so nothing open is lost.
+Notably there was **no sampler-accuracy change**, so the network-rate and
+sampler-publish issues (**F-M6 / F-P3**) remain open.
+
+One known issue: a `layoutSubtreeIfNeeded` recursion warning in the console from the
+tile-scroll `GeometryReader` (horizontal overflow-scroll). No user-visible breakage
+observed, but worth resolving.
 
 ---
 
@@ -117,7 +131,7 @@ Combined with **C2**, there's nothing to verify against.
 5. Verify in a `0700` owner-only temp dir; only move to `~/Downloads` once good.
 
 ### C2. Releases ship unsigned + un-notarized, with `xattr -dr quarantine` as the documented install path
-**`.github/workflows/release.yml:37-89`** · SECURITY
+**`.github/workflows/release.yml`** · SECURITY
 
 The release workflow builds with `CODE_SIGNING_ALLOWED=NO`, ad-hoc signs with
 `codesign --force --deep --sign -`, and tells users to run
@@ -133,14 +147,16 @@ C1 means there's no verification to stop them.
 run `xcrun notarytool submit … --wait`, staple with `xcrun stapler staple`.
 Remove the `xattr` advice. Then wire C1's verifier to assert the Team ID.
 
-### C3. CI uses a third-party action pinned to a floating tag
-**`.github/workflows/release.yml:75`** · SECURITY
+### C3. CI uses third-party actions pinned to floating tags
+**`.github/workflows/release.yml`, `ci.yml`** · SECURITY
 
-`softprops/action-gh-release@v2` (and `actions/checkout@v4`,
-`maxim-lobanov/setup-xcode@v1`) are moving tags. If any of those repos is
-compromised (high-value targets), an attacker ships a new `v2.x` that exfiltrates
-`GITHUB_TOKEN` (`contents: write`) and silently swaps the `.dmg` on every
-release. Combined with C1+C2, that's a complete silent-compromise chain.
+`softprops/action-gh-release@v2`, `actions/checkout@v4`, and
+`maxim-lobanov/setup-xcode@v1` are moving tags. If any of those repos is
+compromised (high-value targets), an attacker ships a new `v2.x`/`v4`/`v1` that
+exfiltrates `GITHUB_TOKEN` and silently swaps the `.dmg` on every release.
+Combined with C1+C2, that's a complete silent-compromise chain. (The 2026-07-02
+CI hardening added least-privilege token scopes, timeouts, tests-on-release, and
+PR-only cancellation — but the actions themselves are still unpinned.)
 
 **Fix:** pin every third-party action to a SHA digest
 (`softprops/action-gh-release@<full-sha> # v2.x.y`).
@@ -149,45 +165,14 @@ release. Combined with C1+C2, that's a complete silent-compromise chain.
 
 ## High
 
-### H2. Pressing Return on a calculation silently leaks the query to Google
-**`Jetty/Menu/JettyMenuModel.swift:108-116`** · BUG/PRIVACY
-
-`activateSelection()` priority is `command → results[selectedIndex] → webSearch`.
-The calculator banner is never an activation target for Return. So typing `2+2`,
-seeing `= 4`, and pressing Return (the universal "use this answer" gesture in
-Spotlight/Alfred/Raycast) falls through to `onWebSearch("2+2")` and opens
-`https://www.google.com/search?q=2+2`. The user wanted to copy `4` to the
-clipboard; they got a surprise browser trip that also leaks the query. Same
-applies to unit conversion (`10 km in miles`) and currency (`100 usd to eur`).
-
-**Fix:** make the calculation/conversion/currency banner the Return target when
-present and no app/command is selected:
-```swift
-if let calculation { onCopyCalculation?(calculation); return }
-if let conversion  { onCopyConversion?(conversion); return }
-if let currency    { onCopyCurrency?(currency); return }
-```
-Wire to the same copy-to-clipboard body the banner's click handler uses.
-
-### H4. App search is not diacritic-insensitive (nor width-insensitive)
-**`Jetty/Menu/AppSearch.swift:39-72`** · BUG/UX
-
-`score()` only `lowercased()`s both sides, so `cafe` ≠ `Café`, `résumé` ≠ `Resume`,
-`ñ` ≠ `n`, full-width `Ａ` ≠ `A`. Spotlight/Alfred/Raycast all fold diacritics and
-width by default — a real gap on any non-ASCII install.
-
-**Fix:** fold both sides with
-`.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)`
-and switch the sort to `localizedStandardCompare`.
-
 ### H7. MediaRemote controller path polls a fresh private controller every 5 s
-**`Jetty/Menu/NowPlayingWidgetView.swift:12-14` + `MediaRemoteBridge.m:6-7,100-124`** · PERFORMANCE
+**`Jetty/Widgets/NowPlayingWidgetView.swift:12` + `MediaRemote/MediaRemoteBridge.m:77-79,89-144`** · PERFORMANCE
 
 Each `refresh()` allocates a fresh `MRNowPlayingController`, calls
-`beginLoadingUpdates`, polls every 60 ms for up to 1.2 s (20×), then
-`endLoadingUpdates` and releases. Heaviest private-API call in the app, at ~5 Hz
-for as long as the tile is on screen — even when playback state hasn't changed.
-The `dlopen` handle is also never `dlclose`d and `dlsym` is re-resolved every call.
+`beginLoadingUpdates`, polls, then `endLoadingUpdates` and releases. Heaviest
+private-API call in the app, at ~5 Hz for as long as the tile is on screen — even
+when playback state hasn't changed. The legacy `dlopen` handle is also never
+`dlclose`d and `dlsym` is re-resolved every call.
 
 **Fix (incremental):** back off to 10–15 s when paused/idle. **Fix (proper):**
 register for now-playing change notifications
@@ -195,7 +180,7 @@ register for now-playing change notifications
 stop polling. Cache the controller and the function pointers (`dispatch_once`).
 
 ### H8. Magnified tiles overlap their neighbors (no squish / neighbor-shift)
-**`Jetty/Dock/DockTileView.swift:54-60, 227-234` + `DockView.swift:275-291`** · VISUAL
+**`Jetty/Dock/DockTileView.swift:57,227-234` + `DockView.swift:324-388`** · VISUAL
 
 Each tile does `.scaleEffect(scale, anchor: scaleAnchor)` where the anchor is the
 edge-facing side, so a tile widens symmetrically along the dock axis. With
@@ -208,7 +193,7 @@ magnification from the strip start to the tile center, mirroring `tileCenters`).
 The single biggest "feels like the real Dock" win.
 
 ### H9. Edge drag-sensor panel swallows clicks/hover at the screen edge
-**`Jetty/Dock/DockPanelController.swift:418-467`** · BUG/UX
+**`Jetty/Dock/DockPanelController.swift:435-458`** · BUG/UX
 
 When auto-hide + edge-hover are on, `updateDragSensor()` installs a 6-pt `NSPanel`
 at `.popUpMenu − 1` hugging the visible-frame edge. It registers for file drags
@@ -221,127 +206,85 @@ edge-swipe hotspots. Measurable dead zones at every targeted screen edge.
 of `ignoresMouseEvents` in AppKit — verify empirically). At minimum drop the
 window level to just above app windows instead of `.popUpMenu − 1`.
 
-### H12. Pomodoro completes instantly after the Mac sleeps
-**`Jetty/Widgets/PomodoroTimer.swift:31,57-68`** · BUG
-
-`endDate` is absolute. While asleep, `Timer` doesn't fire, but on wake the first
-`tick()` calls `updateRemaining(now:)` with the post-sleep clock — so 10 minutes
-left + a 1-hour sleep → `endDate.timeIntervalSince(now)` is negative → clamped to
-0 → the session instantly "completes" and plays the Glass sound. A user who
-closes the laptop mid-session loses the timer every time. No persistence across
-restart either, so an updater relaunch loses it too.
-
-**Fix:** observe `NSWorkspace.willSleepNotification`/`didWakeNotification` → on
-wake, `endDate = Date().addingTimeInterval(remainingAtSleep)`. Persist
-`(endDate, remaining, isRunning)` to `UserDefaults` and restore in `init`.
-
 ### H13. Network byte counters are 32-bit and wrap at 4 GB
-**`Jetty/Widgets/SystemStats.swift:99-102`** · BUG
+**`Jetty/Widgets/SystemStats.swift:98-118`** · BUG
 
 `getifaddrs`/`AF_LINK`'s `ifa_data` points at `struct if_data` whose
 `ifi_ibytes`/`ifi_obytes` are `u_int32_t` (4 GB). On a gigabit link a sustained
 download wraps in ~32 s. The wrap is caught by `LiveSystemStats.throughput`
 (current < previous → 0), so the live graph shows a periodic dip to zero during
-every large transfer — visually broken for what should be the marquee case.
+every large transfer — visually broken for what should be the marquee case. The
+`UInt64(...)` cast widens an already-wrapped 32-bit value; it doesn't prevent the
+wrap.
 
 **Fix:** switch to `sysctl` with `NET_RT_IFLIST2`, which returns
 `struct if_msghdr2` with 64-bit counters. Matches `netstat -i`/Activity Monitor.
 
-### H14. `DateFormatter` allocated on every clock render
-**`Jetty/Widgets/ClockFormatter.swift:22,27,30,46-52`** · PERFORMANCE
+### H16. Icon caches grow unboundedly for app lifetime (CIContext now shared)
+**`Jetty/Menu/JettyMenuModel.swift:105` + `Jetty/Common/TileAccent.swift:10`** · PERFORMANCE/MEMORY
 
-`formatter(template:locale:timeZone:)` allocates a new `DateFormatter` per call;
-`lines(for:)` makes up to 3 calls. With `clockShowSeconds` on, the `ClockWidgetView`
-`TimelineView` fires every 1 s, and each world-clock tile adds 3 more. Easily 6+
-`DateFormatter` allocations per second on the main thread; `DateFormatter` is
-notoriously expensive to construct. `WorldClockWidgetView.timeZone`
-(`WorldClockWidgetView.swift:10-12`) recomputes `TimeZone(identifier:)` every
-render too.
-
-**Fix:** cache formatters in a small `private static` dictionary keyed by
-`template|locale|timezone`. Cache the resolved `TimeZone` and recompute only when
-`preferences.worldClockTimeZone` changes.
-
-### H15. Weather network/API errors leave the widget spinning forever
-**`Jetty/Widgets/WeatherService.swift:48-65`** · BUG
-
-`URLSession.shared.dataTask { data, _, _ in }` throws away `response` and `error`.
-Network down, Open-Meteo 4xx/5xx, or an error JSON → `Self.parse` returns nil →
-`snapshot` is never set → `WeatherWidgetView` keeps showing `ProgressView()` with
-no indication anything failed or that retries stopped. If the first request
-fails, the user is permanently stuck on a spinner.
-
-**Fix:** surface `@Published var lastError`; check `HTTPURLResponse.statusCode`;
-keep showing the stale snapshot on refetch failure; render a `cloud.slash` glyph
-+ last-known temp when offline.
-
-### H16. `DockStore` icon-cache / `TileAccent` cache grow unboundedly for app lifetime
-**`Jetty/Menu/JettyMenuModel.swift:91-100` + `Jetty/Common/TileAccent.swift:10,34`** · PERFORMANCE/MEMORY
-
-`iconCache: [String: NSImage]` accumulates a full-res `NSImage` (~1 MB each) for
-every app ever seen, no eviction. `TileAccent.cache` is a never-cleared mutable
-static and allocates a fresh `CIContext` on **every** call (`CIContext` is
-documented as expensive). Over a long lifetime both leak meaningfully.
+The expensive-`CIContext`-per-call half of this is fixed (`TileAccent` now shares
+one `static let` context). Still open: `JettyMenuModel.iconCache: [String: NSImage]`
+accumulates a full-res `NSImage` (~1 MB each) for every app ever seen, no eviction;
+and `TileAccent.cache` is a never-cleared mutable static. Over a long lifetime both
+leak meaningfully. See also **F-P1** (the icon cache's *other* cache — the bounded
+`LRUImageCacheByKey` in `DockModel` — has a synchronized-expiry storm).
 
 **Fix:** swap for `NSCache` (auto-evicts under pressure) or the existing
-`LRUImageCache`/`LRUImageCacheByKey` in `Common/`. Cache one shared `CIContext`
-in a `static let`. Add `clearCache()` and call from `DockStore` on item changes.
+`LRUImageCache`/`LRUImageCacheByKey`. Add `clearCache()` and call from `DockStore`
+on item changes.
 
 ### H20. WindowPeek's 1-second screen-capture timer is expensive
-**`Jetty/Windows/WindowPeek.swift:29-31`** · PERFORMANCE
+**`Jetty/Windows/WindowPeek.swift:29`** · PERFORMANCE
 
 `Timer(timeInterval: 1.0, repeats: true)` captures every visible window of the
 hovered app every second while the popover is up. `SCShareableContent.current` +
 an `SCScreenshotManager.captureImage` per window is real CPU/GPU work, running
 even when nothing on screen changed. (`WindowLister.windows(forPID:)` is also
-called twice per peek show — `WindowPeekController.swift:30` + `WindowPeek.swift:26`.)
+called twice per peek show — `WindowPeekController.swift:30` + `WindowPeek.swift:47`.)
 
 **Fix:** raise to ~3 s, pause when `model.thumbnails` would be unchanged
 (compare window-list bounds), or invalidate on `NSWorkspace.didActivateApplication`.
 Pass the pre-fetched window list into `model.load` to avoid the double fetch.
 
 ### H21. Power commands / automation silently fail when permission is denied
-**`Jetty/Menu/PowerCommands.swift:78-84` + `Jetty/Menu/JettyMenuController.swift:127-130`** · UX/SECURITY
+**`Jetty/Menu/PowerCommands.swift:79-85` + `Jetty/Menu/JettyMenuController.swift:112-124`** · UX/SECURITY
 
 When the user denies Automation permission, `NSAppleScript.executeAndReturnError`
 returns an error and the only feedback is `NSLog(...)`. The menu has already
 closed, so the user gets **no** indication their Sleep / Toggle Dark Mode didn't
 work — and no path to retry. The TCC prompt may pop up *after* the menu is gone,
-leaving the user confused.
+leaving the user confused. (Pairs with **F-M4**: the same AppleScript runs
+synchronously on the main thread.)
 
 **Fix:** don't `close()` until the script resolves. On error, surface an in-menu
 banner ("Automation permission denied — open System Settings?") with a deep link
 to `x-apple.systempreferences:com.apple.preference.security?Privacy_Automation`.
 
-### H22. "Lock Screen" only sleeps the display — doesn't always lock
-**`Jetty/Menu/PowerCommands.swift:86-93`** · BUG/SECURITY
+### F-H3. "Edge inset" is a visual no-op on 3 of 4 edges — and can draw Jetty over the live system Dock
+**`Jetty/Dock/DockPanelController.swift:349-364` + `Jetty/Dock/DockView.swift:39-43`** · BUG/VISUAL · needs-device-verify
 
-The comment is honest, but the user-facing title is "Lock Screen". The impl is
-`pmset displaysleepnow`, which only locks if "Require password after sleep" is
-immediate. With the very common "5 minutes" setting, the screen turns off
-**without locking** and a passerby can wake it and read the session.
+`DockLayout.revealedFrame` lifts the frame by `inset`, but `recomputeFrames()`
+then stretches the panel back to the physical edge (every edge except `.top`), and
+`DockView` pins the glass strip to the edge-facing side of the panel. So the strip
+renders at the physical screen edge regardless of inset: the "Edge inset" sliders
+(General + Displays) and the documented "floating island" look do nothing on
+bottom/left/right. Worse: when the system Dock is visible (`manageSystemDock` off,
+or after Restore while Jetty runs), the stretch equals the Dock's height and Jetty's
+strip is drawn over the live Dock at `.popUpMenu` level. The stretch only ever fires
+in those two cases — with the Dock hidden and inset 0, the gap is 0 — so it has no
+beneficial case on those edges.
 
-**Fix:** invoke the Screensaver engine instead — what ⌃⌘Q and the menu-bar
-Lock-Screen item use:
-`/System/Library/CoreServices/ScreenSaverEngine.app/Contents/MacOS/ScreenSaverEngine`.
-
-### H25. `AppIndex.reload()` has no in-flight tracking; rapid opens race
-**`Jetty/Menu/AppIndex.swift:14-19`** · BUG/PERFORMANCE
-
-Called on every menu open with no cancellation. Two overlapping scans race; the
-**last to finish** wins, which isn't necessarily the latest. Each scan re-stats
-every `.app` in the scan dirs (hundreds on a dev machine).
-
-**Fix:** add `inFlight` flag or use a cancellable `Task`; only publish the latest
-scan. Better: refresh incrementally on `didLaunchApplication` /
-`didTerminateApplication` instead of re-scanning everything per open.
+**Fix:** guard the stretch to `anchor.inset == 0 && gap <= small`, or keep the
+stretched panel but convert the inset into edge-side content padding so hard-edge
+clicks still land on icons while the strip floats.
 
 ---
 
 ## Medium
 
 ### M1. App-icon resolution on the main thread on every running-app change
-**`Jetty/Dock/DockModel.swift:71-90, 156-190`** · PERFORMANCE
+**`Jetty/Dock/DockModel.swift:72-85, 185-189` + `DockController.swift:183-188`** · PERFORMANCE
 
 `rebuild` is called on every launch/terminate/activate/deactivate/hide/unhide and
 loops all tiles calling `icon(for:)` — on a cache miss `NSWorkspace.shared.icon(forFile:)`
@@ -365,20 +308,20 @@ recomputations/sec per panel.
 **Fix:** only invalidate when the reveal/hidden state or frame actually changed.
 
 ### M4. Live stats timer and widget TimelineViews keep running while the dock is hidden
-**`Jetty/Dock/DockController.swift:176-179` + per-widget `TimelineView`s** · PERFORMANCE
+**`Jetty/Dock/DockController.swift:183-188` + per-widget `TimelineView`s** · PERFORMANCE
 
 `updateLiveStats()` gates the sampler on `!panels.isEmpty` but not on whether any
-panel is *revealed*. The per-widget `TimelineView`s (Clock 1 s/30 s, WorldClock,
-Weather 900 s, NowPlaying 5 s) also keep firing while the panel is hidden via a
-layer transform — ~95% of the time for an auto-hiding dock. 95% of the timer /
-CPU / MediaRemote work is wasted.
+panel is *revealed*. The per-widget `TimelineView`s (Clock, WorldClock, Weather,
+NowPlaying) also keep firing while the panel is hidden via a layer transform —
+~95% of the time for an auto-hiding dock. Most of the timer / CPU / MediaRemote
+work is wasted.
 
 **Fix:** gate on `panels.values.contains { $0.isRevealed }`. Expose `isRevealed`
 to `DockView` and swap/tear down the periodic schedules while hidden. At minimum
 make the NowPlaying poll a no-op while hidden.
 
 ### M5. All sampler syscalls run on the main thread every 2 s
-**`Jetty/Widgets/LiveSystemStats.swift:62-93`** · PERFORMANCE
+**`Jetty/Widgets/LiveSystemStats.swift:81-93`** · PERFORMANCE
 
 `Timer` on `RunLoop.main`; `sample()` synchronously calls `getloadavg`,
 `host_statistics64`, `getifaddrs`, and (every 15th tick) `IOPSCopyPowerSourcesInfo`
@@ -389,7 +332,7 @@ thing that produces micro-hitches while the dock animates.
 assign `@Published` properties.
 
 ### M7. Edge-hover monitor fires on every mouse move with no throttle
-**`Jetty/Dock/EdgeHoverMonitor.swift:18-28` + `DockController.swift:61-64`** · PERFORMANCE
+**`Jetty/Dock/EdgeHoverMonitor.swift:18-28` + `DockController.swift:65-67`** · PERFORMANCE
 
 The global + local monitor pair calls `onMove?(NSEvent.mouseLocation)` for every
 `.mouseMoved`/`.leftMouseDragged`/`.rightMouseDragged` system-wide, then
@@ -403,11 +346,11 @@ drain on timer). Short-circuit in `DockController.onMove` when no panel has
 `autoHide` + edge-hover enabled. Use `event.mouseLocation` for the local monitor.
 
 ### M8. Empty dock still renders an empty glass strip
-**`Jetty/Screens/DockLayout.swift:41-43` + `DockController.swift:214-245`** · UX
+**`Jetty/Screens/DockLayout.swift:41-43` + `DockController.swift`** · UX
 
 When the user removes every item, `contentSize(tiles: [])` falls back to the
 1-tile placeholder size — a real glass strip with nothing inside, still
-revealing/hiding on edge hover. Feels unfinished.
+revealing/hiding on edge hover. Feels unfinished. (Root cause: **L35**.)
 
 **Fix:** skip panel creation when `model.tiles.isEmpty`, or hold it permanently
 hidden with a one-time "+ drop apps here" hint.
@@ -423,28 +366,6 @@ offset on `.leading`.
 **Fix:** document the clamp behavior in the Settings UI, or redefine the
 semantics so offset is always meaningful (e.g. inward from the alignment edge).
 
-### M10. Selected row text is hard-coded white regardless of tint
-**`Jetty/Menu/JettyMenuView.swift:174-176`** · VISUAL/A11Y
-
-`foregroundStyle(selected ? Color.white : Color.primary)` with a light tint
-(white, yellow, light pink — fully supported in Appearance) → white-on-near-white
-selected row. WCAG-failing.
-
-**Fix:** derive the foreground from tint luminance (`isLight ? .black : .white`).
-
-### M11. No hover-to-select on result rows; web-search row hidden when apps match
-**`Jetty/Menu/JettyMenuView.swift:33-36, 152-178`** · UX
-
-The selection is driven only by keyboard + click (no `.onHover`), so a mouse user
-arrowing to row 3 then hovering row 7 sees the highlight stuck on row 3. And the
-web-search fallback only appears when `results.isEmpty` — common case
-("world cup 2026" with two unrelated app matches) gives no path to web search
-without navigating past the apps. Every competitor keeps "Search the web for X"
-as the **last** row regardless of matches.
-
-**Fix:** add `.onHover { if hovering { model.selectedIndex = index } }`. Always
-show the web-search row at the bottom when the query is non-empty.
-
 ### M12. Currency formatting uses unit-converter precision (4 dp) and ISO codes
 **`Jetty/Menu/JettyMenuModel.swift:70`** · VISUAL/UX
 
@@ -455,7 +376,7 @@ and the ISO code shows instead of `€`.
 **Fix:** `NumberFormatter(currencyStyle: .currency)` with `currencyCode = parsed.to`.
 
 ### M13. Recents store does a `stat()` syscall per entry per keystroke
-**`Jetty/Menu/RecentAppsStore.swift:36-42` + `JettyMenuModel.swift:57`** · PERFORMANCE
+**`Jetty/Menu/RecentAppsStore.swift:36-42` + `JettyMenuModel.swift`** · PERFORMANCE
 
 `recentsProvider?()` → `recentItems()` → UserDefaults decode →
 `compactMap { FileManager.default.fileExists(atPath:) }` — up to 8 `stat()` calls
@@ -465,78 +386,53 @@ on the main thread on every character typed. Noticeable on a network homedir.
 Have `RecentAppsStore` publish via Combine.
 
 ### M14. Calculator/conversion/currency: no `⌘C` to copy the answer
-**`Jetty/Menu/JettyMenuView.swift:84-110`** · UX
+**`Jetty/Menu/JettyMenuView.swift`** · UX
 
-Click-to-copy works. `⌘C` doesn't (would copy nothing or the selected row's
-text). `⌘⇧C` would be the natural binding. Pairs with H2.
-
-### M15. Local key monitor swallows Escape/Return/Up/Down app-wide
-**`Jetty/Menu/JettyMenuController.swift:147-158`** · UX/BUG
-
-`NSEvent.addLocalMonitorForEvents(.keyDown)` is app-global. If Settings (or an
-alert) is focused behind the menu, Esc/Return/↑/↓ are eaten before reaching it.
-No `Cmd+Return` (force web search), no `Cmd+1..9` (jump to result N).
-
-**Fix:** `guard panel.isKeyWindow else { return event }` at the top. Add
-`Cmd+1..9` and `Cmd+Return`.
+Click-to-copy and `Return`-to-copy work now, but `⌘C` doesn't (would copy nothing
+or the selected row's text). `⌘⇧C` would be the natural binding.
 
 ### M16. Power row is mouse-only; 9 pt labels; no typed access
-**`Jetty/Menu/JettyMenuView.swift:180-197`** · UX/A11Y
+**`Jetty/Menu/JettyMenuView.swift:227-244` + `JettyMenuController.swift` key monitor** · UX/A11Y
 
 The 6 power buttons are SwiftUI `Button`s with no `@FocusState` — unreachable by
 keyboard. Typing "sleep" doesn't surface a Sleep command-row. `Text(title).font(.system(size: 9))`
-is below the system "small" and doesn't participate in Dynamic Type.
+is below the system "small" and doesn't participate in Dynamic Type. The menu key
+monitor still handles only ↑/↓/Return/Esc — no `⌘1–9` result jumps, no
+`⌘Return` (the enhancement half of the former M15).
 
 **Fix:** add `MenuCommand` cases for each power command (so they're typed), give
-the row a `@FocusState`/Tab stop, use `.caption2` or `.system(size: 10, weight: .medium)`.
-
-### M17. No empty / no-results state in the menu
-**`Jetty/Menu/JettyMenuView.swift:141-164`** · UX
-
-Empty query with no recents/apps → blank scroll area. Non-empty query with no
-matches → only the web-search row at the bottom. Spotlight/Alfred show a clear
-"No Results" row. Reads as a bug to the user.
-
-**Fix:** add a centered "No matching apps" / "Jetty hasn't found any apps yet"
-empty state.
-
-### M18. Selected index resets to 0 whenever results shrink
-**`Jetty/Menu/JettyMenuModel.swift:59`** · UX
-
-Arrowing to row 5 of 10, then typing one more char that narrows to 8 → selection
-jumps to 0. Spotlight/Alfred preserve the selection by id.
-
-**Fix:** track selection by `AppSearchItem.id`; on recompute, reselect the
-previously-selected id if still present.
+the row a `@FocusState`/Tab stop, use `.caption2`, and add `⌘1–9` / `⌘Return` to
+the key monitor.
 
 ### M19. `appToRestoreOnClose` can be nil (frontmost quit) → Jetty left frontmost
-**`Jetty/Menu/JettyMenuController.swift:25, 73`** · BUG
+**`Jetty/Menu/JettyMenuController.swift:66-75`** · BUG
 
-If the captured frontmost app quits while the menu is open, `close()` falls
-through `if let restore` and does nothing — leaving Jetty (an `LSUIElement`
+If the captured frontmost app quits while the menu is open, `close()` finds
+`appToRestoreOnClose == nil` and does nothing — leaving Jetty (an `LSUIElement`
 accessory) as "frontmost". Users see no menu bar until they click another app.
+(The *opposite* case — stealing focus back from an app the user clicked — was
+fixed; this nil case remains.)
 
-**Fix:** fall back to activating Finder when `restore` is nil.
+**Fix:** fall back to activating Finder when `restore` is nil and Jetty is active.
 
 ### M20. Accessibility: widgets/tiles expose only a static label
-**`Jetty/Dock/DockTileView.swift:41-44, 75-89` + all of `Widgets/`** · A11Y
+**`Jetty/Dock/DockTileView.swift:41-44` + all of `Widgets/`** · A11Y
 
 `.accessibilityValue` is hard-coded to `"Running"`/`""`. For info widgets — clock
 time, battery %, CPU/RAM, temp, track, pomodoro remaining — the visible info is
-**not** exposed to VoiceOver at all. A VoiceOver user only hears "Clock". Zero
-`accessibility` calls exist anywhere under `Widgets/`. No `.accessibilityAction(.default)`
-on tiles; SwiftUI's auto-connection between `.onTapGesture` + `.isButton` is
-unreliable.
+**not** exposed to VoiceOver at all. A VoiceOver user only hears "Clock". No
+`.accessibilityAction(.default)` on tiles.
 
 **Fix:** each widget publishes its display string as `.accessibilityValue` (e.g.
 Battery → `"53 percent, charging"`). Add `.accessibilityAction(.default) { onTap() }`
 and a hint per kind. `.accessibilityElement(children: .ignore)`.
 
 ### M21. Settings accessibility gaps
-**`Jetty/Settings/GeneralView.swift`, `AppearanceView.swift`, `AngleDial.swift:45-46`, `MenuView.swift`** · A11Y
+**`Jetty/Settings/GeneralView.swift`, `AppearanceView.swift`, `AngleDial.swift`, `MenuView.swift`** · A11Y
 
 Sliders expose `.accessibilityValue` as a bare percentage, not "52 pt". `AngleDial`
-is drag-only — no stepper, no `accessibilityAdjustableAction`. Menu glyph buttons
+is drag-only — no stepper, no `accessibilityAdjustableAction` (its
+`accessibilityValue` was made crash-safe, but not adjustable). Menu glyph buttons
 use `.help()` (tooltip) not `.accessibilityLabel`. `HotkeyRecorder` reads its
 current binding to no one.
 
@@ -557,30 +453,22 @@ level just above normal windows.
 floats over fullscreen (it should, given `.fullScreenAuxiliary`).
 
 ### M23. `screenEntries` recomputes UUIDs on every Settings body re-render
-**`Jetty/Settings/DisplaysView.swift:66-73`** · PERFORMANCE
+**`Jetty/Settings/DisplaysView.swift:57-64`** · PERFORMANCE
 
 `NSScreen.screens` + `registry.key(for:)` (which calls `CGDisplayCreateUUIDFromDisplayID`)
 on every body recompute — including every slider drag. The array identity changes
-each call, so SwiftUI's diff treats the `ForEach` as fully invalidated.
+each call, so SwiftUI's diff treats the `ForEach` as fully invalidated. (The sibling
+per-render work in MenuView/WidgetsView was fixed; this one was not.)
 
 **Fix:** cache entries in `@State`, refresh on `didChangeScreenParametersNotification`.
 
 ### M24. `ItemsView.row` loads icons via `NSWorkspace`/`NSImage` on every render
-**`Jetty/Settings/ItemsView.swift:118-122, 141`** · PERFORMANCE
+**`Jetty/Settings/ItemsView.swift`** · PERFORMANCE
 
 `NSImage(contentsOfFile:)` (sync disk read) and `urlForApplication(withBundleIdentifier:)`
 (LaunchServices query) per row per render. 30+ items × every prefs tick = janky.
 
 **Fix:** wrap in a cache keyed by `item.id + customIconPath + bundleIdentifier`.
-
-### M25. PermissionsView polls every 2 s
-**`Jetty/Settings/PermissionsView.swift:58`** · PERFORMANCE
-
-`Timer.publish(every: 2).autoconnect()` calls `AXIsProcessTrusted()` and
-`CGPreflightScreenCaptureAccess()` for as long as the tab is open.
-
-**Fix:** drop to ~5 s, or re-check on `didActivateApplicationNotification` (the
-user came back from System Settings). Pause when the window loses key.
 
 ### M26. Folder stack loads icons for all entries *before* the 128-entry prefix
 **`Jetty/Stacks/FolderStack.swift:28-44`** · PERFORMANCE
@@ -592,29 +480,8 @@ before trimming to 128.
 **Fix:** sort first (using only `name` + `isDirectory` from one
 `resourceValues` call), `.prefix(limit)`, then load icons only for the 128 kept.
 
-### M29. Clock 30 s cadence can lag up to 30 s
-**`Jetty/Widgets/ClockWidgetView.swift:11-13` + `WorldClockWidgetView.swift:15`** · VISUAL
-
-`TimelineView(.periodic(from: .now, by: 30))` starts from `.now` and ticks every
-30 s — it does not align to the minute boundary. Launch at 10:00:20 and the
-displayed minute rolls over to `:01` at 10:01:20, lagging the true time by up to
-30 s. For a clock tile, the "wrong minute" shows a third of the time.
-
-**Fix:** drive cadence by a schedule that snaps to the next whole minute, or
-run a 1 s `TimelineView` and gate re-rendering on the minute changing.
-
-### M30. Battery widget: no low-battery emphasis; charging always shows 100% glyph
-**`Jetty/Widgets/BatteryWidgetView.swift` + `SystemStats.swift:39-48`** · VISUAL/UX
-
-`batterySymbol` returns `"battery.100.bolt"` for *all* charging states — 5 %
-plugged in shows a full-battery glyph. No color change at low battery
-(`battery.0` stays `.primary`).
-
-**Fix:** tint red below 20 %; show `battery.N` with a separate `bolt.fill`
-overlay.
-
 ### M31. Currency API leaks the user's IP to a third party on every menu open
-**`Jetty/Menu/CurrencyService.swift:25` + `JettyMenuController.swift:52`** · PRIVACY
+**`Jetty/Menu/CurrencyService.swift:25` + `JettyMenuController.swift`** · PRIVACY
 
 `ensureFresh()` hits `https://api.frankfurter.app/latest?from=USD` (third party)
 on every `show()`, no opt-in. The first time the user opens the menu, their IP
@@ -624,19 +491,16 @@ goes to frankfurter.app. `AGENTS.md` doesn't flag this.
 empty. Add an on/off toggle in Settings.
 
 ### M33. Pomodoro completion: only a sound, no notification
-**`Jetty/Widgets/PomodoroTimer.swift:57-63`** · MISSING
+**`Jetty/Widgets/PomodoroTimer.swift:97-102`** · MISSING
 
-If the dock is hidden, another app is focused, or the system is muted, the user
-has no idea their Pomodoro finished. `mm:ss` also overflows the tile for sessions
-≥ 60 min (`String(format: "%d:%02d", …)` — `120:00` is 5 chars, no
-`minimumScaleFactor`).
+The `mm:ss` → `h:mm:ss` label overflow is fixed. Still missing: if the dock is
+hidden, another app is focused, or the system is muted, the user has no idea their
+Pomodoro finished — it only plays the Glass sound.
 
-**Fix:** post a `UNUserNotification` ("Pomodoro complete — take a break!"). For
-the label, switch to `H:MM:SS` (or `2h00m`) past 60 min, or
-`.lineLimit(1).minimumScaleFactor(0.5)`.
+**Fix:** post a `UNUserNotification` ("Pomodoro complete — take a break!").
 
 ### M35. AppleScript power commands: no per-command confirmation wording
-**`Jetty/Menu/JettyMenuController.swift:102-111`** · UX
+**`Jetty/Menu/JettyMenuController.swift:112-124`** · UX
 
 `"Are you sure you want to \(command.title.lowercased())?"` produces "are you sure
 you want to empty trash?" (missing article/capitalization). `PowerCommandRunner.run`
@@ -656,17 +520,6 @@ path makes `fileExists` misreport.
 **Fix:** cap at ~10 000 iterations and throw on overflow; treat symlinks
 explicitly via `lstat`.
 
-### M37. `AppLauncher.resolvedURL` doesn't refresh stale bookmarks (inconsistent with `DockStore`)
-**`Jetty/Apps/AppLauncher.swift:71-73` vs `Jetty/Store/DockStore.swift:57-67`** · BUG
-
-`DockStore.resolvedURL(forItemID:)` refreshes stale bookmarks and writes back.
-`AppLauncher.resolvedURL` (used on every tile click) bypasses that — so a moved
-app resolves correctly once, but the stale bookmark is never written back to
-`dock.json`. A later launch through a different path keeps hitting the stale
-bookmark.
-
-**Fix:** route `AppLauncher.open` through `DockStore.resolvedURL(forItemID:)`.
-
 ### M38. SystemDock re-assert can thrash `killall Dock`
 **`Jetty/SystemDock/SystemDockController.swift:37-101`** · BUG/UX
 
@@ -674,7 +527,8 @@ bookmark.
 simultaneously and issue two `killall Dock` calls within ~1 s, on some machines
 making the Dock thrash or flash. If Jetty is force-quit between `isManaging = true`
 and `restartDock()` returning, the system is left in the managed state with no
-Jetty running.
+Jetty running. (The single-instance guard added in 2026-07 reduces, but doesn't
+remove, the second risk.)
 
 **Fix:** coalesce `killall Dock` calls (1 s `DispatchWorkItem` debounce). Add a
 launch-time auto-recovery: if a stale `isManaging=true` is detected and the user
@@ -688,32 +542,141 @@ toward Swift 6, these race if any view ever composes on a background queue.
 
 **Fix:** wrap in a `final class` actor or `@MainActor` singleton.
 
+### F-M4. Power commands / dark-mode toggle run AppleScript synchronously on the main thread
+**`Jetty/Menu/PowerCommands.swift:79-85` + `Jetty/Menu/MenuCommand.swift:48-52`** · BUG/PERFORMANCE · needs-device-verify
+
+AppleEvent sends block the calling thread (up to the two-minute AE timeout, or
+until the first-use TCC consent is answered), and the menu closes *before* running
+— so "Empty Trash" grinding through a large Trash freezes the whole app, dock
+panels and all, with no visible cause.
+
+**Fix:** run the script on a dedicated serial queue (NSAppleScript isn't
+main-thread-bound, just not concurrency-safe), hop back to main for the error
+surface (pairs with H21).
+
+### F-M6 / F-P3. Live sampler: post-sleep rate spike, graph seam, and over-publishing
+**`Jetty/Widgets/LiveSystemStats.swift:81-93, 54-69`** · BUG/PERFORMANCE
+
+Three issues in the shared sampler (no fix branch landed for these):
+
+- **Rate spike (F-M6):** `sample()` divides the byte delta by the nominal 2 s
+  `interval`, not the actual elapsed time. After sleep (Power Nap keeps transferring)
+  or timer coalescing, the first delta covers hours but is divided by 2 s — a
+  "50 MB/s" spike. Track real elapsed time; drop the baseline when the gap is large.
+- **Graph seam:** `startTimer()` resets `lastNetwork` but not `history`, so a
+  restart splices pre-gap samples onto post-gap ones as one continuous 2-minute line.
+- **Over-publish (F-P3):** `sample()` assigns `load`/`memory`/`history` (and battery)
+  unconditionally each tick → 3–4 `objectWillChange`/2 s; and a battery-only dock
+  still runs the CPU/mem/net syscalls nobody displays. Guard the assignments and
+  scope the syscalls to the widgets actually shown.
+
+### F-M12. Tile clicks can target a different process than the tile represents
+**`Jetty/Apps/RunningAppsModel.swift:63-79`** · BUG
+
+The published snapshot dedups duplicate bundle-ids keeping the **first** instance;
+`indexByBundle` keeps the **last**. In exactly the dual-instance scenario the dedup
+comment itself calls real, the tile renders instance A's `pid`/`isActive` while
+clicks, Show/Hide/Quit, and the active glow operate on instance B — "Quit" can
+terminate a different process than the tile shows.
+
+**Fix:** make both sides agree on the representative (first-wins, or prefer the
+active instance).
+
+### F-M13. Apps that change activation policy at runtime never appear/disappear
+**`Jetty/Apps/RunningAppsModel.swift:34-50`** · BUG
+
+The model listens to six NSWorkspace notifications; none fires when a running app
+flips `activationPolicy` (Electron tray-mode toggles, "Show Dock icon" preferences).
+The real Dock updates immediately; `NSWorkspace.runningApplications` is
+KVO-observable for exactly this.
+
+**Fix:** KVO-observe `runningApplications` (store the observation, invalidate in
+`deinit`); pair with an equality gate (F-P4) so it doesn't add redundant rebuilds.
+
+### F-M14 / F-U8. Background update check steals focus; download has no feedback
+**`Jetty/Updates/UpdateChecker.swift:91,184-203,227-236`** · UX
+
+`runModal` unconditionally activates Jetty first, and background checks reach it —
+with launch-at-login, the user logs in, starts typing, and Jetty yanks activation
+to a modal alert (a stray `Return` = Download). The only place in the app that
+activates without a user gesture, against the project's never-steal-focus discipline.
+Separately, the Download path has **zero** UI: `isDownloading` is published but
+observed by nothing, and failure silently opens a browser tab.
+
+**Fix:** for background checks, present without activating (or post a
+`UNUserNotification` / defer to the next user interaction). Wire `isDownloading`
+into AboutView and replace the silent browser fallback with an explained alert.
+
+### F-P1. Icon cache TTL causes a synchronized main-thread re-resolve storm every 5 min
+**`Jetty/Common/IconCache.swift:24-29` + `Jetty/Dock/DockModel.swift:41`** · PERFORMANCE
+
+`LRUImageCacheByKey` treats an entry as dead at a hard absolute TTL, set only at
+insert and with no jitter. `DockModel` populates essentially every tile's icon in
+one first rebuild, so every ~5 minutes all entries cross the TTL in the same second
+and the next rebuild takes the miss path for every tile at once — N synchronous
+`NSWorkspace.icon(forFile:)` calls on the main thread, forever, in lockstep.
+
+**Fix:** jitter each entry's effective age, or serve-stale-while-revalidate (return
+the stale image immediately and refresh async — also removes the M1 hitch).
+
+### F-P2. Hovering a folder tile does synchronous bookmark I/O on the main thread up to 3× per hover
+**`Jetty/Dock/DockController.swift:272-282`** · PERFORMANCE
+
+`handleTileHover` → `hoverPreview(for:)` evaluates `liveURL(for: tile)` for every
+folder tile on every hover ENTER, which calls `store.resolvedURL(forItemID:)` →
+`BookmarkResolver.resolve` — synchronous security-scoped bookmark resolution (that
+can stat the filesystem and write back) on the main thread, mid-pointer-tracking.
+`applyPreview()` and `presentFolderStack` resolve it again.
+
+**Fix:** for hover-eligibility, don't resolve bookmarks at all (`tile.url != nil ||
+tile.itemID != nil` is enough); resolve the live URL once, after the dwell.
+
+### F-P4. `RunningAppsModel.refresh()` publishes identical snapshots
+**`Jetty/Apps/RunningAppsModel.swift:59-80`** · PERFORMANCE
+
+`refresh()` always reassigns `@Published var apps`, and `DockController` rebuilds
+on every emission. But `RunningAppInfo` carries no hidden flag, so `didHide`/
+`didUnhide` notifications can only ever produce an array equal to the previous one
+— each still costs a full `rebuildModel()` + `relayoutPanels()`. `RunningAppInfo`
+is already `Equatable`.
+
+**Fix:** end `refresh()` with `if new != apps { apps = new }`.
+
+### F-P7. `BoingBallDecoration`'s single-slot bitmap cache thrashes on mixed-DPI multi-monitor
+**`Jetty/Common/BoingBallDecoration.swift:99-125`** · PERFORMANCE
+
+`cachedSmooth` is a single `(pixelDiameter, image)` tuple keyed by
+`diameter * displayScale`. A Retina laptop (scale 2) plus a 1× external display
+produce two different pixelDiameters, so every shared render trigger makes the two
+panels alternately evict each other's rasterized sphere — a full CPU rasterization
+loop the cache contract promises never happens on the hot path. (Only when the
+Amiga decoration is enabled.)
+
+**Fix:** replace the single-slot tuple with a small dictionary keyed by
+pixelDiameter (2–3 entries in practice).
+
 ---
 
 ## Low / polish
 
-- **L1 — `CarbonHotkey`** (`Hotkeys/CarbonHotkey.swift:57-65`): one
+- **L1 — `CarbonHotkey`** (`Hotkeys/CarbonHotkey.swift:57-64`): one
   `InstallEventHandler` per instance; `Unmanaged.passUnretained(self)` as
   `userData` is only safe if `deinit` runs on the main thread. Use a single
   shared app-wide handler that just `RegisterEventHotKey`s per instance.
-- **L2 — `SemanticVersion`** (`Updates/SemanticVersion.swift:34-39`): main
+- **L2 — `SemanticVersion`** (`Updates/SemanticVersion.swift:34`): main
   components accept leading zeros (`01.02.03`) but pre-release doesn't —
   inconsistent with SemVer §2.3. Reject or document.
-- **L3 — `releaseNotes()`** (`Updates/GitHubRelease.swift:55-60`): truncation by
-  `String.Index` can split an extended grapheme cluster on emoji-heavy notes.
-- **L4 — `UpdateChecker.start()`** (`Updates/UpdateChecker.swift:91-101`): no
-  jitter/back-off; a relaunch wave can hit GitHub's 60/h/IP unauthenticated
-  limit. Add `X-RateLimit-Remaining` awareness + a randomized initial delay.
+- **L4 — `UpdateChecker.start()`**: no jitter/back-off; a relaunch wave can hit
+  GitHub's 60/h/IP unauthenticated limit. Add `X-RateLimit-Remaining` awareness +
+  a randomized initial delay.
 - **L5 — `localizedCaseInsensitiveCompare` on every keystroke**
-  (`AppSearch.swift:22,31`, `AppIndex.swift:60`): ICU collation on every char.
-  Pre-sort once in `AppIndex`; cache the empty-query result.
-- **L6 — `AppSearch.score` recomputes `query.lowercased()` 3×**
-  (`AppSearch.swift:39-49`): hoist out of the loop.
-- **L7 — Recents always shown, no clear/remove**
-  (`JettyMenuModel.swift:81-89`): no `×`, no "Clear recents", no section header
-  distinguishing recents from the alphabetical list. Incognito mode missing.
-- **L8 — Web search is Google-only** (`JettyMenuController.swift:117-124`): no
-  preference for DuckDuckGo/Brave/Kagi/system engine.
+  (`AppSearch.swift`, `AppIndex.swift`): ICU collation on every char. Pre-sort once
+  in `AppIndex`; cache the empty-query result.
+- **L7 — Recents always shown, no clear/remove** (`JettyMenuModel.swift`): no `×`,
+  no "Clear recents", no section header distinguishing recents from the
+  alphabetical list. Incognito mode missing.
+- **L8 — Web search is Google-only** (`JettyMenuController.swift`): no preference for
+  DuckDuckGo/Brave/Kagi/system engine.
 - **L9 — `NSColor.hexString` discards alpha** (`ColorHex.swift:32-39`): always
   `#RRGGBB`; `init?(hex:)` parses 8 digits, so a round-trip loses alpha. Emit
   `#RRGGBBAA` when `alphaComponent < 1`.
@@ -730,83 +693,166 @@ toward Swift 6, these race if any view ever composes on a background queue.
   variant is missing `removeAll()`.
 - **L14 — `GlassBackground` fallback treats all three glass variants identically**
   (`Common/GlassBackground.swift:56-66`): on macOS 13–15/Reduce Transparency,
-  `.liquidGlass`/`.glassClear`/`.glassTinted` all become `.hudWindow`. The
-  distinction the user picked is invisible.
+  `.liquidGlass`/`.glassClear`/`.glassTinted` all become `.hudWindow`. (The Settings
+  pane now *documents* that tint/opacity don't apply to Liquid Glass/Clear, but the
+  fallback still renders the three variants the same.)
 - **L15 — `VisualEffectBlur` forces `.state = .active`**
   (`Common/VisualEffectView.swift:13,19`): when the panel loses key the blur
   still renders active — slight mismatch with system panels.
-- **L17 — World-clock zone label gives region, not city** (`WorldClockWidgetView.swift:42-45`):
-  `US/Eastern` → `Eastern`; no day/night glyph.
+- **L17 — World-clock zone label gives region, not city** (`WorldClockWidgetView.swift`):
+  `US/Eastern` → `Eastern`; no day/night glyph. (Also: `WorldClockWidgetView.timeZone`
+  recomputes `TimeZone(identifier:)` on every render — the residual perf nit from
+  H14; cache it, recompute only when the preference changes.)
 - **L18 — Weather `(0,0)` sentinel + no city name shown**
-  (`WeatherWidgetView.swift:27-35`): anyone near the Gulf of Guinea can't
-  configure it; the tile never shows *which* location. Reverse-geocode the name.
+  (`WeatherWidgetView.swift`): anyone near the Gulf of Guinea can't configure it;
+  the tile never shows *which* location. Reverse-geocode the name.
 - **L19 — Weather: only current temp, no rich data** (`WeatherService.swift`):
   Open-Meteo returns `apparent_temperature`, humidity, wind, daily hi/lo for the
   same no-key call — ignored. Surface in a tooltip + accessibility value.
 - **L20 — System monitor: network is down+up combined**
-  (`SystemMonitorWidgetView.swift:87`): data is already separate; draw two lines.
-- **L21 — `normalizedLoad()` is load average, not CPU %** (`SystemStats.swift:54-59`):
+  (`SystemMonitorWidgetView.swift`): data is already separate; draw two lines.
+- **L21 — `normalizedLoad()` is load average, not CPU %** (`SystemStats.swift`):
   takes 30–60 s to converge, can exceed 100 %. Compute true CPU % from
   `host_processor_info` (HOST_CPU_LOAD_INFO) like `top`.
 - **L22 — `dlopen` handle never closed; `dlsym` re-resolved per call**
-  (`MediaRemoteBridge.m:71-79`): `dispatch_once` both the handle and fn pointer.
+  (`MediaRemoteBridge.m`): `dispatch_once` both the handle and fn pointer. (See H7.)
 - **L23 — `WindowPeekView` nests Buttons inside Buttons**
-  (`Windows/WindowPeek.swift:122-138, 145-172`): SwiftUI's nested-button
-  hit-testing is unreliable — sometimes both fire. Use overlaid tap gestures.
-- **L24 — Custom icon path won't follow moves** (`Settings/ItemsView.swift:88-95`):
+  (`Windows/WindowPeek.swift`): SwiftUI's nested-button hit-testing is unreliable —
+  sometimes both fire. Use overlaid tap gestures.
+- **L24 — Custom icon path won't follow moves** (`Settings/ItemsView.swift`):
   stores a bare path; if the user moves the source file, the icon vanishes. Copy
   into `Application Support/Jetty/icons/<id>.png` or bookmark it.
 - **L25 — No "Reset to defaults" anywhere in Settings** (`Settings/*View.swift`):
   wild experimentation is one-way. Add per-pane reset buttons; `Preferences.Default`
   already centralizes values.
-- **L26 — No user-saved presets** (`Settings/AppearanceView.swift:80-95`):
+- **L26 — No user-saved presets** (`Settings/AppearanceView.swift`):
   built-ins can be Applied and Exported/Imported, but there's no in-app "My
   preset" for one-click re-apply.
 - **L27 — No preset/widget previews in Settings**: configure blind; render a
   small faux dock (3 tiles) per preset, a live preview per widget.
 - **L28 — `ItemsView.row` displays wrong state when display disabled**
-  (`Settings/DisplaysView.swift:30-37`): toggling "Disable dock" hides the
-  controls but retains the override; re-enabling surprises the user. Add a
-  "Reset to global default" button.
+  (`Settings/DisplaysView.swift`): toggling "Disable dock" hides the controls but
+  retains the override; re-enabling surprises the user. Add a "Reset to global
+  default" button.
 - **L29 — `FolderStackView.header` back button too small**
-  (`Stacks/FolderStack.swift:186-200`): ~12 pt glyph, below the ~20 pt HIT min.
-  Wrap in `.frame(24×24).contentShape(Rectangle())`.
+  (`Stacks/FolderStack.swift`): ~12 pt glyph, below the ~20 pt HIT min. Wrap in
+  `.frame(24×24).contentShape(Rectangle())`.
 - **L30 — `FolderStackController` Escape requires Jetty frontmost**
-  (`Stacks/FolderStackController.swift:110-113`): the popover is
-  `.nonactivatingPanel`, so the previously-focused app keeps key — Esc dismisses
-  that app's modal, not the popover. Click-outside still works; document.
+  (`Stacks/FolderStackController.swift`): the popover is `.nonactivatingPanel`, so
+  the previously-focused app keeps key — Esc dismisses that app's modal, not the
+  popover. Click-outside still works; document.
 - **L31 — `runningApplication(bundleIdentifier:)` fallback defeats `indexByBundle`**
-  (`RunningAppsModel.swift:83-85`): the full-scan fallback re-introduces exactly
-  what the index avoids. Drop it.
-- **L32 — `BookmarkResolver` uses `[]` options** (`Store/BookmarkResolver.swift:11-26`):
+  (`RunningAppsModel.swift`): the full-scan fallback re-introduces exactly what the
+  index avoids. Drop it. (See also F-M12.)
+- **L32 — `BookmarkResolver` uses `[]` options** (`Store/BookmarkResolver.swift`):
   fine non-sandboxed, but a future App-Store variant will silently break without
   `startAccessingSecurityScopedResource` at call sites. Add TODOs.
-- **L33 — `seedDefaultItems` is English-only** (`DockController.swift:668-683`):
+- **L33 — `seedDefaultItems` is English-only** (`DockController.swift`):
   localize the display names; detect a default browser when Safari is absent.
-- **L34 — `DockContextAction.id = UUID()`** (`Dock/DockContextAction.swift:7`):
+- **L34 — `DockContextAction.id = UUID()`** (`Dock/DockContextAction.swift`):
   context menu rebuilt per right-click mints new ids → no animation continuity.
   Use `id: \.title` (titles are unique).
 - **L35 — `DockLayout.contentSize(tiles: [])` returns the 1-tile placeholder**
   (`Screens/DockLayout.swift:41-43`): root cause of M8. Return `.zero` and let
   the caller decide on a placeholder.
-- **L36 — `MediaRemoteBridge` legacy `dlopen` is exemplary but the controller
-  path doesn't match it** (`MediaRemoteBridge.m`): the contrast highlights that
-  the fail-closed promise is only half-kept. See C4.
 - **L37 — `dockDefaults?.synchronize()` is deprecated/best-effort**
   (`SystemDockController.swift`): the relaunched Dock may briefly show the user's
   original delay. Document.
 - **L38 — `AppLauncher.openApplication` always launches, never switches**
-  (`JettyMenuController.swift:43-47`): if the app is already running, this may
-  open a new window or do nothing useful. Switch-if-running like dock tiles do.
+  (`JettyMenuController.swift`): if the app is already running, this may open a new
+  window or do nothing useful. Switch-if-running like dock tiles do.
 - **L39 — No "drag result row to dock to pin"** (`JettyMenuView.swift`): menu rows
   aren't draggable. Common Alfred→dock interaction.
 - **L40 — No settings ⌘F search**: 8 tabs, ~60 controls — discoverability is
   rough. macOS users expect it.
-- **L41 — `UnitConverter` missing common families** (`UnitConverter.swift:51-88`):
+- **L41 — `UnitConverter` missing common families** (`UnitConverter.swift`):
   no time/duration, area, pressure, energy, angle, fuel, data rate, bits/bytes
   distinction.
 - **L42 — `hexString`/`init?(hex:)` reject bare-word colors** (`red`): CSS
   keywords are common in hand-edited themes.
+
+### From the Fable review (still open)
+
+- **F-L5 — App search is word-order sensitive** (`Menu/AppSearch.swift:49-89`):
+  "studio visual" finds nothing for Visual Studio Code — the query matches as a
+  single ordered subsequence. (Diacritic/width folding is done.) Tokenize on
+  whitespace and AND the tokens for multi-word queries.
+- **F-L10 — NowPlaying safety net can let a stale callback overwrite a fresher snapshot**
+  (`Widgets/NowPlayingService.swift:19-35`): abandoned fetches aren't invalidated;
+  use a generation token instead of a Bool `inFlight`.
+- **F-L11 — `TrashMonitor` never re-arms** (`Apps/TrashMonitor.swift:13-30`): after
+  the watched `~/.Trash` vnode is deleted/recreated it keeps watching the dead vnode;
+  a failed `open()` silently disables the tile with no log/retry. Re-open the path on
+  `.delete`/`.rename`.
+- **F-L12 — Vertical docks give a separator a full icon-height slot for a 1-pt line**
+  (`Screens/DockLayout.swift:57-67`): 4× the 12 pt gap it gets horizontally. Return a
+  12 pt along-extent on vertical edges (keep `DockLayout` and `DockTileView` in sync).
+- **F-L13 — `DockLayout.hiddenFrame` / `edgeReveal` are dead code**
+  (`Screens/DockLayout.swift:14,126-136`): hiding is done by `hiddenTransform()`,
+  which ignores them; only tests exercise them. Delete, or re-route `hiddenTransform`
+  through the pure function so it stays the source of truth.
+- **F-L14 — `AppLauncher.open(_ item:)` / `resolvedURL(_:)` are dead code**
+  (`Apps/AppLauncher.swift:9-26,71-73`): unused (this is the old M37 path), and they
+  silently disagree with the live path (no bookmark write-back). Delete them.
+- **F-L15 — Update checker reports "You're up to date" when a version fails to parse**
+  (`Updates/UpdateChecker.swift:125,135-138`): a false "up to date" hides real updates;
+  a user-initiated `checkNow()` during an in-flight background check silently no-ops.
+  Present a distinct "couldn't compare versions" message; don't swallow the manual check.
+- **F-L16 — Launch-at-login failure is swallowed silently**
+  (`Model/Preferences.swift:359-370`): with the login item disabled in System Settings
+  or `.requiresApproval`, the toggle just snaps back. Call
+  `SMAppService.openSystemSettingsLoginItems()` and/or explain it.
+- **F-V1 — Hover name labels are clipped** (`Dock/DockTileView.swift:199-206`): the
+  label uses a fixed `.offset(y: -baseSize * 0.75)` ("up" regardless of edge) and the
+  panel clips (`masksToBounds`), so "Show name on hover" is invisible with magnification
+  off and always clipped on top-edge docks. Make the offset edge-aware and reserve label
+  headroom in `contentSize()`. *(needs-device-verify)*
+- **F-V2 — Wide widget tiles overflow the glass strip on vertical docks**
+  (`Dock/DockView.swift:33,131-153`): the strip is a fixed `iconSize + 2·padding` thick
+  while the panel is sized from the widest tile, so a clock/now-playing tile floats past
+  the glass (and is cropped in overflow-scroll). Compute the strip thickness from the
+  widest tile.
+- **F-V3 — Drag-out tile vanishes under the panel mask before the removal threshold**
+  (`Dock/DockView.swift:316-322`): ~26–40 pt of visible travel vs the ~83 pt required
+  (none with magnification off) — the user drags an invisible tile with no cue. Show a
+  floating ghost/removal hint, or lower the threshold to the visible headroom.
+- **F-V4 — Active-glow dots + peek/stack anchors misplaced in overflow-scroll mode**
+  (`Dock/DockView.swift:157-177`): both re-derive layout math that assumes the centered,
+  non-scrolled layout and don't track the scroll offset. Suppress glows in overflow, or
+  read real tile frames via anchor preferences.
+- **F-V5 — End tiles clip when the dock nearly fills the screen** (`Dock/DockPanelController.swift:320-333`):
+  in the band where the panel is clamped to `visibleFrame` but not yet overflowing, the
+  magnification headroom is eaten but magnification stays on. Disable magnification in
+  that band (treat clamped-but-not-overflowing like overflow).
+- **F-V6 — `GlassBackground` reads Reduce Transparency non-reactively**
+  (`Common/GlassBackground.swift:69-71`): nothing re-renders when the accessibility
+  setting toggles. Use `@Environment(\.accessibilityReduceTransparency)`.
+- **F-V7 — Angle row has no numeric readout** (`Settings/AppearanceView.swift:21-25`):
+  the doc comments were corrected to say the gradient angle increases counterclockwise,
+  but unlike every slider the Angle row shows no degree value. Add `Text("\(Int(angle))°")`.
+- **F-U2 — No first-run onboarding**: launch → the menu-bar glyph appears and the
+  system Dock vanishes with no welcome. A one-time panel ("here's how to reveal, here's
+  Restore, here's Settings") removes the scariest moment. The `!store.loadedFromDisk`
+  seed path is the natural hook. *(product decision)*
+- **F-U6 — Minimized windows are invisible in Jetty**: the system Dock shows minimized
+  windows as thumbnails; Jetty's window-peek lists windows but marks none minimized and
+  offers no unminimize. With the AX machinery already shipped (opt-in), a ⊖ badge in
+  WindowPeek rows is cheap. *(product gap)*
+- **F-U9 — Settings slider ranges disagree with model clamps**
+  (`Settings/GeneralView.swift` vs `Preferences`/`DockAnchor`): reveal delay 0–600 vs
+  0–1000; hide 0–1500 vs 0–2000; inset 0–80 vs 0–400. A model-legal value renders with a
+  pinned thumb and a contradicting label, and the first drag silently rewrites it. Pick
+  one source of truth.
+- **F-R6 — `UpdateDownloader` tests aren't hermetic** (`JettyTests/GitHubReleaseTests.swift:45-59`):
+  they run `uniqueDestination` against the real `/tmp`; a leftover `Jetty.dmg` makes them
+  flaky. Use a per-test temp dir (as `MenuGlyphAndStoreTests` does).
+- **F-R9 — `DockStore`'s `.bak` rotation has no unit test** (`JettyTests/MenuGlyphAndStoreTests.swift:27-43`
+  only tests the `fileDecodes` helper): add recover-from-corrupt-primary,
+  don't-overwrite-good-bak, and round-trip tests — the store is fully injectable.
+- **F-R10 — build/release scripts exec an unpinned external engine** (`scripts/build.sh`,
+  `release.sh`): `lkm-build`/`lkm-release` are resolved from PATH (or an env override) with
+  no version/integrity check, so the release *tagging* step depends on whatever binary is
+  installed. Assert a minimum engine version / pin the `release-tool` commit.
 
 ---
 
@@ -836,15 +882,15 @@ AlarmDock unix-philosophy pattern).
 ### Per-display personalities
 Each display gets a subtle independent accent/preset: work monitor = sober
 command strip, laptop = playful glass + widgets. (Needs per-display appearance
-overrides + settings UI.) IDEA-2 from `GPT-is-awesome.md`.
+overrides + settings UI.)
 
 ### Edge reveal "heat map"
 A brief, optional glow in the reveal band after failed edge attempts — teaches
-users where the dock lives without leaving a permanent sliver. IDEA-1.
+users where the dock lives without leaving a permanent sliver.
 
 ### Dock "breathing" on wake
 After wake/display reconnect, pulse the dock once to communicate it reclaimed the
-system-Dock state and restored placement. IDEA-3.
+system-Dock state and restored placement.
 
 ### Stuck-dock self-heal watchdog
 If no `mouseMoved` has fired in N seconds, no panel is revealed, and no panel's
@@ -923,6 +969,47 @@ Sample a color from the screen to set `tintHex` directly.
 Trust + discoverability. A "last installed version/date", "channel" toggle, and
 "verify update signatures" checkbox once C1 lands.
 
+### New from the Fable review
+
+- **`jetty://` URL scheme + Shortcuts hooks.** `jetty://toggle`,
+  `jetty://reveal?display=uuid`, `jetty://menu`, `jetty://preset/Vapor`,
+  `jetty://pomodoro/start?minutes=50`. One `NSAppleEventManager` handler in
+  `AppDelegate` fans out to `DockController`/`Preferences.apply` — instantly
+  scriptable from Shortcuts, Raycast, shell (`open jetty://…`), BetterTouchTool.
+- **Scroll-wheel gestures on tiles.** Scroll over an app tile → cycle that app's
+  windows (the `AppWindows` raise machinery already exists); over the pomodoro →
+  nudge minutes; over the world clock → cycle favorite zones. `DockTileView` just
+  needs a scroll monitor.
+- **Option-drag a tile = duplicate as a floating mini-launcher**, and **⌘-hover a
+  tile to peek its real path** in the label (power users constantly want "where is
+  this app really?").
+- **Day/night auto-theming.** The weather tile already knows coordinates; a NOAA
+  sunrise calc is pure math. At sunset, cross-fade to a chosen preset
+  (`Preferences.apply` exists; presets are shareable).
+- **Preset cards.** On export, also render the current dock into a PNG "theme card"
+  (a 3-tile faux dock) so shared `.json` themes come with a preview — makes a
+  community theme gallery viable.
+- **Per-tile launch hotkeys.** `⌥1…⌥9` activate the Nth dock tile — `CarbonHotkey`
+  infrastructure is already there and the tile order is user-curated. (uBar charges
+  for this; the system Dock never had it.)
+- **Trash X-ray.** `TrashMonitor` already watches the Trash; the tooltip / VoiceOver
+  value could say "14 items · 3.2 GB" from one `contentsOfDirectory` +
+  `totalFileAllocatedSize`, cached on the monitor's events. Pairs with IDEA-5.
+- **Pomodoro in the menu-bar glyph.** While the dock is hidden (95% of the time), the
+  status item is Jetty's only visible surface: swap `statusBarImage()` for a tiny
+  progress ring while a session runs.
+- **Haptic detents on magnification.** `NSHapticFeedbackManager.defaultPerformer
+  .perform(.alignment)` as the hover crosses tile centers — Force-Touch trackpads turn
+  the dock into something you can *feel*. Three lines, gated by a preference.
+- **"Focus dock" per Space/app.** When permission-free window peek knows the frontmost
+  app, a rule like "when Xcode is frontmost, show only the Dev folder's tiles" (per-app
+  tile filters) is a genuinely new dock capability — `DockModel`'s pure merge makes the
+  filter a one-liner.
+- **Battery time-to-full/empty in the tooltip** — `IOPSGetTimeRemainingEstimate` is
+  public and free; the battery tile's `.help` currently says just "Battery".
+- **Konami-code boing.** Typing "boing" in the Jetty Menu bounces the Amiga ball across
+  the dock once (the `BoingBallDecoration` renderer + a keyframe animation).
+
 ---
 
 ## What's done well
@@ -935,6 +1022,9 @@ polish, not rework:
   `CarbonHotkey`, `NSWorkspace`, `RegisterEventHotKey`, mouse-only global
   monitor. Excellent discipline — and exactly the load-bearing design decision
   `AGENTS.md` calls out.
+- **The reveal/hide rework** (window parked, content-layer transform only) is the
+  right architecture — pure GPU compositing, no SwiftUI re-layout mid-slide, with a
+  mid-animation convergence guard.
 - **Pure/UI separation is clean.** `DockLayout`, `MagnificationCurve`,
   `ClockFormatter`, `AppSearch`, `DockModel.makeSlots`/`makeTiles`,
   `PowerCommand` mapping, `ExpressionEvaluator`, `UnitConverter`,
@@ -946,22 +1036,21 @@ polish, not rework:
   can't overwrite the last good backup) is exactly the right defensive pattern.
 - **Lossy Codable decoding** (`Failable<T>` in `DockDocument.swift`) means one
   bad item/anchor no longer loses the whole dock.
-- **`UpdateDownloader.sanitizedFileName`** strips control chars, separators,
-  rejects `.`/`..`/empty — good defensive coding even though GitHub names should
-  be clean.
 - **The MediaRemote legacy `dlopen` path is exemplary** — `dlopen` → `dlsym` →
-  nil-return fail-closed. If the controller path matched it (C4), the bridge
-  would be a model of safe private-API use.
+  nil-return fail-closed; and the controller path now matches it (fails closed).
 - **`SystemDockController` captures prior autohide/delay/time-modifier** and
   restores them faithfully rather than clobbering user prefs.
 - **`RunningAppsModel`'s bundle-id dedup** with the clear comment about why
   (magnification center-map desync) shows real understanding of downstream
-  consequences.
-- **CI basics are right**: `concurrency: cancel-in-progress` on PRs, pinned
-  Xcode version, minimal `permissions:`.
+  consequences — the comment is what let a later review catch that the same
+  invariant wasn't fully enforced for *pinned* duplicates (now fixed).
+- **CI is now hardened**: both workflows declare minimal `permissions:`,
+  cancellation is PR-only, `timeout-minutes` bounds every job, the release path
+  runs the test suite and marks prerelease tags correctly, and the Xcode version is
+  pinned. (Actions are still on floating tags — see C3.)
 - **Combine subscriptions consistently use `[weak self]`**; `LiveSystemStats`
-  correctly centralizes what would otherwise be N independent timer storms; the
-  32-bit counter wrap is *caught* (clamped to 0) rather than producing garbage.
+  centralizes what would otherwise be N independent timer storms; the 32-bit
+  counter wrap is *caught* (clamped to 0) rather than producing garbage.
 
 ---
 
@@ -1003,32 +1092,34 @@ Window peeking (Phase 9) and live ScreenCaptureKit previews (Phase 10) have alre
   `com.apple.dock` defaults on launch / wake / screen-change plus one-click Restore.
 - Private-API drift — the MediaRemote bridge (and any future `_AXUIElementGetWindow` /
   `AXStatusLabel`) stays isolated, `dlopen`/weak-imported, opt-in, fail-closed; re-test
-  each macOS beta. See **C4 / H7** for the current MediaRemote issues.
+  each macOS beta. See **H7** for the current MediaRemote perf issue.
 
 ---
 
 ## Earlier review history
 
-The first external review (*"GPT is awesome"*, 2026-06-28, previously in
-`GPT-is-awesome.md`, now folded here) is fully addressed:
+**GPT-is-awesome review** (2026-06-28, previously in `GPT-is-awesome.md`, folded here):
+fully addressed. BUG-1 … BUG-13 (implement-now bugs) — all fixed. ISSUE-1 … ISSUE-9
+(design-level) — all fixed: activate bundle-less apps by PID (1); magnified end-tile
+clipping (2); now-playing opt-in / isolated / fail-closed (3); off-main-thread folder
+stacks (4); one shared throttled sampler `LiveSystemStats` (5); app-index refresh on
+menu open + one level deeper (6); stale bookmarks written back to `DockStore` (7);
+tolerant/lossy document decoding (8); `.bak` protected from a corrupt primary (9). Its
+delight ideas are captured above. Still open from it: **stack spatial memory** (IDEA-4
+— folder stacks bias focus to the last-hovered item) and part of **Trash mood** (IDEA-5
+— empty/full is live via `TrashMonitor`; remaining: a brief "hot" state after a drop
+and a poof on empty).
 
-- **BUG-1 … BUG-13** (implement-now bugs) — all fixed.
-- **ISSUE-1 … ISSUE-9** (design-level) — all fixed: activate bundle-less apps by PID
-  (1); magnified end-tile clipping (2); now-playing opt-in / isolated / fail-closed (3);
-  off-main-thread folder stacks (4); one shared throttled sampler `LiveSystemStats` (5);
-  app-index refresh on menu open + one level deeper (6); stale bookmarks written back to
-  `DockStore` (7); tolerant/lossy document decoding (8); `.bak` protected from a corrupt
-  primary (9).
-
-Its delight ideas (IDEA-1…5) are captured under
-[Delightful feature ideas](#delightful-feature-ideas) above — edge reveal heat map
-(IDEA-1), per-display personalities (IDEA-2), dock "breathing" on wake (IDEA-3). Still
-open and worth keeping: **stack spatial memory** (IDEA-4 — folder stacks bias focus to
-the last-hovered item) and **Trash mood** (IDEA-5 — empty/full is already live via
-`TrashMonitor`; remaining: a brief "hot" state after a drop and a poof on empty).
+**Fable review** (2026-07-02, previously in `fable-is-awesome.md`, folded here): its
+implemented findings are recorded in
+[Implemented and removed (2026-07-02)](#implemented-and-removed-2026-07-02); its still-open
+findings carry `F-*` ids throughout the lists above; its corrections are applied in
+place (L3 closed as invalid; M37 closed as moot with the dead-code cleanup tracked as
+F-L14; the H7/M4 `NowPlayingWidgetView` path corrected to `Jetty/Widgets/`; the
+`AGENTS.md` activation-policy note fixed there and reflected in "What's done well").
 
 ---
 
-*Reviewed against `main` @ `be22407`. Findings reference line numbers that are
-current as of that commit; a few may drift as the file evolves — the file:line
-citations should remain easy to relocate.*
+*Living document. Backlog line numbers are current as of `main @ fd579a8`
+(2026-07-02); a few may drift as files evolve — the `file:line` citations should
+remain easy to relocate.*

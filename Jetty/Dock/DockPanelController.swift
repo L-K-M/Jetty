@@ -318,8 +318,9 @@ final class DockPanelController {
     // MARK: Frames
 
     private func contentSize() -> CGSize {
+        let icon = CGFloat(preferences.iconSize)
         let base = DockLayout.contentSize(tiles: model.tiles.map(\.kind),
-                                          iconSize: CGFloat(preferences.iconSize),
+                                          iconSize: icon,
                                           spacing: CGFloat(preferences.tileSpacing),
                                           padding: DockView.padding,
                                           edge: anchor.edge)
@@ -327,8 +328,18 @@ final class DockPanelController {
         // goes on *both* axes: perpendicular for the grow-away-from-edge scale, and
         // along the dock axis so the first/last tiles (which scale about their centre)
         // don't clip at the window ends (ISSUE-2).
-        guard preferences.magnificationEnabled else { return base }
-        let extra = (preferences.effectiveMagnification - 1) * CGFloat(preferences.iconSize)
+        var extra = preferences.magnificationEnabled
+            ? (preferences.effectiveMagnification - 1) * icon : 0
+        // A zoomed watch face (Widgets ▸ Clock ▸ Face size) pokes past the strip
+        // like a permanently magnified tile — give it the same kind of headroom.
+        // Horizontal docks only; `ClockWidgetView` ignores the zoom elsewhere.
+        if anchor.edge.isHorizontal, preferences.clockFace != .digital,
+           model.tiles.contains(where: { $0.kind == .clock }) {
+            extra = max(extra, DockLayout.clockZoomHeadroom(
+                iconSize: icon, padding: DockView.padding,
+                zoom: CGFloat(preferences.clockFaceZoom)))
+        }
+        guard extra > 0 else { return base }
         return CGSize(width: base.width + extra, height: base.height + extra)
     }
 

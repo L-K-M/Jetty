@@ -104,6 +104,18 @@ shapes and black-outlined hands; jelly a gloss arc and rainbow dot markers; and
 **Color Time** landed — a 70s Chromachron-style black dial whose 30° hour wedge
 reveals a hidden color wheel (drawn by clipping the wheel to the wedge).
 
+A **Face size** zoom (100–160%, Widgets ▸ Clock) lets a watch face float out over
+the glass strip like a permanently magnified tile: the face pins to the dock edge
+and grows inward; the panel window gains matching headroom
+(`DockLayout.clockZoomHeadroom`, pure + unit-tested; face style/zoom joined the
+layout preference signature so the window resizes live); hover magnification skips
+a zoomed clock so zoom × magnification can't compound past the window bounds, and
+the overflow-scroll dock suspends the zoom (its viewport clips, the same reason
+magnification pauses there).
+Horizontal docks only — on vertical docks the face would overlap its along-axis
+neighbors — and capped at 160% so the square dial stays inside the clock tile's
+1.6×-wide footprint.
+
 ---
 
 ## Table of contents

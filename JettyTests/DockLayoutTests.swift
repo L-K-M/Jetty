@@ -201,4 +201,17 @@ final class DockLayoutTests: XCTestCase {
         XCTAssertTrue(DockLayout.pointerCrossedEdge(CGPoint(x: 1010, y: 450), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 24, margin: 16))
         XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 1010, y: 700), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 24, margin: 16))
     }
+
+    // MARK: Clock face zoom headroom
+
+    func testClockZoomHeadroom() {
+        // No zoom → no headroom: the face already fits inside the resting strip.
+        XCTAssertEqual(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.0), 0, accuracy: 0.001)
+        // 160% of a 52pt tile: the face box (52 × 1.6) plus the 0.04 × 52 edge
+        // gap pokes 52 × 1.64 − (52 + 10) = 23.28pt past the strip.
+        XCTAssertEqual(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.6), 23.28, accuracy: 0.001)
+        // Never negative, and it grows with the zoom.
+        XCTAssertLessThan(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.2),
+                          DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.5))
+    }
 }

@@ -16,6 +16,18 @@ struct WidgetsView: View {
                 }
                 Text(preferences.clockFace.caption)
                     .font(.caption).foregroundStyle(.secondary)
+                if preferences.clockFace != .digital {
+                    HStack {
+                        Slider(value: $preferences.clockFaceZoom, in: 1.0...1.6) {
+                            Text("Face size")
+                        }
+                        Text("\(Int((preferences.clockFaceZoom * 100).rounded()))%")
+                            .monospacedDigit().foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                    Text("Bigger faces float out over the dock's edge, like a magnified icon. (Bottom/top docks; hover magnification skips a zoomed clock.)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if preferences.clockFace == .digital {
                     Toggle("Show date", isOn: $preferences.clockShowDate)
                     Toggle("Show weekday", isOn: $preferences.clockShowWeekday)

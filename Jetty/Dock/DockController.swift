@@ -173,7 +173,10 @@ final class DockController {
                         String(p.inset)].joined(separator: "|"),
             model: String(p.showRunningApps),
             layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
-                     String(p.magnification), String(p.autoHide), p.revealTrigger.rawValue].joined(separator: "|"),
+                     String(p.magnification), String(p.autoHide), p.revealTrigger.rawValue,
+                     // The face style/zoom change the panel's clock headroom
+                     // (DockPanelController.contentSize), so they must relayout.
+                     p.clockFace.rawValue, String(p.clockFaceZoom)].joined(separator: "|"),
             hotkeys: p.toggleHotkey.jsonString + "·" + p.menuHotkey.jsonString
         )
     }

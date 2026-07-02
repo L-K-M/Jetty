@@ -90,6 +90,20 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(Preferences(defaults: defaults).clockFace, .face2000)
     }
 
+    func testClockFaceZoomClampsAndRoundTrips() {
+        let corrupt = freshDefaults()
+        corrupt.set(9.0, forKey: "clockFaceZoom")
+        XCTAssertEqual(Preferences(defaults: corrupt).clockFaceZoom, 1.6, accuracy: 0.001)
+        corrupt.set(0.2, forKey: "clockFaceZoom")
+        XCTAssertEqual(Preferences(defaults: corrupt).clockFaceZoom, 1.0, accuracy: 0.001)
+
+        let defaults = freshDefaults()
+        let a = Preferences(defaults: defaults)
+        XCTAssertEqual(a.clockFaceZoom, 1.0, accuracy: 0.001)   // default: no zoom
+        a.clockFaceZoom = 1.4
+        XCTAssertEqual(Preferences(defaults: defaults).clockFaceZoom, 1.4, accuracy: 0.001)
+    }
+
     func testDefaultAnchorReflectsPosition() {
         let prefs = Preferences(defaults: freshDefaults())
         prefs.edge = .top

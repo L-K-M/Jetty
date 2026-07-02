@@ -22,7 +22,7 @@ enum MenuCommand: String, CaseIterable, Identifiable {
 
     var keywords: [String] {
         switch self {
-        case .toggleDarkMode: return ["dark mode", "dark", "light mode", "appearance"]
+        case .toggleDarkMode: return ["dark mode", "dark", "darkmode", "light mode", "appearance"]
         }
     }
 
@@ -33,14 +33,16 @@ enum MenuCommand: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The command whose keywords match the query, or `nil`. Needs ≥4 chars and uses
-    /// prefix matching (not arbitrary substrings) so common queries like "app" or
-    /// "the" don't hijack a result. Pure.
+    /// The command whose keywords match the query, or `nil`. Needs ≥4 chars and matches
+    /// only when the query is a **prefix of a keyword** — not the other way round. The
+    /// old bidirectional `q.hasPrefix($0)` meant any query *starting with* a keyword
+    /// matched forever, so "darkroom" (a real app) or "appearances" could never launch
+    /// or reach web search — the command hijacked Return permanently (F-H4). Pure.
     static func match(_ query: String) -> MenuCommand? {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         guard q.count >= 4 else { return nil }
         return allCases.first { command in
-            command.keywords.contains { $0.hasPrefix(q) || q.hasPrefix($0) }
+            command.keywords.contains { $0.hasPrefix(q) }
         }
     }
 

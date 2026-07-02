@@ -98,6 +98,16 @@ final class CommandBarTests: XCTestCase {
         XCTAssertNil(MenuCommand.match("safari"))    // unrelated
     }
 
+    func testCommandMatchDoesNotHijackLongerQueries() {
+        // A query that merely *starts with* a keyword must NOT match — otherwise
+        // "darkroom" (a real app) or "appearances" could never launch / web-search (F-H4).
+        XCTAssertNil(MenuCommand.match("darkroom"))
+        XCTAssertNil(MenuCommand.match("appearances"))
+        XCTAssertNil(MenuCommand.match("darker"))
+        // Exact keyword and typed-through variants still match.
+        XCTAssertEqual(MenuCommand.match("darkmode"), .toggleDarkMode)
+    }
+
     func testReturnRunsMatchedCommandBeforeLaunchingSelection() {
         let model = JettyMenuModel(appIndex: AppIndex())
         var launched = false
@@ -110,5 +120,21 @@ final class CommandBarTests: XCTestCase {
 
         XCTAssertEqual(ranCommand, .toggleDarkMode)
         XCTAssertFalse(launched)
+    }
+
+    func testReturnCopiesCalculationResultInsteadOfWebSearch() {
+        // Typing "2+2" and pressing Return copies "4" — it must not fall through to a
+        // web search that leaks the query (H2).
+        let model = JettyMenuModel(appIndex: AppIndex())
+        var copied: String?
+        var searched: String?
+        model.onCopyValue = { copied = $0 }
+        model.onWebSearch = { searched = $0 }
+
+        model.query = "2+2"
+        model.activateSelection()
+
+        XCTAssertEqual(copied, "4")
+        XCTAssertNil(searched)
     }
 }

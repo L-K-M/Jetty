@@ -20,6 +20,7 @@ jobs:
   release:
     name: Build & publish (unsigned)
     runs-on: macos-26
+    timeout-minutes: 45   # don't let a wedged xcodebuild stall a release for 6h
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +34,17 @@ jobs:
 
       - name: Version from tag
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      # Gate the release on the test suite. With no signing/notarization downstream,
+      # tests are the only automated quality check — a tag on a broken commit must not
+      # publish a release the in-app updater immediately offers to everyone.
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" -scheme "$SCHEME" \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify
 
       - name: Build (Release, no Developer ID signing)
         run: |
@@ -78,6 +90,12 @@ jobs:
           files: |
             ${{ env.DMG }}
             ${{ env.ZIP }}
+          # A pre-release tag (contains a hyphen, e.g. v1.1.0-beta.1) must be marked as a
+          # prerelease and NOT made "latest" — otherwise the in-app updater's
+          # releases/latest fetch offers the beta to every stable user, silently defeating
+          # its allowPrereleases gate.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           generate_release_notes: true
           body: |
             ### Unsigned build

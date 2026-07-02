@@ -50,6 +50,24 @@ One known issue since the review: a `layoutSubtreeIfNeeded` recursion warning in
 console from the tile-scroll `GeometryReader` (horizontal overflow-scroll). No
 user-visible breakage observed, but worth resolving.
 
+### Corrections from the Fable review (2026-07-02)
+
+A later review (`fable-is-awesome.md`) re-verified this backlog and corrected a few
+items — recorded here so this file stays accurate:
+
+- **L3 is invalid.** `releaseNotes()` truncation *cannot* split a grapheme cluster:
+  `String.count` and `String.index(_:offsetBy:)` on a `String` stride by `Character`
+  (an extended grapheme cluster), so a flag/ZWJ emoji counts as one step. Consider L3
+  closed — no code change needed.
+- **M37's premise is stale.** `AppLauncher.resolvedURL(_:)` is *not* "used on every tile
+  click" — that path is dead code. The live click path (`DockController.open` →
+  `openApplication` → `liveURL` → `DockStore.resolvedURL(forItemID:)`) already refreshes
+  and writes back stale bookmarks. The real fix is deleting the dead entry point.
+- **H7 / M4 file path.** Both cite `Jetty/Menu/NowPlayingWidgetView.swift`; the file
+  actually lives at `Jetty/Widgets/NowPlayingWidgetView.swift`.
+- **AGENTS.md activation-policy note** (now fixed there): the Jetty Menu never switches to
+  `.regular`; only Settings does. The menu's key, non-activating panel approach is correct.
+
 ---
 
 ## Table of contents

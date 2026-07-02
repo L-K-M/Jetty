@@ -42,6 +42,14 @@ final class ExpressionEvaluatorTests: XCTestCase {
         XCTAssertEqual(value("3*-4"), "-12")
     }
 
+    func testUnaryMinusIsLooserThanPower() {
+        // -2^2 == -(2^2) == -4, matching Spotlight/Google/Python (not Excel).
+        XCTAssertEqual(value("-2^2"), "-4")
+        // The exponent still parses as a factor, so a negative exponent works.
+        XCTAssertEqual(value("2^-2"), "0.25")
+        XCTAssertEqual(value("-2^-2"), "-0.25")
+    }
+
     // MARK: Percent
 
     func testTrailingPercentIsHundredth() {
@@ -57,6 +65,12 @@ final class ExpressionEvaluatorTests: XCTestCase {
     func testUnicodeMultiplyAndDivide() {
         XCTAssertEqual(value("6×7"), "42")
         XCTAssertEqual(value("9÷3"), "3")
+    }
+
+    func testUnicodeMinusSign() {
+        // U+2212 (typographic minus, as pasted from web pages / PDFs) aliases '-'.
+        XCTAssertEqual(value("7\u{2212}2"), "5")
+        XCTAssertEqual(value("\u{2212}5+8"), "3")
     }
 
     // MARK: Non-expressions are rejected (so app searches never show a result)

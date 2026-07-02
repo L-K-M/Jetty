@@ -14,11 +14,14 @@ import Foundation
 /// ```
 /// expr    := term (('+' | '-') term)*
 /// term    := factor (('*' | '/') factor)*
-/// factor  := unary ('^' factor)?      // right-associative
-/// unary   := ('+' | '-') unary | postfix
+/// factor  := ('+' | '-') factor | postfix ('^' factor)?   // unary sign looser than ^,
+///                                                          // ^ right-associative
 /// postfix := primary ('%')*           // trailing percent → × 0.01
 /// primary := number | '(' expr ')'
 /// ```
+/// A leading unary minus binds *looser* than `^`, so `-2^2` is `-(2^2) = -4` —
+/// matching Spotlight, Google, Python, and Wolfram (Excel is the lone exception).
+/// The exponent still parses as a `factor`, so `2^-2 = 0.25` keeps working.
 enum ExpressionEvaluator {
 
     /// A successfully evaluated expression: the (trimmed) input and its formatted value.
@@ -46,8 +49,10 @@ enum ExpressionEvaluator {
     }
 
     /// Characters that mark a query as "probably math". `×`/`÷` are accepted as
-    /// aliases for `*`/`/` so the on-screen multiply/divide glyphs work too.
-    private static let operatorCharacters: Set<Character> = ["+", "-", "*", "/", "^", "%", "×", "÷"]
+    /// aliases for `*`/`/`, and `−` (U+2212, the typographic minus that math copied
+    /// from web pages / PDFs / the Character Viewer produces) as an alias for `-`, so
+    /// the on-screen and pasted glyphs work too.
+    private static let operatorCharacters: Set<Character> = ["+", "-", "*", "/", "^", "%", "×", "÷", "−"]
 
     // MARK: Tokenizing
 
@@ -66,7 +71,7 @@ enum ExpressionEvaluator {
             if c.isWhitespace { i += 1; continue }
             switch c {
             case "+": tokens.append(.plus); i += 1
-            case "-": tokens.append(.minus); i += 1
+            case "-", "−": tokens.append(.minus); i += 1
             case "*", "×": tokens.append(.times); i += 1
             case "/", "÷": tokens.append(.divide); i += 1
             case "^": tokens.append(.power); i += 1
@@ -124,22 +129,20 @@ enum ExpressionEvaluator {
         }
 
         mutating func parseFactor() -> Double? {
-            guard let base = parseUnary() else { return nil }
+            // A leading unary sign binds looser than `^`, so `-2^2` == `-(2^2)` == -4.
+            if let t = peek(), t == .plus || t == .minus {
+                pos += 1
+                guard let value = parseFactor() else { return nil }
+                return t == .minus ? -value : value
+            }
+            guard let base = parsePostfix() else { return nil }
             if let t = peek(), t == .power {
                 pos += 1
-                guard let exponent = parseFactor() else { return nil }   // right-associative
+                // Right-associative, and the exponent is itself a factor so `2^-2` works.
+                guard let exponent = parseFactor() else { return nil }
                 return pow(base, exponent)
             }
             return base
-        }
-
-        mutating func parseUnary() -> Double? {
-            if let t = peek(), t == .plus || t == .minus {
-                pos += 1
-                guard let value = parseUnary() else { return nil }
-                return t == .minus ? -value : value
-            }
-            return parsePostfix()
         }
 
         mutating func parsePostfix() -> Double? {

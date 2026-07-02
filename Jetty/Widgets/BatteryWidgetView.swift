@@ -19,19 +19,38 @@ struct BatteryWidgetView: View {
     @ViewBuilder
     private func content(_ battery: SystemStats.Battery?) -> some View {
         if let battery {
+            let low = SystemStats.isLowBattery(percent: battery.percent, isPlugged: battery.isPlugged)
             VStack(spacing: 1) {
-                Image(systemName: SystemStats.batterySymbol(percent: battery.percent, isCharging: battery.isCharging))
+                Image(systemName: SystemStats.batterySymbol(percent: battery.percent))
                     .font(.system(size: max(13, height * 0.34)))
-                    .foregroundStyle(battery.isCharging ? Color.green : .primary)
+                    .foregroundStyle(low ? Color.red : (battery.isCharging ? Color.green : .primary))
+                    .overlay(alignment: .center) { chargeBadge(battery) }
                     .shadow(color: battery.isCharging ? Color.green.opacity(0.7) : .clear,
                             radius: battery.isCharging ? 4 : 0)
                 Text("\(battery.percent)%")
                     .font(.system(size: max(9, height * 0.2), weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .foregroundStyle(low ? Color.red : .primary)
             }
         } else {
             Image(systemName: "powerplug.fill")
                 .font(.system(size: max(13, height * 0.34)))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// A small glyph inside the battery outline: a bolt while charging, or a plug when
+    /// plugged in but not charging (held at 80% by Optimized Charging, or full on AC)
+    /// so that state reads differently from running on battery (F-L6).
+    @ViewBuilder
+    private func chargeBadge(_ battery: SystemStats.Battery) -> some View {
+        if battery.isCharging {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: max(7, height * 0.16), weight: .bold))
+                .foregroundStyle(.white)
+        } else if battery.isPlugged {
+            Image(systemName: "powerplug.fill")
+                .font(.system(size: max(6, height * 0.14)))
                 .foregroundStyle(.secondary)
         }
     }

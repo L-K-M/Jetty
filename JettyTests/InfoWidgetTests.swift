@@ -11,11 +11,20 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(SystemStats.clampPercent(73), 73)
     }
 
-    func testBatterySymbolByLevelAndCharging() {
-        XCTAssertEqual(SystemStats.batterySymbol(percent: 50, isCharging: true), "battery.100.bolt")
-        XCTAssertEqual(SystemStats.batterySymbol(percent: 5, isCharging: false), "battery.0")
-        XCTAssertEqual(SystemStats.batterySymbol(percent: 100, isCharging: false), "battery.100")
-        XCTAssertEqual(SystemStats.batterySymbol(percent: 55, isCharging: false), "battery.50")
+    func testBatterySymbolByLevel() {
+        // The glyph reflects the level regardless of charging — a 5% battery on the
+        // charger no longer shows a full-battery glyph (M30). Charging is a bolt overlay.
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 5), "battery.0")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 30), "battery.25")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 55), "battery.50")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 80), "battery.75")
+        XCTAssertEqual(SystemStats.batterySymbol(percent: 100), "battery.100")
+    }
+
+    func testLowBatteryOnlyWhenUnpluggedAndUnder20() {
+        XCTAssertTrue(SystemStats.isLowBattery(percent: 15, isPlugged: false))
+        XCTAssertFalse(SystemStats.isLowBattery(percent: 15, isPlugged: true))   // on AC → no warning
+        XCTAssertFalse(SystemStats.isLowBattery(percent: 25, isPlugged: false))  // above threshold
     }
 
     // MARK: Weather

@@ -35,9 +35,11 @@ enum SystemStats {
 
     static func clampPercent(_ p: Int) -> Int { Swift.min(Swift.max(p, 0), 100) }
 
-    /// An SF Symbol matching a battery level + charging state.
-    static func batterySymbol(percent: Int, isCharging: Bool) -> String {
-        if isCharging { return "battery.100.bolt" }
+    /// An SF Symbol for the battery *level* (0/25/50/75/100). Charging is shown
+    /// separately by the view (a bolt overlay) rather than baked into the glyph — the
+    /// old code returned `battery.100.bolt` for *every* charging state, so a 5%
+    /// battery on the charger showed a full-battery glyph (M30).
+    static func batterySymbol(percent: Int) -> String {
         switch percent {
         case ..<13:  return "battery.0"
         case ..<38:  return "battery.25"
@@ -45,6 +47,13 @@ enum SystemStats {
         case ..<88:  return "battery.75"
         default:     return "battery.100"
         }
+    }
+
+    /// Whether the battery warrants a low-battery warning tint: under 20% and not on
+    /// external power. Uses `isPlugged` (previously computed but never read) so a
+    /// battery held at a low charge on AC doesn't cry wolf (M30 / F-L6).
+    static func isLowBattery(percent: Int, isPlugged: Bool) -> Bool {
+        percent < 20 && !isPlugged
     }
 
     // MARK: CPU / memory

@@ -43,4 +43,16 @@ final class ClockFormatterTests: XCTestCase {
                                          showDate: false, showWeekday: false, locale: posix, timeZone: gmt)
         XCTAssertNil(lines.secondary)
     }
+
+    func testMinuteStartFloorsToTheMinute() {
+        // 100.7 s past the epoch → floors to 60 s (minute 1), dropping the 40.7 s.
+        let date = Date(timeIntervalSince1970: 100.7)
+        let start = ClockFormatter.minuteStart(date)
+        XCTAssertEqual(start.timeIntervalSince1970, 60, accuracy: 0.0001)
+        // Already on a boundary → unchanged.
+        let onBoundary = Date(timeIntervalSince1970: 120)
+        XCTAssertEqual(ClockFormatter.minuteStart(onBoundary).timeIntervalSince1970, 120, accuracy: 0.0001)
+        // Result is never in the future relative to its input.
+        XCTAssertLessThanOrEqual(start.timeIntervalSince1970, date.timeIntervalSince1970)
+    }
 }

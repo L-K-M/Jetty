@@ -43,11 +43,37 @@ enum ClockFormatter {
         return "\(hour)mm\(secs)\(ampm)"
     }
 
+    // MARK: Cached formatters (H14)
+
+    private static let cacheLock = NSLock()
+    private static var formatterCache: [String: DateFormatter] = [:]
+
+    /// A `DateFormatter` for `template`/`locale`/`timeZone`, cached by that key.
+    /// `DateFormatter` is expensive to build and `lines(for:)` needs up to three per
+    /// call — with a 1 Hz `TimelineView` (seconds on) plus per-display world clocks
+    /// that was 6+ allocations/second on the main thread. Configured once under a
+    /// lock; `DateFormatter.string(from:)` is documented thread-safe for reuse.
     private static func formatter(template: String, locale: Locale, timeZone: TimeZone) -> DateFormatter {
+        let key = "\(template)|\(locale.identifier)|\(timeZone.identifier)"
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached = formatterCache[key] { return cached }
         let f = DateFormatter()
         f.locale = locale
         f.timeZone = timeZone
         f.setLocalizedDateFormatFromTemplate(template)
+        formatterCache[key] = f
         return f
+    }
+
+    // MARK: Minute-cadence alignment (M29)
+
+    /// The start of the minute containing `date`. Used as the phase for a minute-
+    /// cadence `TimelineView` so its ticks land on the minute boundary — otherwise
+    /// `.periodic(from: .now, by: 60)` ticks 60 s after launch and the displayed
+    /// minute lags up to ~60 s behind real time. Pure, unit-tested.
+    static func minuteStart(_ date: Date = Date()) -> Date {
+        let seconds = date.timeIntervalSinceReferenceDate
+        return Date(timeIntervalSinceReferenceDate: (seconds / 60).rounded(.down) * 60)
     }
 }

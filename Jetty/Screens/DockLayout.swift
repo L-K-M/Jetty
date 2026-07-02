@@ -37,11 +37,13 @@ enum DockLayout {
     /// what keeps the `NSPanel` exactly as wide as its SwiftUI content, so the clock
     /// never clips and separators don't leave dead glass (BUG-1).
     static func contentSize(tiles kinds: [DockItemKind], iconSize: CGFloat, spacing: CGFloat,
-                            padding: CGFloat, edge: DockEdge) -> CGSize {
+                            padding: CGFloat, edge: DockEdge,
+                            clockWidthFactor: CGFloat = DockItemKind.clock.tileWidthFactor) -> CGSize {
         guard !kinds.isEmpty else {
             return contentSize(tileCount: 1, iconSize: iconSize, spacing: spacing, padding: padding, edge: edge)
         }
-        let extents = kinds.map { tileExtent(kind: $0, baseSize: iconSize, edge: edge) }
+        let extents = kinds.map { tileExtent(kind: $0, baseSize: iconSize, edge: edge,
+                                             clockWidthFactor: clockWidthFactor) }
         let along = extents.reduce(0) { $0 + $1.along }
             + CGFloat(kinds.count - 1) * spacing + 2 * padding
         let across = (extents.map { $0.across }.max() ?? iconSize) + 2 * padding
@@ -51,14 +53,18 @@ enum DockLayout {
 
     /// A single tile's size split into the dimension *along* the dock and the one
     /// *across* it, for `edge`. Mirrors `DockTileView`'s per-kind frame: a horizontal
-    /// separator is a thin 12pt gap, the clock tile is 1.6× wide, everything else is
-    /// a `baseSize` square (tile height is always `baseSize`). **Keep in sync with
-    /// `DockTileView.tileWidth`.**
-    static func tileExtent(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge) -> (along: CGFloat, across: CGFloat) {
+    /// separator is a thin 12pt gap, the clock tile is `clockWidthFactor` wide (its
+    /// resting 1.6×, or wider when a zoomed face needs the room — horizontal docks
+    /// only), everything else is a `baseSize` square (tile height is always
+    /// `baseSize`). **Keep in sync with `DockTileView.tileWidth`.**
+    static func tileExtent(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge,
+                           clockWidthFactor: CGFloat = DockItemKind.clock.tileWidthFactor)
+        -> (along: CGFloat, across: CGFloat) {
         let frameWidth: CGFloat
         switch kind {
         case .separator: frameWidth = edge.isHorizontal ? 12 : baseSize
-        default:         frameWidth = baseSize * kind.tileWidthFactor
+        case .clock where edge.isHorizontal: frameWidth = baseSize * clockWidthFactor
+        default: frameWidth = baseSize * kind.tileWidthFactor
         }
         let frameHeight = baseSize
         // Horizontal dock: along-axis is width. Vertical dock: along-axis is height.
@@ -66,15 +72,43 @@ enum DockLayout {
                                  : (along: frameHeight, across: frameWidth)
     }
 
+    /// The clock tile's along-edge width factor for a face zoomed to `zoom`: the
+    /// resting 1.6× until the square analog face (0.92 × zoom of the icon size,
+    /// plus a little slack) outgrows it, then wide enough to hold the face so it
+    /// never overlaps neighboring tiles. Pure, unit-tested. **Keep
+    /// `DockTileView.tileWidth` and `ClockWidgetView` driven by this.**
+    static func clockTileWidthFactor(zoom: CGFloat) -> CGFloat {
+        max(DockItemKind.clock.tileWidthFactor, 0.92 * zoom + 0.08)
+    }
+
+    /// The widest tile's along-edge width factor among `kinds` (the clock uses
+    /// `clockWidthFactor`, which may exceed its resting 1.6× when zoomed). The
+    /// along-axis magnification headroom scales with this so a wide end tile
+    /// (now-playing, a zoomed clock) doesn't clip at the window ends. Pure.
+    static func widestTileFactor(kinds: [DockItemKind], clockWidthFactor: CGFloat) -> CGFloat {
+        kinds.map { $0 == .clock ? clockWidthFactor : $0.tileWidthFactor }.max() ?? 1
+    }
+
+    /// The along-axis window headroom for hover magnification: a magnified tile
+    /// scales about the edge anchor, so its width grows about its centre by
+    /// `(magnification − 1) × width` — budget for the widest tile, split half per
+    /// window end by the centered content. Pure, unit-tested.
+    static func magnificationAlongExtra(iconSize: CGFloat, magnification: CGFloat,
+                                        widestFactor: CGFloat) -> CGFloat {
+        max(0, (magnification - 1) * iconSize * widestFactor)
+    }
+
     /// Extra across-axis window headroom needed for a zoomed clock face
     /// (Widgets ▸ Clock ▸ Face size). The zoomed face box is at most
     /// `iconSize * zoom` across (the LCD; analog dials are 0.92× of that), sits
     /// `0.04 * iconSize` off the edge-facing side of the tile
-    /// (`ClockWidgetView`'s edge padding — keep in sync), and the resting strip
-    /// is `iconSize + 2 * padding` — whatever pokes past the strip needs window
+    /// (`ClockWidgetView`'s edge padding — keep in sync), scales by the hover
+    /// `magnification` about the edge anchor, and the resting strip is
+    /// `iconSize + 2 * padding` — whatever pokes past the strip needs window
     /// room so it isn't clipped at the panel bounds. Pure, unit-tested.
-    static func clockZoomHeadroom(iconSize: CGFloat, padding: CGFloat, zoom: CGFloat) -> CGFloat {
-        max(0, iconSize * (zoom + 0.04) - (iconSize + padding))
+    static func clockZoomHeadroom(iconSize: CGFloat, padding: CGFloat, zoom: CGFloat,
+                                  magnification: CGFloat = 1) -> CGFloat {
+        max(0, iconSize * (zoom + 0.04) * max(magnification, 1) - (iconSize + padding))
     }
 
     // MARK: Revealed frame
@@ -179,9 +213,13 @@ enum DockLayout {
     /// `spacing` between them (a running-apps slot has several tiles; everything else
     /// has one). Pure, so the live-reorder math is unit-tested.
     static func slotExtentAlong(tileKinds kinds: [DockItemKind], baseSize: CGFloat,
-                                spacing: CGFloat, edge: DockEdge) -> CGFloat {
+                                spacing: CGFloat, edge: DockEdge,
+                                clockWidthFactor: CGFloat = DockItemKind.clock.tileWidthFactor) -> CGFloat {
         guard !kinds.isEmpty else { return 0 }
-        let sum = kinds.reduce(CGFloat(0)) { $0 + tileExtent(kind: $1, baseSize: baseSize, edge: edge).along }
+        let sum = kinds.reduce(CGFloat(0)) {
+            $0 + tileExtent(kind: $1, baseSize: baseSize, edge: edge,
+                            clockWidthFactor: clockWidthFactor).along
+        }
         return sum + CGFloat(kinds.count - 1) * spacing
     }
 

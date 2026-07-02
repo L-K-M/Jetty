@@ -26,6 +26,12 @@ struct DockView: View {
     /// frame and the SwiftUI content agree.
     static let padding: CGFloat = 10
 
+    /// The clock tile's current width factor (widens with a zoomed watch face).
+    /// Must match what `DockTileView.tileWidth` and the panel sizing use.
+    private var clockWidthFactor: CGFloat {
+        DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+    }
+
     var body: some View {
         let edge = anchor.edge
         let base = CGFloat(preferences.iconSize)
@@ -59,7 +65,8 @@ struct DockView: View {
     private func contentOverflows(edge: DockEdge, base: CGFloat, spacing: CGFloat, available: CGSize) -> Bool {
         guard !model.slots.isEmpty else { return false }
         let natural = DockLayout.contentSize(tiles: model.tiles.map(\.kind), iconSize: base,
-                                             spacing: spacing, padding: Self.padding, edge: edge)
+                                             spacing: spacing, padding: Self.padding, edge: edge,
+                                             clockWidthFactor: clockWidthFactor)
         return edge.isHorizontal ? natural.width > available.width + 1
                                  : natural.height > available.height + 1
     }
@@ -160,7 +167,14 @@ struct DockView: View {
             let base = CGFloat(preferences.iconSize)
             let spacing = CGFloat(preferences.tileSpacing)
             let centers = tileCenters(base: base, spacing: spacing)
-            let extra = preferences.magnificationEnabled ? (preferences.effectiveMagnification - 1) * base : 0
+            // The same along-axis headroom the panel budgets (widest tile), so the
+            // glow positions stay aligned with the centered content.
+            let widest = edge.isHorizontal
+                ? DockLayout.widestTileFactor(kinds: model.tiles.map(\.kind),
+                                              clockWidthFactor: clockWidthFactor) : 1
+            let extra = DockLayout.magnificationAlongExtra(iconSize: base,
+                                                           magnification: preferences.effectiveMagnification,
+                                                           widestFactor: widest)
             let lead = extra / 2 + Self.padding   // first tile's offset from the strip's leading edge
             ZStack {
                 ForEach(model.tiles.filter(isActiveAppTile)) { tile in
@@ -273,17 +287,13 @@ struct DockView: View {
     }
 
     private func tileView(_ tile: DockTile, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat], magnifies: Bool) -> some View {
-        // A zoomed watch face is already oversize and the panel's headroom is
-        // budgeted for max(magnification, zoom) — not both compounded — so
-        // hover-magnifying it further would clip at the window bounds.
-        let zoomedClock = tile.kind == .clock && anchor.edge.isHorizontal
-            && preferences.clockFace != .digital && preferences.clockFaceZoom > 1.001
-        return DockTileView(
+        DockTileView(
             tile: tile,
             preferences: preferences,
             baseSize: base,
-            scale: magnifies && !zoomedClock
-                ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
+            // Zoomed clocks magnify like any tile — the panel's across headroom
+            // budgets for zoom × magnification (DockLayout.clockZoomHeadroom).
+            scale: magnifies ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
             isHovered: hoveredTileID == tile.id,
             edge: anchor.edge,
             // The overflow-scroll state passes magnifies=false; its viewport
@@ -366,7 +376,8 @@ struct DockView: View {
     private func slotExtents(base: CGFloat, spacing: CGFloat) -> [CGFloat] {
         model.slots.map {
             DockLayout.slotExtentAlong(tileKinds: $0.tiles.map(\.kind), baseSize: base,
-                                       spacing: spacing, edge: anchor.edge)
+                                       spacing: spacing, edge: anchor.edge,
+                                       clockWidthFactor: clockWidthFactor)
         }
     }
 
@@ -388,7 +399,8 @@ struct DockView: View {
         var cursor: CGFloat = 0
         for slot in model.slots {
             for tile in slot.tiles {
-                let extent = DockLayout.tileExtent(kind: tile.kind, baseSize: base, edge: anchor.edge).along
+                let extent = DockLayout.tileExtent(kind: tile.kind, baseSize: base, edge: anchor.edge,
+                                                   clockWidthFactor: clockWidthFactor).along
                 map[tile.id] = cursor + extent / 2
                 cursor += extent + spacing
             }

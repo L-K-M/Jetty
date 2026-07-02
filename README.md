@@ -43,10 +43,12 @@ launcher).
   wristwatch (blue studded bezel, yellow squiggle second hand), an 80s **Memphis**
   Swatch, a translucent 90s **jelly** watch, and **Color Time**, a 70s
   Chromachron-style hour wedge sweeping a hidden color wheel, with an optional
-  **face zoom** (up to 160%) that lets the dial float out over the dock's edge —
+  **face zoom** (up to 250%) that lets the dial float out over the dock's edge —
   plus **battery**,
   **weather** (no location permission — you supply coordinates), a **world clock**,
-  a **Pomodoro** timer, a **CPU/RAM** monitor, and a **now-playing** tile.
+  a **Pomodoro** timer, a **CPU/RAM** monitor (bars, glass-plate graph, phosphor
+  **oscilloscope**, hi-fi **LED meter**, or analog **gauges**), and a
+  **now-playing** tile.
 - **Make it yours** — rename a pinned item or give it a custom icon, optional retro
   flourishes (corner decorations + CRT scanlines), and **customizable global
   shortcuts** (General ▸ Shortcuts).

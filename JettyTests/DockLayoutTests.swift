@@ -202,7 +202,7 @@ final class DockLayoutTests: XCTestCase {
         XCTAssertFalse(DockLayout.pointerCrossedEdge(CGPoint(x: 1010, y: 700), screenFrame: screen, dockFrame: rightDock, edge: .right, band: 24, margin: 16))
     }
 
-    // MARK: Clock face zoom headroom
+    // MARK: Clock face zoom headroom & tile widening
 
     func testClockZoomHeadroom() {
         // No zoom → no headroom: the face already fits inside the resting strip.
@@ -213,5 +213,63 @@ final class DockLayoutTests: XCTestCase {
         // Never negative, and it grows with the zoom.
         XCTAssertLessThan(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.2),
                           DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.5))
+    }
+
+    func testClockZoomHeadroomCompoundsWithMagnification() {
+        // A zoomed face still hover-magnifies: 52 × 2.04 × 1.5 − 62 = 97.12.
+        XCTAssertEqual(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 2.0, magnification: 1.5),
+                       97.12, accuracy: 0.001)
+        // Magnification below 1 never shrinks the headroom.
+        XCTAssertEqual(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.6, magnification: 0.5),
+                       DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.6), accuracy: 0.001)
+    }
+
+    func testClockTileWidthFactorWidensOnlyPastTheRestingWidth() {
+        // Unzoomed (and mildly zoomed) faces fit the resting 1.6× tile.
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 1.0), 1.6, accuracy: 0.001)
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 1.6), 1.6, accuracy: 0.001)
+        // Past that the tile tracks the face: 0.92 × zoom + 0.08 slack.
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 2.5), 2.38, accuracy: 0.001)
+        // The face always fits: face(0.92 × zoom) ≤ factor.
+        for zoom in stride(from: 1.0, through: 2.5, by: 0.1) {
+            XCTAssertGreaterThanOrEqual(DockLayout.clockTileWidthFactor(zoom: CGFloat(zoom)),
+                                        CGFloat(0.92 * zoom))
+        }
+    }
+
+    func testWidestTileFactorUsesClockOverride() {
+        // Now-playing (2.4×) beats a resting clock…
+        XCTAssertEqual(DockLayout.widestTileFactor(kinds: [.application, .clock, .nowPlaying],
+                                                   clockWidthFactor: 1.6), 2.4, accuracy: 0.001)
+        // …but a fully zoomed clock beats now-playing.
+        XCTAssertEqual(DockLayout.widestTileFactor(kinds: [.application, .clock, .nowPlaying],
+                                                   clockWidthFactor: 2.5), 2.5, accuracy: 0.001)
+        XCTAssertEqual(DockLayout.widestTileFactor(kinds: [], clockWidthFactor: 1.6), 1, accuracy: 0.001)
+    }
+
+    func testMagnificationAlongExtraScalesWithWidestTile() {
+        // Square tiles: the old (mag − 1) × icon budget.
+        XCTAssertEqual(DockLayout.magnificationAlongExtra(iconSize: 52, magnification: 1.5, widestFactor: 1),
+                       26, accuracy: 0.001)
+        // Wide tiles need proportionally more end-room.
+        XCTAssertEqual(DockLayout.magnificationAlongExtra(iconSize: 52, magnification: 1.5, widestFactor: 2.4),
+                       62.4, accuracy: 0.001)
+        // Magnification off → none.
+        XCTAssertEqual(DockLayout.magnificationAlongExtra(iconSize: 52, magnification: 1, widestFactor: 2.4),
+                       0, accuracy: 0.001)
+    }
+
+    func testContentSizeUsesClockWidthFactor() {
+        let resting = DockLayout.contentSize(tiles: [.clock], iconSize: 50, spacing: 8,
+                                             padding: 10, edge: .bottom)
+        let zoomed = DockLayout.contentSize(tiles: [.clock], iconSize: 50, spacing: 8,
+                                            padding: 10, edge: .bottom, clockWidthFactor: 2.0)
+        XCTAssertEqual(resting.width, 100, accuracy: 0.001)   // 1.6 × 50 + 20
+        XCTAssertEqual(zoomed.width, 120, accuracy: 0.001)    // 2.0 × 50 + 20
+        // Vertical docks ignore the widened factor (zoom is off there); the
+        // across dimension stays the resting clock width.
+        let vertical = DockLayout.contentSize(tiles: [.clock], iconSize: 50, spacing: 8,
+                                              padding: 10, edge: .left, clockWidthFactor: 2.0)
+        XCTAssertEqual(vertical.width, 50 * 1.6 + 20, accuracy: 0.001)
     }
 }

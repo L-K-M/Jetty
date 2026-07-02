@@ -395,15 +395,20 @@ small month popover). Pure formatting logic (`ClockFormatter`) is unit-tested; t
 ticks on a coalesced timer aligned to the minute/second.
 
 The tile's look is a `ClockFaceStyle` (Widgets ▸ Clock ▸ Face): the plain **digital**
-text, a seven-segment **LCD** in the spirit of 80s Casios, or an analog dial — the
-minimal **classic** glass face, the **Swiss railway** station clock (bold batons, red
-lollipop second hand), the mid-90s rainbow-era **retro Mac** wristwatch (green triangle
-hour hand, red minute baton, yellow squiggle second hand), an 80s Memphis-style
-**Swatch** (cream dial, confetti markers), and an early-90s translucent **jelly** watch
-tinted with the accent color. Dials are drawn in `Canvas` (`AnalogClockFace`), inset so
+text, a seven-segment **LCD** drawn as a whole resin sports watch in the spirit of 80s
+Casios, or an analog dial — the minimal **classic** glass face, **Clock Face 2000** (a
+station-style dial of our own: silvery face, rounded slate batons, orange ring second
+hand), the mid-90s rainbow-era **retro Mac** wristwatch (blue studded metal bezel,
+green triangle hour hand, red minute baton, yellow squiggle second hand, and a rainbow
+chip — no logo), an 80s Memphis-style **Swatch** (cream dial, pastel shapes, confetti
+markers, outlined hands), an early-90s translucent **jelly** watch tinted with the
+accent color (rainbow dot markers), and **Color Time**, a 70s Chromachron-style dial
+whose 30° hour wedge sweeps a color wheel hidden under a black dial (no hands —
+deliberately approximate). Dials are drawn in `Canvas` (`AnalogClockFace`), inset so
 the rim stroke stays fully inside the canvas bounds (nothing clips); digit shapes
 (`SevenSegment`) and hand angles (`ClockGeometry`) are pure and unit-tested. The old
-`clockAnalog` boolean migrates to `.classic`.
+`clockAnalog` boolean migrates to `.classic`, and the retired `"swiss"` raw value maps
+onto Clock Face 2000.
 
 ### 8.2 The Jetty Menu (Windows-Start-style launcher)
 A separate borderless panel (`JettyMenuPanel`) summoned from its dock tile or a hotkey:
@@ -526,7 +531,7 @@ Jetty/
 │   │   └── EdgeHoverMonitor.swift    # global mouse monitor → which screen edge is hovered
 │   ├── Widgets/
 │   │   ├── ClockWidgetView.swift     # date/time tile (digital text + face dispatch)
-│   │   ├── AnalogClockFace.swift     # Canvas dials: classic/swiss/retroMac/memphis/jelly
+│   │   ├── AnalogClockFace.swift     # Canvas dials: classic/face2000/retroMac/memphis/jelly/colorTime
 │   │   ├── LCDClockFace.swift        # Canvas seven-segment retro LCD face
 │   │   ├── SevenSegment.swift        # pure digit→segments lookup (unit-tested)
 │   │   ├── ClockGeometry.swift       # pure hand-angle/polar math (unit-tested)

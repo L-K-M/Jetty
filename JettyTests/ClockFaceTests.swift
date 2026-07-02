@@ -98,4 +98,14 @@ final class ClockFaceTests: XCTestCase {
             XCTAssertEqual(ClockFaceStyle(rawValue: style.rawValue), style)
         }
     }
+
+    func testStoredDecodingMapsRetiredSwissName() {
+        // Every live raw value decodes to itself; the retired "swiss" maps to
+        // Clock Face 2000; junk still fails.
+        for style in ClockFaceStyle.allCases {
+            XCTAssertEqual(ClockFaceStyle.stored(style.rawValue), style)
+        }
+        XCTAssertEqual(ClockFaceStyle.stored("swiss"), .face2000)
+        XCTAssertNil(ClockFaceStyle.stored("sundial"))
+    }
 }

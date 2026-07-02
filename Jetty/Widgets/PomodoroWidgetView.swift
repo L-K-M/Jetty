@@ -20,6 +20,8 @@ struct PomodoroWidgetView: View {
             Text(timer.displayString)
                 .font(.system(size: max(9, height * 0.22), weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)   // long sessions (h:mm:ss) must not overflow (M33)
                 .opacity(timer.isRunning ? 1 : 0.6)
         }
         .padding(height * 0.12)

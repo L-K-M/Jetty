@@ -12,8 +12,11 @@ struct WorldClockWidgetView: View {
     }
 
     var body: some View {
-        let cadence: TimeInterval = preferences.clockShowSeconds ? 1 : 30
-        TimelineView(.periodic(from: .now, by: cadence)) { context in
+        // Minute cadence phased to the boundary (M29); seconds still tick every second.
+        let schedule: PeriodicTimelineSchedule = preferences.clockShowSeconds
+            ? .periodic(from: .now, by: 1)
+            : .periodic(from: ClockFormatter.minuteStart(), by: 60)
+        TimelineView(schedule) { context in
             let lines = ClockFormatter.lines(
                 for: context.date,
                 use24Hour: preferences.clockUse24Hour,
@@ -25,6 +28,8 @@ struct WorldClockWidgetView: View {
                 Text(lines.primary)
                     .font(.system(size: max(11, height * 0.30), weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)   // 12-hour + seconds must not wrap/clip (F-L7)
                 Text(zoneLabel)
                     .font(.system(size: max(8, height * 0.18), weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)

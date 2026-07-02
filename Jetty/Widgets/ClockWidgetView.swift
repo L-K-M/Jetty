@@ -9,8 +9,13 @@ struct ClockWidgetView: View {
     var height: CGFloat
 
     var body: some View {
-        let cadence: TimeInterval = (preferences.clockShowSeconds || preferences.clockAnalog) ? 1 : 30
-        TimelineView(.periodic(from: .now, by: cadence)) { context in
+        // Seconds/analog tick every second; otherwise tick once a minute, phased to the
+        // minute boundary so the shown minute never lags up to ~60 s behind (M29).
+        let showsSeconds = preferences.clockShowSeconds || preferences.clockAnalog
+        let schedule: PeriodicTimelineSchedule = showsSeconds
+            ? .periodic(from: .now, by: 1)
+            : .periodic(from: ClockFormatter.minuteStart(), by: 60)
+        TimelineView(schedule) { context in
             if preferences.clockAnalog {
                 AnalogClockFace(date: context.date,
                                 showSeconds: preferences.clockShowSeconds,
@@ -36,10 +41,14 @@ struct ClockWidgetView: View {
             Text(lines.primary)
                 .font(.system(size: max(11, height * 0.32), weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)   // "10:00:00 PM" / small tiles must not wrap or clip (F-L7)
             if let secondary = lines.secondary {
                 Text(secondary)
                     .font(.system(size: max(8, height * 0.2), weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
         }
         .padding(.horizontal, 8)

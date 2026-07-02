@@ -61,6 +61,29 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(other.tintHex, "#112233")
     }
 
+    func testClockFaceDefaultsToDigitalAndRoundTrips() {
+        let defaults = freshDefaults()
+        let a = Preferences(defaults: defaults)
+        XCTAssertEqual(a.clockFace, .digital)
+        a.clockFace = .memphis
+        let b = Preferences(defaults: defaults)
+        XCTAssertEqual(b.clockFace, .memphis)
+    }
+
+    func testClockFaceMigratesFromLegacyAnalogToggle() {
+        // An old install with "Analog face" on gets the matching classic dial…
+        let defaults = freshDefaults()
+        defaults.set(true, forKey: "clockAnalog")
+        XCTAssertEqual(Preferences(defaults: defaults).clockFace, .classic)
+        // …but a stored face style always wins over the legacy flag.
+        defaults.set(ClockFaceStyle.swiss.rawValue, forKey: "clockFace")
+        XCTAssertEqual(Preferences(defaults: defaults).clockFace, .swiss)
+        // Legacy flag off (or absent) stays digital.
+        let plain = freshDefaults()
+        plain.set(false, forKey: "clockAnalog")
+        XCTAssertEqual(Preferences(defaults: plain).clockFace, .digital)
+    }
+
     func testDefaultAnchorReflectsPosition() {
         let prefs = Preferences(defaults: freshDefaults())
         prefs.edge = .top

@@ -37,9 +37,13 @@ launcher).
   (Show / Hide / Quit / Keep in Dock / Show in Finder). **Folders** preview their
   contents as a grid / list / fan **stack** on hover; a click opens them in Finder.
 - **Live info tiles** right in the dock — a date/time tile (12/24-hour, seconds,
-  weekday, date, or an analog face), plus **battery**, **weather** (no location
-  permission — you supply coordinates), a **world clock**, a **Pomodoro** timer, a
-  **CPU/RAM** monitor, and a **now-playing** tile.
+  weekday, date) with a family of **clock faces**: digital text, a retro
+  seven-segment **LCD**, and analog dials inspired by icons — the **Swiss railway**
+  station clock, the mid-90s **rainbow-era Mac** wristwatch (yellow squiggle second
+  hand included), an 80s **Memphis** Swatch, and a translucent 90s **jelly** watch —
+  plus **battery**, **weather** (no location permission — you supply coordinates), a
+  **world clock**, a **Pomodoro** timer, a **CPU/RAM** monitor, and a **now-playing**
+  tile.
 - **Make it yours** — rename a pinned item or give it a custom icon, optional retro
   flourishes (corner decorations + CRT scanlines), and **customizable global
   shortcuts** (General ▸ Shortcuts).

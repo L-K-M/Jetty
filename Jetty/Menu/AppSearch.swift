@@ -33,26 +33,43 @@ enum AppSearch {
             .map { $0.0 }
     }
 
-    /// A match score (higher = better), or `nil` when `query` isn't a subsequence of
-    /// `candidate` (case-insensitive). Exact/prefix matches and matches that start on
-    /// word boundaries (after a space, `-`, `_`, or a case bump) score higher.
-    static func score(_ query: String, _ candidate: String) -> Int? {
-        let lowerQuery = Array(query.lowercased())
-        let cand = Array(candidate)
-        let lowerCand = Array(candidate.lowercased())
-        guard !lowerQuery.isEmpty else { return 0 }
-        guard lowerQuery.count <= lowerCand.count else { return nil }
+    /// Folds a string so matching is case-, diacritic-, and width-insensitive:
+    /// "cafe" matches "Café", "resume" matches "Résumé", "n" matches "ñ", and a
+    /// full-width "Ａ" matches "A" — the default behavior in Spotlight/Alfred/Raycast
+    /// (H4).
+    private static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                  locale: .current)
+    }
 
-        // Exact / prefix fast paths.
-        let candLower = candidate.lowercased()
-        if candLower == query.lowercased() { return 1000 }
-        if candLower.hasPrefix(query.lowercased()) { return 800 - (candidate.count - query.count) }
+    /// A match score (higher = better), or `nil` when `query` isn't a subsequence of
+    /// `candidate` (case-, diacritic-, and width-insensitive). Exact/prefix matches and
+    /// matches that start on word boundaries (after a space, `-`, `_`, or a case bump)
+    /// score higher.
+    static func score(_ query: String, _ candidate: String) -> Int? {
+        let queryFolded = fold(query)
+        guard !queryFolded.isEmpty else { return 0 }
+
+        // Exact / prefix fast paths, folded on both sides.
+        let candFolded = fold(candidate)
+        if candFolded == queryFolded { return 1000 }
+        if candFolded.hasPrefix(queryFolded) { return 800 - (candidate.count - query.count) }
+
+        // Fold each character independently so the folded arrays stay index-aligned
+        // with the original `cand` chars — the word-boundary / camelCase bonuses read
+        // the *original* neighbors, and whole-string folding could change the length
+        // (ligatures) and break that alignment. Diacritic/width folds are 1:1 in
+        // practice, so per-character folding matches the whole-string fast paths.
+        let cand = Array(candidate)
+        let foldedCand = cand.map { fold(String($0)) }
+        let foldedQuery = Array(query).map { fold(String($0)) }
+        guard foldedQuery.count <= foldedCand.count else { return nil }
 
         var qi = 0
         var score = 0
         var lastMatch = -2
-        for ci in 0..<lowerCand.count where qi < lowerQuery.count {
-            if lowerCand[ci] == lowerQuery[qi] {
+        for ci in 0..<foldedCand.count where qi < foldedQuery.count {
+            if foldedCand[ci] == foldedQuery[qi] {
                 var bonus = 10
                 if ci == lastMatch + 1 { bonus += 15 }                 // consecutive run
                 if ci == 0 { bonus += 20 }                              // at the start
@@ -66,7 +83,7 @@ enum AppSearch {
                 qi += 1
             }
         }
-        guard qi == lowerQuery.count else { return nil }
+        guard qi == foldedQuery.count else { return nil }
         // Prefer shorter candidates among equal matches.
         return score - candidate.count / 4
     }

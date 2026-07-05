@@ -12,6 +12,14 @@ final class DockStore: ObservableObject {
     /// True when an existing document was read from disk (vs. a fresh first run).
     let loadedFromDisk: Bool
 
+    /// True when the file on disk claims a **newer** document version than this build
+    /// understands (`version > DockDocument.currentVersion`). In that case the store
+    /// never writes: re-encoding would rewrite downgraded (lossily decoded) content
+    /// under the newer version stamp — and rotate the real newer file out of `.bak` —
+    /// poisoning a future build's migration (FAB-B16). In-memory edits still work for
+    /// the session; they just aren't persisted.
+    let isReadOnly: Bool
+
     private let fileURL: URL
     private let fileManager: FileManager
     private var saveWorkItem: DispatchWorkItem?
@@ -24,9 +32,14 @@ final class DockStore: ObservableObject {
         if let loaded = Self.load(from: fileURL, fileManager: fileManager) {
             document = loaded
             loadedFromDisk = true
+            isReadOnly = loaded.version > DockDocument.currentVersion
         } else {
             document = DockDocument()
             loadedFromDisk = false
+            isReadOnly = false
+        }
+        if isReadOnly {
+            NSLog("Jetty: dock.json is version \(document.version) but this build only understands version \(DockDocument.currentVersion) — treating the store as read-only for this session so the newer file isn't downgraded.")
         }
     }
 
@@ -151,6 +164,12 @@ final class DockStore: ObservableObject {
     }
 
     private func saveNow() {
+        // Never overwrite a file written by a newer build (FAB-B16): this build's
+        // encode would be a lossy downgrade of content it only partially understands.
+        guard !isReadOnly else {
+            NSLog("Jetty: skipping save — dock.json is version \(document.version) (newer than this build's \(DockDocument.currentVersion)); the store is read-only this session.")
+            return
+        }
         do {
             try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(),
                                             withIntermediateDirectories: true)
@@ -164,7 +183,11 @@ final class DockStore: ObservableObject {
             }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(document)
+            // Stamp the version truthfully (FAB-B16): what this build writes is, by
+            // definition, `currentVersion`-shaped — never echo an older file's stamp.
+            var toWrite = document
+            toWrite.version = DockDocument.currentVersion
+            let data = try encoder.encode(toWrite)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             NSLog("Jetty: failed to save dock document: \(error.localizedDescription)")

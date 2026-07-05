@@ -139,7 +139,13 @@ final class InfoWidgetTests: XCTestCase {
 
     func testGraphRateFormatting() {
         XCTAssertEqual(SystemMonitorGraph.formatRate(0), "0")
-        XCTAssertEqual(SystemMonitorGraph.formatRate(512), "0")
+        // A trickle below 1 KiB/s reads as "<1K", not a hard zero (FAB-V7)…
+        XCTAssertEqual(SystemMonitorGraph.formatRate(1), "<1K")
+        XCTAssertEqual(SystemMonitorGraph.formatRate(512), "<1K")
+        XCTAssertEqual(SystemMonitorGraph.formatRate(1023), "<1K")
+        // …negative rates still clamp to true silence.
+        XCTAssertEqual(SystemMonitorGraph.formatRate(-100), "0")
+        XCTAssertEqual(SystemMonitorGraph.formatRate(1024), "1K")
         XCTAssertEqual(SystemMonitorGraph.formatRate(64 * 1024), "64K")
         XCTAssertEqual(SystemMonitorGraph.formatRate(2 * 1024 * 1024), "2.0M")
     }
@@ -160,6 +166,22 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(SystemMonitorGraph.litSegments(value: 2.0, count: 8), 8)   // clamped
         XCTAssertEqual(SystemMonitorGraph.litSegments(value: -1, count: 8), 0)    // clamped
         XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.5, count: 0), 0)   // degenerate
+    }
+
+    func testLEDSegmentsLightTheBottomSegmentForAnyNonzeroValue() {
+        // Rounding alone left an idle machine (< 6.25% on 8 segments) with dead
+        // columns; any nonzero load now lights at least the bottom LED (FAB-V7)…
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.01, count: 8), 1)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.06, count: 8), 1)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.001, count: 8), 1)
+        // …values past the rounding threshold are unaffected by the floor…
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.07, count: 8), 1)  // rounds to 1 anyway
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.13, count: 8), 1)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.25, count: 8), 2)
+        // …and exact zero (or negative, clamped to zero) stays fully dark.
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0, count: 8), 0)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: -0.5, count: 8), 0)
+        XCTAssertEqual(SystemMonitorGraph.litSegments(value: 0.01, count: 0), 0)  // degenerate count
     }
 
     func testLEDZonesMatchTheBarThresholds() {

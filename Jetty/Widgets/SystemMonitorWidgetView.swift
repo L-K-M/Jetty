@@ -38,8 +38,10 @@ struct SystemMonitorWidgetView: View {
         return SystemMonitorScopeView(
             cpu: samples.map(\.load),
             ram: samples.map(\.memory),
-            net: SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
-                                               floor: SystemMonitorGraph.netFloor),
+            net: showNetwork
+                ? SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
+                                                floor: SystemMonitorGraph.netFloor)
+                : [],
             cpuValue: stats.load,
             ramValue: stats.memory,
             netRate: currentNetRate,
@@ -48,9 +50,20 @@ struct SystemMonitorWidgetView: View {
     }
 
     private var helpText: String {
-        style.supportsNetwork
-            ? "CPU, memory\(showNetwork ? ", and network" : "") over the last couple of minutes"
-            : "CPU load and memory usage"
+        switch style {
+        case .led, .gauges:
+            // These looks show no numerals at all, so the tooltip carries the
+            // live values (FAB-A2). Recomputed on every published sample.
+            var text = "CPU \(percent(stats.load))% · RAM \(percent(stats.memory))%"
+            if showNetwork && style.supportsNetwork {
+                text += " · Net \(SystemMonitorGraph.formatRate(currentNetRate))"
+            }
+            return text
+        default:
+            return style.supportsNetwork
+                ? "CPU, memory\(showNetwork ? ", and network" : "") over the last couple of minutes"
+                : "CPU load and memory usage"
+        }
     }
 
     // MARK: Bars
@@ -66,6 +79,11 @@ struct SystemMonitorWidgetView: View {
     private func meter(label: String, value: Double) -> some View {
         let clamped = min(max(value, 0), 1)
         let color = barColor(clamped)
+        // The numeral gets the same readability lift the graph legend got
+        // (FAB-V5): below 60% load `barColor` is the raw tint, which can be
+        // near-black on the dock glass. The bar fill itself keeps the exact
+        // tint — the capsule reads by shape and glow, not contrast.
+        let textColor = readableColor(color)
         return VStack(spacing: 3) {
             Text(label)
                 .font(.system(size: max(7, height * 0.15), weight: .bold, design: .rounded))
@@ -85,7 +103,7 @@ struct SystemMonitorWidgetView: View {
             Text("\(Int((clamped * 100).rounded()))")
                 .font(.system(size: max(8, height * 0.18), weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(color)
+                .foregroundStyle(textColor)
         }
     }
 
@@ -103,8 +121,10 @@ struct SystemMonitorWidgetView: View {
         let samples = stats.history
         let cpu = samples.map(\.load)
         let ram = samples.map(\.memory)
-        let net = SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
-                                                floor: SystemMonitorGraph.netFloor)
+        let net = showNetwork
+            ? SystemMonitorGraph.autoScaled(samples.map { $0.netDown + $0.netUp },
+                                            floor: SystemMonitorGraph.netFloor)
+            : []
         let cpuColor = readableCPUColor
         let labelSize = max(7, height * 0.15)
         // Legend sits in its own row ABOVE the chart so the sparklines never draw over
@@ -179,11 +199,17 @@ struct SystemMonitorWidgetView: View {
     /// The CPU series color: the user's tint, lifted toward white when it's too
     /// dark to read on the dark plate (perceived luminance, like the menu's
     /// selected-row text — M10).
-    private var readableCPUColor: Color {
-        guard let rgb = NSColor(tint).usingColorSpace(.sRGB) else { return tint }
+    private var readableCPUColor: Color { readableColor(tint) }
+
+    /// `color`, lifted toward white when it's too dark to read as text
+    /// (perceived luminance + `SystemMonitorGraph.whiteLift`). Used everywhere
+    /// a series color feeds text/legend rendering; bright colors pass through
+    /// untouched.
+    private func readableColor(_ color: Color) -> Color {
+        guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return color }
         let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
         let lift = SystemMonitorGraph.whiteLift(forLuminance: luminance)
-        guard lift > 0, let lifted = rgb.blended(withFraction: lift, of: .white) else { return tint }
+        guard lift > 0, let lifted = rgb.blended(withFraction: lift, of: .white) else { return color }
         return Color(nsColor: lifted)
     }
 
@@ -260,9 +286,14 @@ enum SystemMonitorGraph {
     enum LEDZone: Equatable { case green, amber, red }
 
     /// How many of an `count`-segment LED column light for `value` (0…1).
+    /// Any nonzero value lights at least the bottom segment — plain rounding
+    /// left an idle machine (< 6.25% on 8 segments) showing dead columns,
+    /// which on a hi-fi meter reads as "broken" (FAB-V7).
     static func litSegments(value: Double, count: Int) -> Int {
         guard count > 0 else { return 0 }
-        return Int((Swift.min(Swift.max(value, 0), 1) * Double(count)).rounded())
+        let clamped = Swift.min(Swift.max(value, 0), 1)
+        let rounded = Int((clamped * Double(count)).rounded())
+        return Swift.max(clamped > 0 ? 1 : 0, rounded)
     }
 
     /// The zone of segment `index` (0 = bottom) in an `count`-segment column:
@@ -282,11 +313,14 @@ enum SystemMonitorGraph {
         (Swift.min(Swift.max(value, 0), 1) - 0.5) * (2 * .pi / 3)
     }
 
-    /// A compact throughput label: `0`, `64K`, `1.2M` (1024-based, bytes/s).
+    /// A compact throughput label: `0`, `<1K`, `64K`, `1.2M` (1024-based,
+    /// bytes/s). A trickle below 1 KiB/s reads as `<1K` rather than a hard `0`,
+    /// so live-but-quiet traffic is distinguishable from silence (FAB-V7).
     static func formatRate(_ bytesPerSecond: Double) -> String {
         let v = Swift.max(bytesPerSecond, 0)
         if v >= 1024 * 1024 { return String(format: "%.1fM", v / (1024 * 1024)) }
         if v >= 1024 { return String(format: "%.0fK", v / 1024) }
+        if v > 0 { return "<1K" }
         return "0"
     }
 }

@@ -70,7 +70,8 @@ Mirrors `PLAN.md §11`:
   `DockAlignment`, `AppearancePreset`), `Preferences`, `ColorHex`, the UI enums.
 - `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`.
 - `Screens/` — `DisplayRegistry` (UUID mapping) and the pure `DockLayout` math.
-- `Apps/` — `RunningAppsModel` (NSWorkspace running apps), `AppLauncher`.
+- `Apps/` — `RunningAppsModel` (NSWorkspace running apps), `AppLauncher`, and
+  `TrashMonitor` (DispatchSource watch so the Trash tile reflects empty/full live).
 - `SystemDock/` — `SystemDockController` (hide/re-assert/restore the real Dock).
 - `Dock/` — `DockController` (the brain), `DockPanelController` (per-display
   auto-hiding panel), `DockModel` (pure tile merge), `DockView`/`DockTileView`,
@@ -90,6 +91,10 @@ Mirrors `PLAN.md §11`:
 - `Updates/` — the GitHub self-updater (reused from Zap).
 - `MediaRemote/` — the isolated Objective-C MediaRemote bridge (`MediaRemoteBridge`)
   behind `Jetty-Bridging-Header.h`, used only by the opt-in now-playing tile.
+- `Windows/` — the opt-in window peek: `AppWindows` (CGWindowList listing + AX
+  raise/minimize), `WindowPeek` + `WindowPeekController` (the hover popover panel).
+  The default window-name mode is permission-free; live thumbnails need Screen
+  Recording; raising/minimizing a specific window needs Accessibility.
 - `Common/` — `VisualEffectView`, `GlassBackground` (Liquid Glass + fallback),
   `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent` (dominant-color glow),
   `Poof`, and the retro decorations (`PanelDecoration`, `BoingBallDecoration`,

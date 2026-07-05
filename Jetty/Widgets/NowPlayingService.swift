@@ -16,21 +16,32 @@ final class NowPlayingService: ObservableObject {
 
     @Published private(set) var snapshot: NowPlayingSnapshot?
 
-    private var inFlight = false
+    /// Monotonically increasing token; each `refresh()` starts a new generation, so a
+    /// stale callback from an abandoned fetch can't overwrite a fresher snapshot (F-L10).
+    private var generation = 0
+    /// The generation of the fetch currently in flight, or `nil` if none.
+    private var inFlightGeneration: Int?
 
     /// Fetches the current track (the bridge calls back on the main queue).
     func refresh() {
-        guard !inFlight else { return }
-        inFlight = true
+        guard inFlightGeneration == nil else { return }
+        generation += 1
+        let fetchGeneration = generation
+        inFlightGeneration = fetchGeneration
         JettyNowPlaying.fetch { [weak self] info in
-            self?.inFlight = false
-            self?.snapshot = Self.parse(info)
+            guard let self else { return }
+            // Apply only if no newer fetch has started since; a callback from an
+            // abandoned fetch must not overwrite a fresher snapshot (F-L10).
+            guard fetchGeneration == self.generation else { return }
+            self.inFlightGeneration = nil
+            self.snapshot = Self.parse(info)
         }
-        // Safety net: if a half-present private framework never delivers, clear the flag
-        // so future refreshes aren't blocked forever (H17). Harmless if the callback
-        // already fired (`inFlight` is only reset to false).
+        // Safety net: if a half-present private framework never delivers, invalidate
+        // this fetch so future refreshes aren't blocked forever (H17). Guarded by the
+        // generation so it never clears a newer fetch's in-flight state.
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            if self?.inFlight == true { self?.inFlight = false }
+            guard let self else { return }
+            if self.inFlightGeneration == fetchGeneration { self.inFlightGeneration = nil }
         }
     }
 

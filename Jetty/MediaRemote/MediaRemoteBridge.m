@@ -75,9 +75,10 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
 /// Legacy C API (macOS < 15.4): one async callback with a CFDictionary.
 + (void)fetchViaLegacy:(void (^)(NSDictionary * _Nullable))completion {
     void *handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
-    if (!handle) { completion(nil); return; }
+    // Early exits must still honor the header's main-queue contract (FAB-B17).
+    if (!handle) { dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); }); return; }
     MRGetInfoFn getInfo = (MRGetInfoFn)dlsym(handle, "MRMediaRemoteGetNowPlayingInfo");
-    if (!getInfo) { completion(nil); return; }
+    if (!getInfo) { dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); }); return; }
     getInfo(dispatch_get_main_queue(), ^(CFDictionaryRef information) {
         NSDictionary *info = (__bridge NSDictionary *)information;
         completion((info.count > 0) ? info : nil);
@@ -90,7 +91,8 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
     Class destClass     = NSClassFromString(@"MRDestination");
     Class configClass   = NSClassFromString(@"MRNowPlayingControllerConfiguration");
     Class controllerCls = NSClassFromString(@"MRNowPlayingController");
-    if (!destClass || !configClass || !controllerCls) { completion(nil); return; }
+    // Early exit must still honor the header's main-queue contract (FAB-B17).
+    if (!destClass || !configClass || !controllerCls) { dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); }); return; }
 
     @try {
     // Route `init…` through a typed objc_msgSend (not -performSelector:), so ARC keeps
@@ -138,8 +140,9 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
     });
     dispatch_resume(timer);
     } @catch (NSException *ex) {
-        // Any renamed/removed private selector in the setup path → fail closed (C4).
-        completion(nil);
+        // Any renamed/removed private selector in the setup path → fail closed (C4),
+        // still on the main queue per the header contract (FAB-B17).
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
     }
 }
 

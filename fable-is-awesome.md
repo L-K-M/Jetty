@@ -831,33 +831,39 @@ coherent and minimize cross-PR merge conflicts (same-file entries share a
 branch; independent files get their own). Everything not listed stays as
 backlog above — mostly *needs-device-verify* items and product decisions.
 
-| Branch | Entries |
-|---|---|
-| `fable2/second-instance-teardown` | FAB-B1 |
-| `fable2/systemdock-guards` | FAB-B4, FAB-B5 |
-| `fable2/dock-geometry-mirrors` | FAB-B2, FAB-B3 |
-| `fable2/lcd-zoom-aspect` | FAB-V1 (stacked on geometry-mirrors if needed) |
-| `fable2/folder-stacks` | FAB-B6, M26, L29 |
-| `fable2/menu-fixes` | FAB-B7, FAB-B12, FAB-U10, FAB-A1, M12, M19, FAB-D16 |
-| `fable2/expression-evaluator` | FAB-B8, FAB-B9, FAB-B10, FAB-D19 |
-| `fable2/app-search` | FAB-B11, FAB-P4, F-L5 |
-| `fable2/clock-cadence` | FAB-P1, FAB-P2, FAB-B13, FAB-U3, L17 |
-| `fable2/system-monitor-polish` | FAB-V5, FAB-V7, FAB-P5, FAB-A2 |
-| `fable2/weather-retry` | FAB-B19 |
-| `fable2/trash-pipeline` | FAB-P3, F-L11 |
-| `fable2/runningapps-consistency` | F-P4, F-M12 |
-| `fable2/nowplaying-robustness` | FAB-B17, F-L10 |
-| `fable2/update-downloader` | FAB-S4, M36, F-R6 |
-| `fable2/quarantine-flag` | FAB-S1 |
-| `fable2/release-workflow` | FAB-S2, FAB-S3 |
-| `fable2/colorhex` | FAB-B15, L9, L10 |
-| `fable2/power-commands` | M35 |
-| `fable2/settings-fixes` | FAB-B14, FAB-U4, FAB-U5, weather-example nit |
-| `fable2/windowpeek-preflight` | FAB-B18 |
-| `fable2/small-visual-fixes` | FAB-V8, separator-id nit + L34 |
-| `fable2/store-version-stamp` | FAB-B16, F-P7 |
-| `fable2/test-hardening` | FAB-T1, FAB-T2 (new test files), F-R9 |
-| `fable2/docs-truth` | FAB-T3 |
+| Branch | Entries | PR |
+|---|---|---|
+| `fable2/second-instance-teardown` | FAB-B1 | #6 |
+| `fable2/systemdock-guards` | FAB-B4, FAB-B5 | #8 |
+| `fable2/dock-geometry-mirrors` | FAB-B2, FAB-B3 | #13 |
+| `fable2/lcd-zoom-aspect` | FAB-V1 | #18 (stacked on #13) |
+| `fable2/folder-stacks` | FAB-B6, M26, L29 | #9 |
+| `fable2/menu-fixes` | FAB-B7, FAB-B12, FAB-U10, FAB-A1, M12, M19, FAB-D16 | #25 |
+| `fable2/expression-evaluator` | FAB-B8, FAB-B9, FAB-B10, FAB-D19 | #14 |
+| `fable2/app-search` | FAB-B11, FAB-P4, F-L5 | #12 |
+| `fable2/clock-cadence` | FAB-P1, FAB-P2, FAB-B13, FAB-U3, L17 | #19 |
+| `fable2/system-monitor-polish` | FAB-V5, FAB-V7, FAB-P5, FAB-A2 | #20 |
+| `fable2/weather-retry` | FAB-B19 | #22 |
+| `fable2/trash-pipeline` | FAB-P3, F-L11 | #21 |
+| `fable2/runningapps-consistency` | F-P4, F-M12 | #15 |
+| `fable2/nowplaying-robustness` | FAB-B17, F-L10 | #16 |
+| `fable2/update-downloader` | FAB-S4, M36, F-R6 | #11 |
+| `fable2/quarantine-flag` | FAB-S1 | #24 |
+| `fable2/release-workflow` | FAB-S2, FAB-S3 | #7 |
+| `fable2/colorhex` | FAB-B15, L9, L10 | #10 |
+| `fable2/power-commands` | M35 | #17 |
+| `fable2/settings-fixes` | FAB-B14, FAB-U4, FAB-U5, weather-example nit | #26 |
+| `fable2/windowpeek-preflight` | FAB-B18 | #23 |
+| `fable2/small-visual-fixes` | FAB-V8, separator-id nit + L34, F-P7 | #27 |
+| `fable2/store-version-stamp` | FAB-B16 | #28 |
+| `fable2/test-hardening` | FAB-T1, FAB-T2 (new test files), F-R9 | #29 |
+| `fable2/docs-truth` | FAB-T3 | #30 |
+
+All 25 PRs were opened on 2026-07-05. Two scope notes vs. the original plan:
+F-P7 (Boing cache) landed in `fable2/small-visual-fixes` rather than
+`fable2/store-version-stamp`, and FAB-U3 shipped as a caption rather than
+hiding the toggle (hiding would recreate the FAB-B13 stranded-setting trap —
+see PR #19's discussion).
 
 Deliberately **not** implemented from this environment (no compiler, no GUI):
 FAB-V2/V3/V4/V6/V9/V10/V11, FAB-U1/U7/U8/U9/U11, FAB-B20/B21/B22, FAB-P6,

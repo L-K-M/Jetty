@@ -44,7 +44,16 @@ jobs:
           xcodebuild test \
             -project "$PROJECT" -scheme "$SCHEME" \
             -destination 'platform=macOS' \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReleaseTestResults
+          path: TestResults.xcresult
+          if-no-files-found: ignore
 
       - name: Build (Release, no Developer ID signing)
         run: |
@@ -80,6 +89,9 @@ jobs:
             --app-drop-link 390 185 \
             "$DMG" "$APP_PATH" || true
           [ -f "$DMG" ] || { echo "::error::DMG was not created"; exit 1; }
+          # create-dmg's exit code is unreliable, so verify the image itself: a
+          # truncated/corrupt DMG must not ship as the release's preferred asset.
+          hdiutil verify "$DMG" || { echo "::error::DMG failed hdiutil verification — the image is corrupt or truncated"; exit 1; }
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "DMG=$DMG" >> "$GITHUB_ENV"
 

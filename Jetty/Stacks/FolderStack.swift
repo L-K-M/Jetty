@@ -8,6 +8,18 @@ struct FolderEntry: Identifiable {
     let name: String
     let icon: NSImage
     let isDirectory: Bool
+    /// True for file packages (bundles like `.app`/`.rtfd`) that should *open* rather
+    /// than drill in, even though they are directories on disk (FAB-B6).
+    let isPackage: Bool
+
+    init(id: String, url: URL, name: String, icon: NSImage, isDirectory: Bool, isPackage: Bool = false) {
+        self.id = id
+        self.url = url
+        self.name = name
+        self.icon = icon
+        self.isDirectory = isDirectory
+        self.isPackage = isPackage
+    }
 }
 
 /// Pure helpers + content reading for the folder-stack popover (MF-2). The geometry
@@ -23,24 +35,37 @@ enum FolderStack {
         return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
     }
 
+    /// True when clicking `entry` should drill into it rather than open it: a real
+    /// directory that is not a file package (bundles like `.app` open; ordinary
+    /// folders with dotted names like `jquery-3.7.1` drill in — FAB-B6). Pure.
+    static func isDrillable(_ entry: FolderEntry) -> Bool {
+        entry.isDirectory && !entry.isPackage
+    }
+
     /// Reads a folder's immediate, non-hidden contents (capped), sorted for display.
     /// Call off the main thread — it hits the filesystem and loads icons.
+    /// Icons are loaded only for the `limit` entries actually kept (M26): the sort
+    /// needs just name/isDirectory from one `resourceValues` call per URL.
     static func entries(of folder: URL, limit: Int = 128) -> [FolderEntry] {
-        let keys: [URLResourceKey] = [.isDirectoryKey, .localizedNameKey]
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .localizedNameKey]
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
 
-        let mapped: [FolderEntry] = urls.map { url in
+        let lightweight: [(url: URL, name: String, isDirectory: Bool, isPackage: Bool)] = urls.map { url in
             let values = try? url.resourceValues(forKeys: Set(keys))
-            let name = values?.localizedName ?? url.lastPathComponent
-            let isDir = values?.isDirectory ?? false
-            return FolderEntry(id: url.path, url: url, name: name,
-                               icon: NSWorkspace.shared.icon(forFile: url.path), isDirectory: isDir)
+            return (url: url,
+                    name: values?.localizedName ?? url.lastPathComponent,
+                    isDirectory: values?.isDirectory ?? false,
+                    isPackage: values?.isPackage ?? false)
         }
-        return mapped
+        return lightweight
             .sorted { orderedBefore(($0.name, $0.isDirectory), ($1.name, $1.isDirectory)) }
             .prefix(limit)
-            .map { $0 }
+            .map { item in
+                FolderEntry(id: item.url.path, url: item.url, name: item.name,
+                            icon: NSWorkspace.shared.icon(forFile: item.url.path),
+                            isDirectory: item.isDirectory, isPackage: item.isPackage)
+            }
     }
 
     // MARK: Geometry (pure)
@@ -190,8 +215,12 @@ struct FolderStackView: View {
     private var header: some View {
         HStack(spacing: 8) {
             if model.canGoBack {
-                Button { onBack() } label: { Image(systemName: "chevron.backward") }
-                    .buttonStyle(.plain).help("Back")
+                Button { onBack() } label: {
+                    Image(systemName: "chevron.backward")
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help("Back")
             }
             Image(systemName: "folder.fill").foregroundStyle(preferences.tintColor)
             Text(model.title).font(.headline).lineLimit(1)
@@ -236,7 +265,7 @@ struct FolderStackView: View {
                         icon(entry, size: 20)
                         Text(entry.name).lineLimit(1)
                         Spacer()
-                        if entry.isDirectory {
+                        if FolderStack.isDrillable(entry) {
                             Image(systemName: "chevron.forward").font(.caption2).foregroundStyle(.secondary)
                         }
                     }

@@ -101,8 +101,10 @@ final class FolderStackController {
     // MARK: Actions
 
     /// A subfolder drills in; a file (or alias/bundle) opens and closes the stack.
+    /// Drillability keys off `.isPackageKey`, not the path extension, so ordinary
+    /// folders with dotted names (`jquery-3.7.1`, `My.Project`) drill in (FAB-B6).
     private func select(_ entry: FolderEntry) {
-        if entry.isDirectory && entry.url.pathExtension.isEmpty {
+        if FolderStack.isDrillable(entry) {
             model?.open(entry.url)
         } else {
             NSWorkspace.shared.open(entry.url)

@@ -206,12 +206,19 @@ final class DockModel: ObservableObject {
     /// The system Trash icon reflecting empty vs. full (IDEA-5). A live `DockController`
     /// trash watcher triggers a rebuild so this re-evaluates when the Trash changes.
     static func trashIcon() -> NSImage? {
+        NSImage(named: isTrashEmpty() ? NSImage.trashEmptyName : NSImage.trashFullName)
+    }
+
+    /// Whether the user's Trash is empty, decided from the first visible entry alone —
+    /// a shallow enumerator probe, not a materialized listing of the whole directory,
+    /// so a Trash holding thousands of files costs the same as an empty one (FAB-P3).
+    static func isTrashEmpty() -> Bool {
         let trash = (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
                                                   appropriateFor: nil, create: false))
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: trash, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
-        let name = contents.isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName
-        return NSImage(named: name)
+        guard let enumerator = FileManager.default.enumerator(
+            at: trash, includingPropertiesForKeys: [],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]) else { return true }
+        return enumerator.nextObject() == nil
     }
 }

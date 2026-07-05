@@ -3,6 +3,21 @@ import XCTest
 
 final class GitHubReleaseTests: XCTestCase {
 
+    /// Per-test scratch directory so the `uniqueDestination` tests never touch a
+    /// shared location like `/tmp` (a leftover `Jetty.dmg` there made them flaky).
+    private var tempDir: URL!
+
+    override func setUpWithError() throws {
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("JettyReleaseTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let tempDir { try? FileManager.default.removeItem(at: tempDir) }
+        tempDir = nil
+    }
+
     private let json = Data("""
     {
       "tag_name": "v1.4.0",
@@ -42,19 +57,68 @@ final class GitHubReleaseTests: XCTestCase {
         XCTAssertEqual(release.releaseNotes(maxLength: 4), "Note…")
     }
 
-    func testUpdateDownloaderSanitizesAssetNames() {
-        let directory = URL(fileURLWithPath: "/tmp")
+    func testUpdateDownloaderSanitizesAssetNames() throws {
         XCTAssertEqual(
-            UpdateDownloader.uniqueDestination(in: directory, fileName: "../../Jetty.dmg").lastPathComponent,
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "../../Jetty.dmg").lastPathComponent,
             "Jetty.dmg"
         )
         XCTAssertEqual(
-            UpdateDownloader.uniqueDestination(in: directory, fileName: "Jetty\u{0000}.zip").lastPathComponent,
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty\u{0000}.zip").lastPathComponent,
             "Jetty-.zip"
         )
         XCTAssertEqual(
-            UpdateDownloader.uniqueDestination(in: directory, fileName: "..").lastPathComponent,
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "..").lastPathComponent,
             "Jetty-update"
+        )
+    }
+
+    func testUniqueDestinationSkipsExistingFilesAndDanglingSymlinks() throws {
+        // An empty directory hands back the plain name.
+        XCTAssertEqual(
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty.dmg").lastPathComponent,
+            "Jetty.dmg"
+        )
+
+        // With Jetty.dmg and Jetty-1.dmg taken, the -2/-3 suffixing kicks in.
+        try Data().write(to: tempDir.appendingPathComponent("Jetty.dmg"))
+        try Data().write(to: tempDir.appendingPathComponent("Jetty-1.dmg"))
+        XCTAssertEqual(
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty.dmg").lastPathComponent,
+            "Jetty-2.dmg"
+        )
+
+        // A dangling symlink at the next candidate still counts as "taken":
+        // fileExists(atPath:) follows the link and would report false, letting the
+        // link be reused as a destination. lstat semantics must skip past it.
+        try FileManager.default.createSymbolicLink(
+            at: tempDir.appendingPathComponent("Jetty-2.dmg"),
+            withDestinationURL: tempDir.appendingPathComponent("does-not-exist.dmg")
+        )
+        XCTAssertEqual(
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty.dmg").lastPathComponent,
+            "Jetty-3.dmg"
+        )
+    }
+
+    func testUniqueDestinationThrowsWhenAttemptCapIsExhausted() throws {
+        try Data().write(to: tempDir.appendingPathComponent("Jetty.dmg"))
+        try Data().write(to: tempDir.appendingPathComponent("Jetty-1.dmg"))
+        try Data().write(to: tempDir.appendingPathComponent("Jetty-2.dmg"))
+
+        XCTAssertThrowsError(
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty.dmg", maxAttempts: 2)
+        ) { error in
+            guard case UpdateDownloader.DownloadError.noUniqueFileName(_, let fileName, let attempts) = error else {
+                return XCTFail("Expected noUniqueFileName, got \(error)")
+            }
+            XCTAssertEqual(fileName, "Jetty.dmg")
+            XCTAssertEqual(attempts, 2)
+        }
+
+        // The default cap is far beyond any real Downloads folder.
+        XCTAssertEqual(
+            try UpdateDownloader.uniqueDestination(in: tempDir, fileName: "Jetty.dmg").lastPathComponent,
+            "Jetty-3.dmg"
         )
     }
 }

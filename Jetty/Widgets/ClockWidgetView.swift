@@ -17,13 +17,17 @@ struct ClockWidgetView: View {
 
     var body: some View {
         let face = preferences.clockFace
-        // Analog dials tick every second (their minute hand sweeps continuously);
-        // text faces tick once a minute unless seconds are shown, phased to the
-        // minute boundary so the shown minute never lags up to ~60 s behind (M29).
-        let showsSeconds = preferences.clockShowSeconds || face.isAnalog
-        let schedule: PeriodicTimelineSchedule = showsSeconds
-            ? .periodic(from: .now, by: 1)
-            : .periodic(from: ClockFormatter.minuteStart(), by: 60)
+        // Tick per second only when something visibly moves per second: seconds
+        // digits, or an analog second hand — `AnalogClockFace` gates its second
+        // hand on `clockShowSeconds`, and Color Time has no hands at all, so a
+        // 1 Hz repaint there is pure waste (FAB-P1). Otherwise tick per minute.
+        // Both cadences anchor at the minute boundary — a second boundary too —
+        // so the shown minute never lags (M29) and per-second ticks land on
+        // real second boundaries instead of an arbitrary phase (FAB-P2).
+        let ticksEverySecond = preferences.clockShowSeconds && face.showsSecondsOption
+        let schedule: PeriodicTimelineSchedule = .periodic(
+            from: ClockFormatter.minuteStart(),
+            by: ticksEverySecond ? 1 : 60)
         TimelineView(schedule) { context in
             switch face {
             case .digital:

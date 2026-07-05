@@ -457,7 +457,7 @@ and bundled into **shareable presets**.
 | Background opacity | 0–1 | honored on non-glass; glass respects system |
 | Icon size | 24–128 | tile size |
 | Tile spacing | slider | gap between tiles |
-| Corner radius | 0–32 | dock + tiles |
+| Corner radius | 0–40 | dock + tiles |
 | Magnification | off / amount | Dock-style hover zoom (pure `MagnificationCurve`, unit-tested) |
 | Indicator style | dot / bar / underline / none | running indicator look |
 | Indicator color | Color | — |
@@ -515,15 +515,21 @@ Jetty/
 │   ├── JettyApp.swift               # @main enum; NSApplication, .accessory policy
 │   ├── AppDelegate.swift            # status item, bootstraps controllers, first-run consent
 │   ├── Model/
-│   │   ├── DockDocument.swift       # Codable root (+ schema version)
-│   │   ├── DockItem.swift           # + fromFileURL/fromRunningApp factories
-│   │   ├── DockItemKind.swift
+│   │   ├── DockDocument.swift       # Codable root (a `version` field for forward-compat)
+│   │   ├── DockItem.swift           # + application/fromFileURL/fromLink factories
+│   │   ├── DockItemKind.swift       # launchable targets + built-in tiles (separator/Trash/widgets)
 │   │   ├── DockAnchor.swift         # display UUID + edge + alignment + offset + inset
 │   │   ├── DockEdge.swift           # + DockAlignment
-│   │   ├── AppearancePreset.swift   # Codable theme bundle + built-ins (Zap-style)
-│   │   ├── PreferenceEnums.swift    # material / indicator / reveal-trigger enums
+│   │   ├── AppearancePreset.swift   # Codable theme bundle + built-ins (Zap-style; imports Zap themes)
+│   │   ├── PreferenceEnums.swift    # material / indicator / reveal-trigger / window-preview enums
+│   │   ├── ClockFaceStyle.swift     # clock-tile look: digital / LCD / the analog dials
+│   │   ├── SystemMonitorStyle.swift # system-monitor look: bars / graph / scope / LED / gauges
+│   │   ├── DecorationStyle.swift    # retro corner decorations (ZX stripes / Amiga boing ball)
+│   │   ├── DecorationPosition.swift # which top corner a decoration occupies
+│   │   ├── HotkeyBinding.swift      # Codable key code + Carbon modifiers + recorded label
+│   │   ├── JettyMenuGlyph.swift     # configurable SF Symbol for the menu tile (lenient fallback)
 │   │   ├── ColorHex.swift           # reused from Zap
-│   │   └── Preferences.swift        # UserDefaults-backed global prefs
+│   │   └── Preferences.swift        # UserDefaults-backed global prefs (validated/clamped on read)
 │   ├── Store/
 │   │   ├── DockStore.swift          # load/save JSON, observable, debounced atomic write + .bak
 │   │   └── BookmarkResolver.swift   # bookmark ⇄ URL, staleness, broken-item handling
@@ -532,41 +538,79 @@ Jetty/
 │   │   └── DockLayout.swift         # pure anchor → frame math (revealed/hidden) — unit-tested
 │   ├── Apps/
 │   │   ├── RunningAppsModel.swift   # NSWorkspace running apps + launch/quit/activate observers
-│   │   └── AppLauncher.swift        # NSWorkspace open/activate/openWith/hide/terminate
+│   │   ├── AppLauncher.swift        # NSWorkspace open/activate/openWith/hide/terminate
+│   │   └── TrashMonitor.swift       # DispatchSource watch → live empty/full Trash tile
 │   ├── SystemDock/
 │   │   └── SystemDockController.swift # hide/re-assert/restore the real Dock (defaults + killall)
 │   ├── Dock/
 │   │   ├── DockController.swift      # the brain: merges items, drives panels + reveal/hide
-│   │   ├── DockPanelController.swift # one auto-hiding NSPanel per display (+ edge-hover monitor)
-│   │   ├── DockModel.swift           # observable rendered-tile state + callbacks
-│   │   ├── DockView.swift            # SwiftUI: GlassEffectContainer of tiles + widgets
+│   │   ├── DockPanelController.swift # one auto-hiding NSPanel per display (+ drag-reveal edge window)
+│   │   ├── DockModel.swift           # observable rendered-tile state; pure makeSlots/makeTiles merge
+│   │   ├── DockSlot.swift            # one reorderable unit: a tile, or the running-apps cluster
+│   │   ├── DockView.swift            # SwiftUI: glass strip of slots; magnification + drag-to-reorder
 │   │   ├── DockTileView.swift        # one tile: icon, indicator, magnification, drop target
+│   │   ├── DockContextAction.swift   # synthesized right-click menu entries for a tile
 │   │   ├── MagnificationCurve.swift  # pure Dock-style hover-zoom math (unit-tested)
 │   │   └── EdgeHoverMonitor.swift    # global mouse monitor → which screen edge is hovered
+│   ├── Stacks/
+│   │   ├── FolderStack.swift         # pure ordering/geometry + directory reading (unit-tested)
+│   │   └── FolderStackController.swift # folder-stack popover: non-activating panel, drill-in
 │   ├── Widgets/
 │   │   ├── ClockWidgetView.swift     # date/time tile (digital text + face dispatch)
 │   │   ├── AnalogClockFace.swift     # Canvas dials: classic/face2000/retroMac/memphis/jelly/colorTime
 │   │   ├── LCDClockFace.swift        # Canvas seven-segment retro LCD face
 │   │   ├── SevenSegment.swift        # pure digit→segments lookup (unit-tested)
 │   │   ├── ClockGeometry.swift       # pure hand-angle/polar math (unit-tested)
-│   │   └── ClockFormatter.swift      # pure time/date formatting (unit-tested)
+│   │   ├── ClockFormatter.swift      # pure time/date formatting (unit-tested)
+│   │   ├── WorldClockWidgetView.swift # time in a chosen zone; reuses ClockFormatter
+│   │   ├── BatteryWidgetView.swift   # charge % + level glyph, charging glow
+│   │   ├── WeatherWidgetView.swift   # conditions glyph + temperature for set coordinates
+│   │   ├── WeatherService.swift      # Open-Meteo fetch + cache; parsing pure (unit-tested)
+│   │   ├── PomodoroWidgetView.swift  # progress ring + mm:ss, tap to start/pause
+│   │   ├── PomodoroTimer.swift       # shared countdown state; formatting pure (unit-tested)
+│   │   ├── SystemMonitorWidgetView.swift # CPU/RAM tile; dispatches to the style views
+│   │   ├── SystemMonitorGaugeView.swift  # analog dashboard-gauge style
+│   │   ├── SystemMonitorLEDView.swift    # stacked hi-fi LED-meter style
+│   │   ├── SystemMonitorScopeView.swift  # oscilloscope style (CPU/RAM/network traces)
+│   │   ├── SystemStats.swift         # IOKit/Darwin battery/CPU/memory reads; formatting pure
+│   │   ├── LiveSystemStats.swift     # one shared throttled sampler for all displays
+│   │   ├── NowPlayingWidgetView.swift # play/pause glyph + track title/artist
+│   │   └── NowPlayingService.swift   # polls the MediaRemote bridge; parsing pure (unit-tested)
+│   ├── MediaRemote/
+│   │   ├── MediaRemoteBridge.h       # private MediaRemote bridge (opt-in now-playing tile)
+│   │   ├── MediaRemoteBridge.m       # dlopen-based, fails closed; legacy C API + 15.4+ controller
+│   │   └── Jetty-Bridging-Header.h   # exposes the bridge to Swift
+│   ├── Windows/
+│   │   ├── AppWindows.swift          # window list via CGWindowList (no permission); AX titles + raise/minimize
+│   │   ├── WindowPeek.swift          # peek model + SwiftUI content; live thumbnails need Screen Recording
+│   │   └── WindowPeekController.swift # non-activating hover popover panel
 │   ├── Menu/
-│   │   ├── JettyMenuController.swift  # the Start-menu launcher panel
+│   │   ├── JettyMenuController.swift  # the Start-menu launcher panel (key, non-activating)
 │   │   ├── JettyMenuView.swift        # search field + results + power row
+│   │   ├── JettyMenuModel.swift       # query/results/selection state (ranking via AppSearch)
 │   │   ├── AppSearch.swift            # pure fuzzy app filter/rank (unit-tested)
-│   │   ├── AppIndex.swift             # /Applications scan + Spotlight (NSMetadataQuery)
+│   │   ├── AppIndex.swift             # installed-app scan of the standard app dirs (off-main)
+│   │   ├── RecentAppsStore.swift      # recently launched apps, persisted in UserDefaults
+│   │   ├── MenuCommand.swift          # quick system toggles; pure matching (unit-tested)
+│   │   ├── ExpressionEvaluator.swift  # pure inline-calculator arithmetic (unit-tested)
+│   │   ├── UnitConverter.swift        # pure "10 km in miles" conversions (unit-tested)
+│   │   ├── CurrencyService.swift      # Frankfurter rates fetch; parsing/math pure (unit-tested)
 │   │   └── PowerCommands.swift        # sleep/restart/shutdown/logout/lock/empty-trash (pure mapping + exec)
 │   ├── Hotkeys/
 │   │   ├── CarbonHotkey.swift         # optional toggle hotkeys (no Accessibility) — reused
-│   │   └── KeyCodes.swift             # reused
+│   │   ├── KeyCodes.swift             # reused
+│   │   └── AccessibilityAuthorizer.swift # AX trust check/prompt for the opt-in window features
 │   ├── Settings/
 │   │   ├── SettingsWindowController.swift
 │   │   ├── SettingsView.swift
-│   │   ├── GeneralView.swift          # launch at login, hide/restore Dock, reveal triggers
+│   │   ├── GeneralView.swift          # launch at login, hide/restore Dock, positioning, reveal
 │   │   ├── AppearanceView.swift       # material/size/spacing/radius/indicator + presets + live preview
-│   │   ├── ItemsView.swift            # manage pinned items + widgets, per-display placement
-│   │   ├── MenuView.swift             # Jetty Menu config (power cmds, recents)
-│   │   ├── PermissionsView.swift      # reports Accessibility/Screen-Recording/Automation status (for later features)
+│   │   ├── ItemsView.swift            # manage pinned items + built-in tiles
+│   │   ├── DisplaysView.swift         # per-display placement overrides
+│   │   ├── WidgetsView.swift          # clock/world-clock/Pomodoro/weather widget options
+│   │   ├── MenuView.swift             # Jetty Menu config (tile glyph, power cmds)
+│   │   ├── PermissionsView.swift      # reports Accessibility/Screen-Recording/Automation status
+│   │   ├── HotkeyRecorder.swift       # records a global shortcut into a HotkeyBinding
 │   │   ├── AngleDial.swift            # gradient angle picker — reused from Zap
 │   │   └── AboutView.swift
 │   ├── Updates/
@@ -579,31 +623,44 @@ Jetty/
 │   │   ├── VisualEffectView.swift     # NSVisualEffectView wrapper (reused)
 │   │   ├── GlassBackground.swift      # NSGlassEffectView (macOS 26) with VisualEffect fallback
 │   │   ├── ActivationPolicy.swift     # shared .regular↔.accessory revert guard (reused)
-│   │   └── LRUImageCache.swift        # icon cache (reused from Zap)
+│   │   ├── LRUImageCache.swift        # window-thumbnail LRU cache (reused from Zap)
+│   │   ├── IconCache.swift            # LRU + TTL icon cache keyed by tile id
+│   │   ├── TileAccent.swift           # per-tile accent color (icon average) for the hover glow
+│   │   ├── Poof.swift                 # classic Dock removal poof (NSAnimationEffect)
+│   │   ├── PanelDecoration.swift      # ZX Spectrum corner stripes
+│   │   ├── BoingBallDecoration.swift  # Amiga boing-ball corner decoration
+│   │   └── CRTScreenOverlay.swift     # scanlines + vignette CRT overlay
 │   ├── Jetty.entitlements             # hardened runtime; no sandbox; (later) AppleEvents
 │   └── Resources/
 │       └── Assets.xcassets            # AppIcon, AccentColor (Info.plist generated)
 ├── JettyTests/
-│   ├── DockLayoutTests.swift          # anchor → frame across edges/alignments/resolutions + hidden frames
-│   ├── DockAnchorTests.swift          # offset/inset clamping + Codable
-│   ├── DockDocumentCodableTests.swift # encode/decode + forward-compat
+│   ├── DockLayoutTests.swift          # anchor → frame across edges/alignments + hidden frames + clock sizing
 │   ├── DockModelTests.swift           # pinned+running merge / dedup / ordering / indicators
+│   ├── CodableModelTests.swift        # DockDocument/DockItem encode/decode + forward-compat
 │   ├── MagnificationCurveTests.swift  # hover-zoom falloff
-│   ├── ClockFormatterTests.swift      # 12/24h, seconds, custom templates
+│   ├── ClockFormatterTests.swift      # 12/24h, seconds, secondary line
+│   ├── ClockFaceTests.swift           # seven-segment patterns + analog hand angles
 │   ├── AppSearchTests.swift           # fuzzy rank / filter / selection movement
+│   ├── CommandBarTests.swift          # unit/currency conversion, command matching, Return behavior
+│   ├── ExpressionEvaluatorTests.swift # inline-calculator arithmetic
+│   ├── FolderStackTests.swift         # stack ordering, panel size, origin clamping
+│   ├── RecentsTests.swift             # recents dedup/cap + recents-first ranking
+│   ├── MenuGlyphAndStoreTests.swift   # menu-glyph validation + store corrupt-file handling
+│   ├── InfoWidgetTests.swift          # battery/weather/now-playing/system-monitor logic
+│   ├── PomodoroTests.swift            # countdown formatting
 │   ├── PowerCommandTests.swift        # command → descriptor mapping + confirmation flags
-│   ├── AppearancePresetTests.swift    # preset Codable + built-ins round-trip
-│   ├── PreferencesTests.swift         # defaults, clamping
+│   ├── HotkeyBindingTests.swift       # binding validity, display, Codable, Carbon mapping
+│   ├── PreferencesTests.swift         # defaults, clamping, preset apply/capture
 │   ├── ColorHexTests.swift            # hex ⇄ color
 │   ├── SemanticVersionTests.swift     # version parse/compare
-│   └── GitHubReleaseTests.swift       # release JSON decode + asset pick
+│   └── GitHubReleaseTests.swift       # release JSON decode + asset pick + downloader sanitizing
 ├── scripts/
 │   ├── build.sh                       # lkm-build stub (BUILD_KIND=xcode)
 │   └── release.sh                     # lkm-release stub (RELEASE_KIND=xcode)
 ├── .github/workflows/
 │   ├── ci.yml                         # build + test (macos, Xcode pinned, CODE_SIGNING_ALLOWED=NO)
 │   └── release.yml                    # tag v* → Release build, ad-hoc sign, zip+dmg, GH Release
-├── PLAN.md  ├── README.md  └── AGENTS.md
+├── PLAN.md  ├── README.md  ├── AGENTS.md  └── REVIEW.md
 ```
 
 ---

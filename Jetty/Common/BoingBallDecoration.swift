@@ -92,11 +92,17 @@ struct BoingBallDecoration: View {
     /// with interpolation off.
     private static let pixelatedResolution = 96
 
-    /// The last-rendered sphere of each rendition. `body` re-runs on every
-    /// selection change while the overlay is up; one cached image makes that free,
-    /// where re-rasterizing ~100k pixels per Tab press would be wasted work on the
-    /// switcher hot path. Read and written only from `body` (main thread).
-    private static var cachedSmooth: (pixelDiameter: Int, image: Image)?
+    /// Rendered spheres, cached so re-renders never re-rasterize on the hot path.
+    /// `body` re-runs on every selection change while the overlay is up; a cached
+    /// image makes that free, where re-rasterizing ~100k pixels per Tab press
+    /// would be wasted work. The smooth rendition is keyed by pixel diameter so
+    /// mixed-DPI multi-monitor setups (e.g. a Retina panel plus a 1× external
+    /// display) each keep their own bitmap instead of evicting each other on
+    /// every shared render trigger; the cache is bounded and simply cleared if it
+    /// ever exceeds the cap (re-rasterizing a couple of spheres after a display
+    /// change is cheap and rare). Read and written only from `body` (main thread).
+    private static var cachedSmooth: [Int: Image] = [:]
+    private static let smoothCacheLimit = 4
     private static var cachedPixelated: Image?
 
     /// The checkered sphere as an `Image`: rasterized at `scale` so it stays
@@ -114,13 +120,14 @@ struct BoingBallDecoration: View {
         }
         let effectiveScale = max(1, scale)
         let pixelDiameter = max(8, Int((diameter * effectiveScale).rounded()))
-        if let cached = cachedSmooth, cached.pixelDiameter == pixelDiameter {
-            return cached.image
-        }
+        if let cached = cachedSmooth[pixelDiameter] { return cached }
         guard let bitmap = renderSphere(pixelDiameter: pixelDiameter,
                                         antialiased: true) else { return nil }
         let image = Image(decorative: bitmap, scale: effectiveScale)
-        cachedSmooth = (pixelDiameter, image)
+        if cachedSmooth.count >= smoothCacheLimit {
+            cachedSmooth.removeAll(keepingCapacity: true)
+        }
+        cachedSmooth[pixelDiameter] = image
         return image
     }
 

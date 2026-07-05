@@ -320,7 +320,8 @@ final class DockPanelController {
     private func contentSize() -> CGSize {
         let icon = CGFloat(preferences.iconSize)
         let kinds = model.tiles.map(\.kind)
-        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom),
+                                                          face: preferences.clockFace)
         let base = DockLayout.contentSize(tiles: kinds,
                                           iconSize: icon,
                                           spacing: CGFloat(preferences.tileSpacing),

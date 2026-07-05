@@ -237,6 +237,22 @@ final class DockLayoutTests: XCTestCase {
         }
     }
 
+    func testClockTileWidthFactorBudgetsTheLCDLandscapeCase() {
+        // Unzoomed the LCD's 1.35:1 case fits the resting 1.6× tile.
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 1.0, face: .lcd), 1.6, accuracy: 0.001)
+        // Past the crossover the tile tracks the case: 1.35 × zoom + 0.08 slack —
+        // wider than the analog budget, so the case is never squashed square.
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 2.5, face: .lcd), 3.455, accuracy: 0.001)
+        // The case always fits at full aspect: 1.35 × zoom ≤ factor.
+        for zoom in stride(from: 1.0, through: 2.5, by: 0.1) {
+            XCTAssertGreaterThanOrEqual(DockLayout.clockTileWidthFactor(zoom: CGFloat(zoom), face: .lcd),
+                                        CGFloat(1.35 * zoom))
+        }
+        // Analog faces are unchanged by the face-aware overload.
+        XCTAssertEqual(DockLayout.clockTileWidthFactor(zoom: 2.5, face: .memphis),
+                       DockLayout.clockTileWidthFactor(zoom: 2.5), accuracy: 0.001)
+    }
+
     func testWidestTileFactorUsesClockOverride() {
         // Now-playing (2.4×) beats a resting clock…
         XCTAssertEqual(DockLayout.widestTileFactor(kinds: [.application, .clock, .nowPlaying],

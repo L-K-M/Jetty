@@ -72,13 +72,16 @@ enum DockLayout {
                                  : (along: frameHeight, across: frameWidth)
     }
 
-    /// The clock tile's along-edge width factor for a face zoomed to `zoom`: the
-    /// resting 1.6× until the square analog face (0.92 × zoom of the icon size,
-    /// plus a little slack) outgrows it, then wide enough to hold the face so it
-    /// never overlaps neighboring tiles. Pure, unit-tested. **Keep
-    /// `DockTileView.tileWidth` and `ClockWidgetView` driven by this.**
-    static func clockTileWidthFactor(zoom: CGFloat) -> CGFloat {
-        max(DockItemKind.clock.tileWidthFactor, 0.92 * zoom + 0.08)
+    /// The clock tile's along-edge width factor for `face` zoomed to `zoom`: the
+    /// resting 1.6× until the face (plus a little slack) outgrows it, then wide
+    /// enough to hold the face so it never overlaps neighboring tiles — or, for
+    /// the LCD, squashes. The square analog dials are 0.92 × zoom of the icon
+    /// size; the LCD's landscape resin case is 1.35 × its `zoom`-scaled height
+    /// (`LCDClockFace`'s `caseH * 1.35` — keep in sync). Pure, unit-tested.
+    /// **Keep `DockTileView.tileWidth` and `ClockWidgetView` driven by this.**
+    static func clockTileWidthFactor(zoom: CGFloat, face: ClockFaceStyle = .classic) -> CGFloat {
+        let faceWidth = face == .lcd ? 1.35 * zoom : 0.92 * zoom
+        return max(DockItemKind.clock.tileWidthFactor, faceWidth + 0.08)
     }
 
     /// The widest tile's along-edge width factor among `kinds` (the clock uses

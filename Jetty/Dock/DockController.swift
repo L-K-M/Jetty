@@ -51,7 +51,13 @@ final class DockController {
 
     // MARK: Lifecycle
 
+    /// True once `start()` ran, so `teardown()` on a never-started controller is a
+    /// no-op — a terminating duplicate instance must not restore the system Dock or
+    /// touch the shared `isManaging` state on its way out (FAB-B1).
+    private var started = false
+
     func start() {
+        started = true
         if !store.loadedFromDisk && store.items.isEmpty { seedDefaultItems() }
         ensureRunningSentinel()
         wireModelCallbacks()
@@ -81,6 +87,8 @@ final class DockController {
     }
 
     func teardown() {
+        guard started else { return }
+        started = false
         hoverMonitor.stop()
         trashMonitor.stop()
         LiveSystemStats.shared.setRunning(false)

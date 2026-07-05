@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?
 
+    /// True once this instance actually started (passed the single-instance guard).
+    /// A terminating *duplicate* must not tear down — `controller` is `lazy`, so the
+    /// teardown path would instantiate a fresh `DockController` just to restore the
+    /// system Dock out from under the running instance and race its store (FAB-B1).
+    private var didStart = false
+
     // MARK: NSApplicationDelegate
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.terminate(nil)
             return
         }
+        didStart = true
         installMainMenu()
         setUpStatusItem()
         controller.start()
@@ -54,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
-        guard !Self.isRunningTests else { return }
+        guard !Self.isRunningTests, didStart else { return }
         store.flush()
         controller.teardown()
     }

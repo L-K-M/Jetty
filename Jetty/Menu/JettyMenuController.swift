@@ -23,6 +23,12 @@ final class JettyMenuController {
     private var keyMonitor: Any?
     private var resignObserver: Any?
     private weak var appToRestoreOnClose: NSRunningApplication?
+    /// Whether `show()` captured an app to restore. Distinguishes "the captured app
+    /// quit while the menu was open" (restore is nil/terminated but this is true →
+    /// fall back to Finder) from the deliberate nil cases — Jetty was already
+    /// frontmost, or a launched app is taking focus (F-M3) — where close() must not
+    /// activate anything (M19).
+    private var hadRestoreTarget = false
     private(set) var isOpen = false
 
     init(preferences: Preferences) {
@@ -37,6 +43,7 @@ final class JettyMenuController {
         guard !isOpen else { return }
         let frontmost = NSWorkspace.shared.frontmostApplication
         appToRestoreOnClose = frontmost?.processIdentifier == NSRunningApplication.current.processIdentifier ? nil : frontmost
+        hadRestoreTarget = appToRestoreOnClose != nil
 
         model.reset()
         model.recentsProvider = { RecentAppsStore.shared.recentItems() }
@@ -45,6 +52,7 @@ final class JettyMenuController {
             // The launched app is being given focus (config.activates) — don't let close()
             // restore the previously-frontmost app over it (F-M3).
             self?.appToRestoreOnClose = nil
+            self?.hadRestoreTarget = false
             AppLauncher.launchApplication(at: item.url)
             self?.close()
         }
@@ -80,8 +88,21 @@ final class JettyMenuController {
         // Hand activation back only if Jetty is still the active app — i.e. the menu was
         // dismissed by Esc / copy / a command. If the user dismissed it by clicking
         // another app, that app is already frontmost and must not be yanked away (F-M3).
-        if NSApp.isActive, let restore = appToRestoreOnClose { AppLauncher.activate(restore) }
+        if NSApp.isActive {
+            if let restore = appToRestoreOnClose, !restore.isTerminated {
+                AppLauncher.activate(restore)
+            } else if hadRestoreTarget {
+                // The captured frontmost app quit while the menu was open. With nothing
+                // to hand focus back to, Jetty — an LSUIElement with no menu bar — would
+                // be left "frontmost"; fall back to activating Finder (M19).
+                if let finder = NSRunningApplication
+                    .runningApplications(withBundleIdentifier: "com.apple.finder").first {
+                    AppLauncher.activate(finder)
+                }
+            }
+        }
         appToRestoreOnClose = nil
+        hadRestoreTarget = false
     }
 
     // MARK: Build
@@ -177,7 +198,11 @@ final class JettyMenuController {
             case 126: self.model.moveSelection(-1); return nil   // up
             case 125: self.model.moveSelection(1); return nil    // down
             case 36, 76: self.model.activateSelection(); return nil  // return / enter
-            case 53: self.close(); return nil                    // escape
+            case 53:                                             // escape
+                // First Esc clears a non-empty query (and resets the selection via the
+                // query's didSet); a second Esc closes — Spotlight behavior (FAB-D16).
+                if self.model.query.isEmpty { self.close() } else { self.model.reset() }
+                return nil
             default: return event                                 // let typing reach the field
             }
         }

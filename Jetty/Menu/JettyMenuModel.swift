@@ -16,6 +16,10 @@ final class JettyMenuModel: ObservableObject {
     @Published private(set) var conversion: UnitConverter.Result?
     /// An inline currency conversion (e.g. `100 usd to eur`), else `nil` (ND-9).
     @Published private(set) var currency: String?
+    /// Set when the query parses as a currency conversion but no rates are loaded
+    /// (offline / failed fetch). Shown as an inline banner that owns Return, so the
+    /// query is never silently leaked to a web search (FAB-B12).
+    @Published private(set) var currencyUnavailable = false
     /// A matched quick toggle (e.g. typing "dark"), else `nil` (ND-9).
     @Published private(set) var command: MenuCommand?
     @Published var selectedIndex: Int = 0
@@ -74,19 +78,38 @@ final class JettyMenuModel: ObservableObject {
     }
 
     /// A currency conversion result string, when the query parses as one and the
-    /// rates for both currencies are loaded (ND-9).
+    /// rates for both currencies are loaded (ND-9). Also maintains
+    /// `currencyUnavailable`: when the query *parses* as currency but no rates are
+    /// loaded at all, the menu must show a "rates unavailable" banner instead of
+    /// silently falling through to a web search of the query (FAB-B12).
     private func computeCurrency() -> String? {
+        currencyUnavailable = false
         guard calculation == nil, conversion == nil,
-              let parsed = CurrencyService.parseQuery(query),
-              CurrencyService.shared.known(parsed.from), CurrencyService.shared.known(parsed.to),
+              let parsed = CurrencyService.parseQuery(query) else { return nil }
+        guard CurrencyService.shared.known(parsed.from), CurrencyService.shared.known(parsed.to),
               let value = CurrencyService.shared.convert(amount: parsed.amount, from: parsed.from, to: parsed.to)
-        else { return nil }
-        return "\(UnitConverter.format(value)) \(parsed.to)"
+        else {
+            // Distinguish "rates never arrived" (offline) from "not a real currency
+            // code" — only the former earns the banner; the latter falls through.
+            currencyUnavailable = CurrencyService.shared.rates.isEmpty
+            return nil
+        }
+        return Self.formatCurrency(value, code: parsed.to)
+    }
+
+    /// Formats a converted amount as money — currency symbol and the currency's own
+    /// decimal convention (2 for EUR, 0 for JPY) — instead of the unit converter's
+    /// 4-decimals-plus-ISO-code (M12).
+    static func formatCurrency(_ value: Double, code: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = code
+        return formatter.string(from: NSNumber(value: value)) ?? "\(UnitConverter.format(value)) \(code)"
     }
 
     /// The trimmed query to offer as a web search (nil when empty).
     var webSearchQuery: String? {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
@@ -94,7 +117,7 @@ final class JettyMenuModel: ObservableObject {
     /// a non-empty query is fuzzy-ranked over all apps. Unit-tested.
     static func rankedResults(query: String, apps: [AppSearchItem],
                               recents: [AppSearchItem]) -> [AppSearchItem] {
-        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return AppSearch.rank(query, in: apps)
         }
         let recentIDs = Set(recents.map(\.id))
@@ -118,12 +141,24 @@ final class JettyMenuModel: ObservableObject {
         selectedIndex = AppSearch.nextIndex(current: selectedIndex, delta: delta, count: results.count)
     }
 
+    /// Pointer (hover) selection. A hover that visibly moves the highlight is as
+    /// explicit a gesture as an arrow key, so it must also set `userMovedSelection`
+    /// — otherwise Return runs a matched command instead of the highlighted row
+    /// (FAB-B7).
+    func selectByPointer(_ index: Int) {
+        guard results.indices.contains(index) else { return }
+        userMovedSelection = true
+        selectedIndex = index
+    }
+
     /// The Return key. Priority:
     /// 1. An app the user explicitly arrow-selected — never hijacked (F-H4).
     /// 2. A calc/conversion/currency banner — copy it, the universal "use this answer"
     ///    gesture, instead of leaking the query to a web search (H2).
-    /// 3. A matched quick toggle (its row advertises "⏎ run").
-    /// 4. Otherwise the selected app, then a web search (ND-9 / BUG-5).
+    /// 3. A currency query whose rates are unavailable — retry the fetch and stay
+    ///    put; never leak the query to a web search (FAB-B12).
+    /// 4. A matched quick toggle (its row advertises "⏎ run").
+    /// 5. Otherwise the selected app, then a web search (ND-9 / BUG-5).
     func activateSelection() {
         if userMovedSelection, results.indices.contains(selectedIndex) {
             onLaunch?(results[selectedIndex]); return
@@ -131,6 +166,7 @@ final class JettyMenuModel: ObservableObject {
         if let calculation { onCopyValue?(calculation.value); return }
         if let conversion { onCopyValue?(conversion.value); return }
         if let currency { onCopyValue?(currency); return }
+        if currencyUnavailable { CurrencyService.shared.ensureFresh(); return }
         if let command { onRunCommand?(command); return }
         if results.indices.contains(selectedIndex) { onLaunch?(results[selectedIndex]); return }
         if let query = webSearchQuery { onWebSearch?(query) }

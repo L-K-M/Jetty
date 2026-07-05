@@ -173,13 +173,25 @@ struct ItemsView: View {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
+        var duplicateIDs: [UUID] = []
+        var addedAny = false
         for url in panel.urls {
             var item = DockItem.application(at: url)
             // Skip an app already pinned (by bundle id) so we don't mint a duplicate
             // tile id for the same app (F-M1).
-            if let bid = item.bundleIdentifier, store.contains(bundleIdentifier: bid) { continue }
+            if let bid = item.bundleIdentifier,
+               let existing = store.items.first(where: { $0.kind == .application && $0.bundleIdentifier == bid }) {
+                duplicateIDs.append(existing.id)
+                continue
+            }
             item.bookmark = BookmarkResolver.bookmark(for: url)
             store.addItem(item)
+            addedAny = true
+        }
+        // A silently skipped duplicate made Add look broken (FAB-U5). When *everything*
+        // picked was already pinned, highlight the existing rows as the feedback.
+        if !addedAny && !duplicateIDs.isEmpty {
+            selection = Set(duplicateIDs)
         }
     }
 
@@ -212,14 +224,38 @@ struct ItemsView: View {
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        let raw = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty else { return }
-        // Only prepend https:// when there's no URL scheme at all. Detecting the scheme
-        // (not just "://") keeps non-hierarchical links like mailto:/tel:/message: intact
-        // instead of mangling them to "https://mailto:…" (H18).
-        let hasScheme = raw.range(of: #"^[a-zA-Z][a-zA-Z0-9+.\-]*:"#, options: .regularExpression) != nil
-        let normalized = hasScheme ? raw : "https://\(raw)"
-        guard let url = URL(string: normalized), url.scheme != nil else { return }
+        guard let url = ItemsView.normalizedLinkURL(from: field.stringValue) else { return }
         store.addItem(DockItem.fromLink(url))
+    }
+
+    /// Normalizes user-typed link text into a URL, prepending `https://` when the text
+    /// has no real scheme. Detecting the scheme (not just "://") keeps non-hierarchical
+    /// links like mailto:/tel: intact instead of mangling them to "https://mailto:…"
+    /// (H18) — but `host:port` shapes like `localhost:3000` also match the scheme
+    /// grammar, so a scheme only counts when it's followed by `//` or is a known
+    /// non-hierarchical scheme (FAB-B14). Pure and static so it's unit-testable.
+    static func normalizedLinkURL(from raw: String) -> URL? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        // Non-hierarchical schemes carry no "//" after the colon. Keep this list small:
+        // anything else typed with a bare colon is far more likely host:port than an
+        // exotic scheme, and https:// is the safer default for a dock tile.
+        let nonHierarchicalSchemes: Set<String> = [
+            "mailto", "tel", "sms", "facetime", "x-apple.systempreferences",
+        ]
+
+        var hasScheme = false
+        if let match = text.range(of: #"^[a-zA-Z][a-zA-Z0-9+.\-]*:"#, options: .regularExpression) {
+            let scheme = String(text[text.startIndex..<text.index(before: match.upperBound)]).lowercased()
+            let rest = text[match.upperBound...]
+            // `localhost:3000` / `example.com:8080` reach here with all-digit `rest`
+            // (a port, not a scheme body) and fall through to the https:// prepend.
+            hasScheme = rest.hasPrefix("//") || nonHierarchicalSchemes.contains(scheme)
+        }
+
+        let normalized = hasScheme ? text : "https://\(text)"
+        guard let url = URL(string: normalized), url.scheme != nil else { return nil }
+        return url
     }
 }

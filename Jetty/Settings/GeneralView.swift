@@ -68,7 +68,8 @@ struct GeneralView: View {
                     Slider(value: $preferences.animationMs, in: 0...600)
                     Text("\(Int(preferences.animationMs)) ms").monospacedDigit().frame(width: 64, alignment: .trailing)
                 }
-                .disabled(!preferences.autoHide)
+                // Not gated on autoHide: the animation also drives the hotkey dock
+                // toggle, which works with auto-hide off (FAB-U4).
                 Toggle("Show running apps that aren't pinned", isOn: $preferences.showRunningApps)
             }
 

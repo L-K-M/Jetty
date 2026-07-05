@@ -89,7 +89,7 @@ struct WidgetsView: View {
                     Text("Fahrenheit").tag(false)
                 }
                 .pickerStyle(.segmented)
-                Text("Current conditions from Open-Meteo (no account or location permission needed). Enter your coordinates — for example San Francisco is 37.77, −122.42.")
+                Text("Current conditions from Open-Meteo (no account or location permission needed). Enter your coordinates — for example San Francisco is 37.77, -122.42.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

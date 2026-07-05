@@ -93,6 +93,26 @@ final class ClockFaceTests: XCTestCase {
         }
     }
 
+    func testDrawsSecondHandMatchesTheDialRenderers() {
+        // Every analog dial draws a second hand (gated on showSeconds in
+        // AnalogClockFace) — except Color Time, which has no hands at all.
+        // The text faces show seconds as digits, not a hand.
+        XCTAssertFalse(ClockFaceStyle.digital.drawsSecondHand)
+        XCTAssertFalse(ClockFaceStyle.lcd.drawsSecondHand)
+        XCTAssertFalse(ClockFaceStyle.colorTime.drawsSecondHand)
+        for style in [ClockFaceStyle.classic, .face2000, .retroMac, .memphis, .jelly] {
+            XCTAssertTrue(style.drawsSecondHand, "\(style)")
+        }
+    }
+
+    func testShowsSecondsOptionIsFalseOnlyForColorTime() {
+        // The "Show seconds" preference affects every face except Color Time —
+        // digits on the text faces, a second hand on the other dials (FAB-U3).
+        for style in ClockFaceStyle.allCases {
+            XCTAssertEqual(style.showsSecondsOption, style != .colorTime, "\(style)")
+        }
+    }
+
     func testRawValuesRoundTrip() {
         for style in ClockFaceStyle.allCases {
             XCTAssertEqual(ClockFaceStyle(rawValue: style.rawValue), style)

@@ -36,6 +36,22 @@ enum ClockFaceStyle: String, CaseIterable, Identifiable, Codable {
     /// preference applies to it.
     var usesTimeDigits: Bool { !isAnalog }
 
+    /// Whether the face renders a second hand when "Show seconds" is on.
+    /// Every analog dial does — except Color Time, which deliberately has no
+    /// hands at all (the sweeping hour wedge *is* the time). Keep this in
+    /// sync with the `if showSeconds` branches in `AnalogClockFace`.
+    var drawsSecondHand: Bool {
+        isAnalog && self != .colorTime
+    }
+
+    /// Whether the "Show seconds" preference affects this face at all —
+    /// seconds digits on the text faces, a second hand on the analog dials.
+    /// False only for Color Time (FAB-U3); drives both the Settings toggle's
+    /// caption and the tile's tick cadence (FAB-P1).
+    var showsSecondsOption: Bool {
+        usesTimeDigits || drawsSecondHand
+    }
+
     var title: String {
         switch self {
         case .digital: return "Digital"

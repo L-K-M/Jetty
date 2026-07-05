@@ -32,10 +32,15 @@ struct WidgetsView: View {
                     Toggle("Show date", isOn: $preferences.clockShowDate)
                     Toggle("Show weekday", isOn: $preferences.clockShowWeekday)
                 }
-                if preferences.clockFace.usesTimeDigits {
-                    Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
-                }
+                // Always shown: the World Clock formats with these preferences
+                // whatever the clock face, so hiding them for analog faces would
+                // strand it with no control anywhere in the app (FAB-B13).
+                Toggle("24-hour time", isOn: $preferences.clockUse24Hour)
                 Toggle("Show seconds", isOn: $preferences.clockShowSeconds)
+                if !preferences.clockFace.showsSecondsOption {
+                    Text("\(preferences.clockFace.title) has no second hand — seconds apply only to the World Clock.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             Section("World Clock") {

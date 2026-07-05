@@ -74,11 +74,25 @@ final class DockController {
         hoverMonitor.start()
 
         // Re-resolve icons when the Trash empties/fills so its tile shows the right
-        // can (IDEA-5). Only bother while a Trash tile is actually pinned.
+        // can (IDEA-5). Only bother while a Trash tile is actually pinned. Trash events
+        // arrive in bursts (dragging hundreds of files), so the handler is debounced
+        // ~300 ms, and the rebuild is skipped entirely unless the empty/full state
+        // actually flipped — the icon is the only thing a trash event changes (FAB-P3).
+        // Both locals live in the onChange closure's captures; everything runs on main.
+        var trashWork: DispatchWorkItem?
+        var lastTrashEmpty: Bool?
         trashMonitor.onChange = { [weak self] in
-            guard let self, self.store.items.contains(where: { $0.kind == .trash }) else { return }
-            self.model.invalidateTrashIcon()
-            self.rebuildModel()
+            trashWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.store.items.contains(where: { $0.kind == .trash }) else { return }
+                let isEmpty = DockModel.isTrashEmpty()
+                guard isEmpty != lastTrashEmpty else { return }
+                lastTrashEmpty = isEmpty
+                self.model.invalidateTrashIcon()
+                self.rebuildModel()
+            }
+            trashWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
         trashMonitor.start()
 

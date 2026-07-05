@@ -227,8 +227,12 @@ struct DockTileView: View {
         case .separator: return edge.isHorizontal ? 12 : baseSize
         case .clock where edge.isHorizontal:
             // Widens with a zoomed watch face — keep in sync with
-            // `DockLayout.tileExtent` so panel sizing and rendering agree.
-            return baseSize * DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+            // `DockLayout.tileExtent` so panel sizing and rendering agree. In the
+            // overflow-scroll state the face renders unzoomed (`allowsClockZoom`
+            // is false), so the tile keeps its resting width too instead of
+            // holding a zoom-wide slab of empty glass around a 1× face.
+            return baseSize * DockLayout.clockTileWidthFactor(
+                zoom: allowsClockZoom ? CGFloat(preferences.effectiveClockZoom) : 1)
         default: return baseSize * tile.kind.tileWidthFactor
         }
     }

@@ -345,15 +345,23 @@ final class DockController {
     private func tileAnchor(for tile: DockTile, edge: DockEdge, dock: CGRect) -> CGPoint? {
         let base = CGFloat(preferences.iconSize)
         let spacing = CGFloat(preferences.tileSpacing)
+        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
         var cursor: CGFloat = 0
         var centerAlong: CGFloat?
         for t in model.tiles {
-            let extent = DockLayout.tileExtent(kind: t.kind, baseSize: base, edge: edge).along
+            let extent = DockLayout.tileExtent(kind: t.kind, baseSize: base, edge: edge,
+                                               clockWidthFactor: clockFactor).along
             if t.id == tile.id { centerAlong = cursor + extent / 2; break }
             cursor += extent + spacing
         }
         guard let centerAlong else { return nil }
-        let extra = preferences.magnificationEnabled ? (preferences.effectiveMagnification - 1) * base : 0
+        // The same along-axis headroom the panel budgets (widest tile), so the anchor
+        // stays aligned with the centered content — keep in sync with `activeGlows`.
+        let widest = edge.isHorizontal
+            ? DockLayout.widestTileFactor(kinds: model.tiles.map(\.kind), clockWidthFactor: clockFactor) : 1
+        let extra = DockLayout.magnificationAlongExtra(iconSize: base,
+                                                       magnification: preferences.effectiveMagnification,
+                                                       widestFactor: widest)
         let leading = extra / 2 + DockView.padding
         switch edge {
         case .bottom, .top: return CGPoint(x: dock.minX + leading + centerAlong, y: dock.midY)

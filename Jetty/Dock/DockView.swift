@@ -27,9 +27,13 @@ struct DockView: View {
     static let padding: CGFloat = 10
 
     /// The clock tile's current width factor (widens with a zoomed watch face).
-    /// Must match what `DockTileView.tileWidth` and the panel sizing use.
-    private var clockWidthFactor: CGFloat {
-        DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+    /// Must match what `DockTileView.tileWidth` and the panel sizing use. The
+    /// overflow-scroll state suspends the face zoom, so its rendered width falls
+    /// back to the resting factor (`zoomed: false`) — every layout mirror
+    /// (centers, slot extents, glows) must use the same `zoomed` flag as the
+    /// tiles it lays out, or the reorder/glow math desyncs from what's drawn.
+    private func clockWidthFactor(zoomed: Bool) -> CGFloat {
+        DockLayout.clockTileWidthFactor(zoom: zoomed ? CGFloat(preferences.effectiveClockZoom) : 1)
     }
 
     var body: some View {
@@ -43,7 +47,7 @@ struct DockView: View {
         GeometryReader { geo in
             let overflows = contentOverflows(edge: edge, base: base, spacing: spacing, available: geo.size)
             ZStack(alignment: edgeAlignment(edge)) {
-                glassStrip(edge: edge, thickness: resting)
+                glassStrip(edge: edge, thickness: resting, overflows: overflows)
                 slotsContainer(edge: edge, base: base, spacing: spacing, resting: resting, overflows: overflows)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
@@ -64,9 +68,12 @@ struct DockView: View {
     /// tile at once.
     private func contentOverflows(edge: DockEdge, base: CGFloat, spacing: CGFloat, available: CGSize) -> Bool {
         guard !model.slots.isEmpty else { return false }
+        // Decide overflow from the *zoomed* natural size: the rendered width shrinks
+        // to resting in overflow (zoom suspended), so deciding on the zoomed size can
+        // only over-trigger, never oscillate.
         let natural = DockLayout.contentSize(tiles: model.tiles.map(\.kind), iconSize: base,
                                              spacing: spacing, padding: Self.padding, edge: edge,
-                                             clockWidthFactor: clockWidthFactor)
+                                             clockWidthFactor: clockWidthFactor(zoomed: true))
         return edge.isHorizontal ? natural.width > available.width + 1
                                  : natural.height > available.height + 1
     }
@@ -135,7 +142,7 @@ struct DockView: View {
     // MARK: Glass strip + decorations
 
     @ViewBuilder
-    private func glassStrip(edge: DockEdge, thickness: CGFloat) -> some View {
+    private func glassStrip(edge: DockEdge, thickness: CGFloat, overflows: Bool) -> some View {
         let radius = CGFloat(preferences.cornerRadius)
         let bg = GlassBackground(material: preferences.material,
                                  tint: preferences.tintColor,
@@ -153,7 +160,7 @@ struct DockView: View {
         sized
             // The active-app glow lives here, *inside* the strip's clip, so it tints the
             // dock under the running app instead of blooming out past the dock's edges.
-            .overlay { activeGlows(edge: edge, thickness: thickness) }
+            .overlay { activeGlows(edge: edge, thickness: thickness, zoomed: !overflows) }
             .overlay { decorations(cornerRadius: radius) }
             .overlay { if preferences.crtEnabled { CRTScreenOverlay(intensity: preferences.crtIntensity, cornerRadius: radius) } }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -162,16 +169,16 @@ struct DockView: View {
     // MARK: Active-app glow (ND-8) — clipped to the strip
 
     @ViewBuilder
-    private func activeGlows(edge: DockEdge, thickness: CGFloat) -> some View {
+    private func activeGlows(edge: DockEdge, thickness: CGFloat, zoomed: Bool) -> some View {
         if preferences.accentGlow {
             let base = CGFloat(preferences.iconSize)
             let spacing = CGFloat(preferences.tileSpacing)
-            let centers = tileCenters(base: base, spacing: spacing)
+            let centers = tileCenters(base: base, spacing: spacing, zoomed: zoomed)
             // The same along-axis headroom the panel budgets (widest tile), so the
             // glow positions stay aligned with the centered content.
             let widest = edge.isHorizontal
                 ? DockLayout.widestTileFactor(kinds: model.tiles.map(\.kind),
-                                              clockWidthFactor: clockWidthFactor) : 1
+                                              clockWidthFactor: clockWidthFactor(zoomed: zoomed)) : 1
             let extra = DockLayout.magnificationAlongExtra(iconSize: base,
                                                            magnification: preferences.effectiveMagnification,
                                                            widestFactor: widest)
@@ -233,7 +240,9 @@ struct DockView: View {
 
     @ViewBuilder
     private func slotStack(edge: DockEdge, base: CGFloat, spacing: CGFloat, magnifies: Bool) -> some View {
-        let centers = tileCenters(base: base, spacing: spacing)
+        // `magnifies` is false exactly in the overflow-scroll state, where the face
+        // zoom is suspended too — the centers must match the rendered tile widths.
+        let centers = tileCenters(base: base, spacing: spacing, zoomed: magnifies)
         let slots = Array(model.slots.enumerated())
         Group {
             if edge.isHorizontal {
@@ -262,13 +271,13 @@ struct DockView: View {
     private func slotView(_ slot: DockSlot, slotIndex: Int, base: CGFloat, spacing: CGFloat,
                           centers: [String: CGFloat], magnifies: Bool) -> some View {
         let isDragged = draggingSlotID == slot.id
-        let offset = slotOffset(for: slotIndex, base: base, spacing: spacing)
+        let offset = slotOffset(for: slotIndex, base: base, spacing: spacing, zoomed: magnifies)
 
         return slotTiles(slot, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
             .offset(offset)
             .zIndex(isDragged ? 1 : 0)
             .animation(isDragged ? nil : .spring(response: 0.26, dampingFraction: 0.85), value: offset)
-            .gesture(reorderGesture(for: slot), including: slot.isReorderable ? .all : .subviews)
+            .gesture(reorderGesture(for: slot, zoomed: magnifies), including: slot.isReorderable ? .all : .subviews)
     }
 
     @ViewBuilder
@@ -314,7 +323,7 @@ struct DockView: View {
 
     // MARK: Drag-to-reorder
 
-    private func reorderGesture(for slot: DockSlot) -> some Gesture {
+    private func reorderGesture(for slot: DockSlot, zoomed: Bool) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 draggingSlotID = slot.id
@@ -322,7 +331,7 @@ struct DockView: View {
                 dragCross = anchor.edge.isHorizontal ? value.translation.height : value.translation.width
             }
             .onEnded { _ in
-                if !commitDragOutIfNeeded(for: slot) { commitReorder() }
+                if !commitDragOutIfNeeded(for: slot) { commitReorder(zoomed: zoomed) }
                 draggingSlotID = nil
                 dragAlong = 0
                 dragCross = 0
@@ -340,13 +349,13 @@ struct DockView: View {
         return true
     }
 
-    private func slotOffset(for index: Int, base: CGFloat, spacing: CGFloat) -> CGSize {
+    private func slotOffset(for index: Int, base: CGFloat, spacing: CGFloat, zoomed: Bool) -> CGSize {
         guard let draggingSlotID,
               let dragged = model.slots.firstIndex(where: { $0.id == draggingSlotID }) else { return .zero }
         let edge = anchor.edge
         if index == dragged { return vector(along: dragAlong, cross: dragCross, edge: edge) }
 
-        let extents = slotExtents(base: base, spacing: spacing)
+        let extents = slotExtents(base: base, spacing: spacing, zoomed: zoomed)
         let target = DockLayout.liveReorderTarget(slotExtents: extents, spacing: spacing,
                                                   draggedIndex: dragged, dragAlong: dragAlong)
         let shift = extents[dragged] + spacing
@@ -358,12 +367,12 @@ struct DockView: View {
         return .zero
     }
 
-    private func commitReorder() {
+    private func commitReorder(zoomed: Bool) {
         guard let draggingSlotID,
               let dragged = model.slots.firstIndex(where: { $0.id == draggingSlotID }) else { return }
         let base = CGFloat(preferences.iconSize)
         let spacing = CGFloat(preferences.tileSpacing)
-        let extents = slotExtents(base: base, spacing: spacing)
+        let extents = slotExtents(base: base, spacing: spacing, zoomed: zoomed)
         let target = DockLayout.liveReorderTarget(slotExtents: extents, spacing: spacing,
                                                   draggedIndex: dragged, dragAlong: dragAlong)
         guard target != dragged else { return }
@@ -373,11 +382,11 @@ struct DockView: View {
         model.onReorder?(ids.compactMap { $0 })
     }
 
-    private func slotExtents(base: CGFloat, spacing: CGFloat) -> [CGFloat] {
+    private func slotExtents(base: CGFloat, spacing: CGFloat, zoomed: Bool) -> [CGFloat] {
         model.slots.map {
             DockLayout.slotExtentAlong(tileKinds: $0.tiles.map(\.kind), baseSize: base,
                                        spacing: spacing, edge: anchor.edge,
-                                       clockWidthFactor: clockWidthFactor)
+                                       clockWidthFactor: clockWidthFactor(zoomed: zoomed))
         }
     }
 
@@ -394,13 +403,13 @@ struct DockView: View {
     /// Resting along-axis center of each flat tile (tiles are laid uniformly with
     /// `spacing` since slot and intra-group spacing match), in the slot stack's local
     /// coordinate space — the input the continuous magnification compares against.
-    private func tileCenters(base: CGFloat, spacing: CGFloat) -> [String: CGFloat] {
+    private func tileCenters(base: CGFloat, spacing: CGFloat, zoomed: Bool) -> [String: CGFloat] {
         var map: [String: CGFloat] = [:]
         var cursor: CGFloat = 0
         for slot in model.slots {
             for tile in slot.tiles {
                 let extent = DockLayout.tileExtent(kind: tile.kind, baseSize: base, edge: anchor.edge,
-                                                   clockWidthFactor: clockWidthFactor).along
+                                                   clockWidthFactor: clockWidthFactor(zoomed: zoomed)).along
                 map[tile.id] = cursor + extent / 2
                 cursor += extent + spacing
             }

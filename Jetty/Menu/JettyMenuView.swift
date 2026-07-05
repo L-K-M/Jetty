@@ -27,6 +27,10 @@ struct JettyMenuView: View {
                 Divider().opacity(0.5)
                 copyRow(symbol: "banknote", value: currency)
             }
+            if model.currencyUnavailable {
+                Divider().opacity(0.5)
+                currencyUnavailableRow
+            }
             if let command = model.command {
                 Divider().opacity(0.5)
                 commandRow(command)
@@ -92,6 +96,15 @@ struct JettyMenuView: View {
             model.onClose?()
         }
         .help("Copy \(calculation.value) to the clipboard")
+        // Expose the banner as a single actionable button to VoiceOver (FAB-A1).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Copy result: \(calculation.value)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(calculation.value, forType: .string)
+            model.onClose?()
+        }
     }
 
     /// A unit/currency result row: shows the value, click to copy and close (ND-9).
@@ -113,6 +126,36 @@ struct JettyMenuView: View {
             model.onClose?()
         }
         .help("Copy \(value) to the clipboard")
+        // Expose the copy row as a single actionable button to VoiceOver (FAB-A1).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Copy result: \(value)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(value, forType: .string)
+            model.onClose?()
+        }
+    }
+
+    /// Shown when the query parses as a currency conversion but rates never loaded
+    /// (offline / failed fetch). Owns the space where the result would be so the
+    /// query isn't silently shipped to a web search on Return (FAB-B12). Click to
+    /// retry the fetch.
+    private var currencyUnavailableRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.slash").font(.title3).foregroundStyle(.secondary)
+            Text("Currency rates unavailable — check your connection")
+                .font(.callout).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { CurrencyService.shared.ensureFresh() }
+        .help("Currency rates unavailable — click to retry")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { CurrencyService.shared.ensureFresh() }
     }
 
     /// A quick-toggle command row (e.g. Toggle Dark Mode) — click to run (ND-9).
@@ -127,6 +170,11 @@ struct JettyMenuView: View {
         .contentShape(Rectangle())
         .onTapGesture { model.onRunCommand?(command) }
         .help(command.title)
+        // Expose the command row as a single actionable button to VoiceOver (FAB-A1).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(command.title)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { model.onRunCommand?(command) }
     }
 
     /// A web-search fallback shown when nothing matches — click (or ⏎) to search (ND-9).
@@ -141,6 +189,11 @@ struct JettyMenuView: View {
         .contentShape(Rectangle())
         .onTapGesture { model.onWebSearch?(query) }
         .help("Search the web for \(query)")
+        // Expose the web-search row as a single actionable button to VoiceOver (FAB-A1).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Search the web for \(query)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { model.onWebSearch?(query) }
     }
 
     /// The results list, or a centered empty state when nothing matches (M17).
@@ -154,7 +207,7 @@ struct JettyMenuView: View {
     }
 
     private var emptyState: some View {
-        let hasQuery = !model.query.trimmingCharacters(in: .whitespaces).isEmpty
+        let hasQuery = !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return VStack(spacing: 6) {
             Image(systemName: hasQuery ? "magnifyingglass" : "square.grid.2x2")
                 .font(.title2).foregroundStyle(.secondary)
@@ -181,13 +234,21 @@ struct JettyMenuView: View {
                             // Hover moves the highlight to the row under the pointer so a mouse
                             // user isn't stuck on a keyboard-selected row (M11). Suppress the
                             // auto-scroll for hover changes so the list doesn't jump under the
-                            // cursor — only keyboard navigation should scroll.
+                            // cursor — only keyboard navigation should scroll. Route through the
+                            // model so the hover also counts as an explicit selection and Return
+                            // launches the visibly highlighted row (FAB-B7).
                             .onHover { inside in
                                 if inside, model.selectedIndex != index {
                                     suppressScroll = true
-                                    model.selectedIndex = index
+                                    model.selectByPointer(index)
                                 }
                             }
+                            // Expose the row as a single actionable button to VoiceOver (FAB-A1).
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel(item.name)
+                            .accessibilityAddTraits(index == model.selectedIndex
+                                                    ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { model.selectedIndex = index; model.launch(at: index) }
                     }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 6)

@@ -60,23 +60,36 @@ final class RunningAppsModel: ObservableObject {
         let ownBundleID = Bundle.main.bundleIdentifier
         let regular = workspace.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != ownBundleID }
-        var index: [String: NSRunningApplication] = [:]
-        for app in regular { if let bundleID = app.bundleIdentifier { index[bundleID] = app } }
-        indexByBundle = index
         // Dedup by bundle id: macOS can list two `.regular` instances of one app (a
         // relaunch/activation race, a bundle that spawns a second regular process). Two
         // infos with the same bundle id would mint two tiles with the same `DockTile.id`,
         // which desyncs the magnification's id-keyed center map from the rendered tiles
         // (the trailing icon then stops zooming). Apps without a bundle id keep their
         // unique pid-based id.
-        var seenBundleIDs = Set<String>()
-        apps = regular.compactMap { app in
-            if let bundleID = app.bundleIdentifier, !seenBundleIDs.insert(bundleID).inserted { return nil }
-            return RunningAppInfo(bundleIdentifier: app.bundleIdentifier,
-                                  name: app.localizedName ?? "App",
-                                  isActive: app.isActive,
-                                  pid: app.processIdentifier)
+        //
+        // Representative policy: the FIRST instance wins, in both the published
+        // snapshot and `indexByBundle` (built in the same pass), so the process a
+        // tile renders is the same one activate/hide/quit act on (F-M12).
+        var index: [String: NSRunningApplication] = [:]
+        var snapshot: [RunningAppInfo] = []
+        snapshot.reserveCapacity(regular.count)
+        for app in regular {
+            if let bundleID = app.bundleIdentifier {
+                guard index[bundleID] == nil else { continue }
+                index[bundleID] = app
+            }
+            snapshot.append(RunningAppInfo(bundleIdentifier: app.bundleIdentifier,
+                                           name: app.localizedName ?? "App",
+                                           isActive: app.isActive,
+                                           pid: app.processIdentifier))
         }
+        indexByBundle = index
+        // Equality gate (F-P4): `didHide`/`didUnhide` can't change the snapshot
+        // (`RunningAppInfo` carries no hidden flag), so skip the publish when nothing
+        // changed and spare downstream a full rebuild + relayout. `RunningAppInfo`'s
+        // synthesized `==` compares every stored field (bundleIdentifier, name,
+        // isActive, pid), so activate/deactivate and relaunches still propagate.
+        if snapshot != apps { apps = snapshot }
     }
 
     /// The live `NSRunningApplication` for a bundle id (for activate/hide/quit).

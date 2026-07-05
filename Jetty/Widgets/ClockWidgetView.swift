@@ -31,11 +31,12 @@ struct ClockWidgetView: View {
             case .lcd:
                 // The LCD's box tracks the (zoom-widened) tile width; its case
                 // sizes itself inside, so it grows with the face but never
-                // outgrows the tile.
+                // outgrows the tile. The face-aware factor budgets the case's
+                // 1.35:1 landscape aspect so zooming never squashes it.
                 faceBox(LCDClockFace(date: context.date,
                                      use24Hour: preferences.clockUse24Hour,
                                      showSeconds: preferences.clockShowSeconds),
-                        width: height * DockLayout.clockTileWidthFactor(zoom: zoom),
+                        width: height * DockLayout.clockTileWidthFactor(zoom: zoom, face: .lcd),
                         faceHeight: height * zoom)
             default:
                 faceBox(AnalogClockFace(date: context.date,

@@ -232,7 +232,8 @@ struct DockTileView: View {
             // is false), so the tile keeps its resting width too instead of
             // holding a zoom-wide slab of empty glass around a 1× face.
             return baseSize * DockLayout.clockTileWidthFactor(
-                zoom: allowsClockZoom ? CGFloat(preferences.effectiveClockZoom) : 1)
+                zoom: allowsClockZoom ? CGFloat(preferences.effectiveClockZoom) : 1,
+                face: preferences.clockFace)
         default: return baseSize * tile.kind.tileWidthFactor
         }
     }

@@ -353,7 +353,8 @@ final class DockController {
     private func tileAnchor(for tile: DockTile, edge: DockEdge, dock: CGRect) -> CGPoint? {
         let base = CGFloat(preferences.iconSize)
         let spacing = CGFloat(preferences.tileSpacing)
-        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom))
+        let clockFactor = DockLayout.clockTileWidthFactor(zoom: CGFloat(preferences.effectiveClockZoom),
+                                                          face: preferences.clockFace)
         var cursor: CGFloat = 0
         var centerAlong: CGFloat?
         for t in model.tiles {

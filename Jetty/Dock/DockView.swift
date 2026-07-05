@@ -33,7 +33,8 @@ struct DockView: View {
     /// (centers, slot extents, glows) must use the same `zoomed` flag as the
     /// tiles it lays out, or the reorder/glow math desyncs from what's drawn.
     private func clockWidthFactor(zoomed: Bool) -> CGFloat {
-        DockLayout.clockTileWidthFactor(zoom: zoomed ? CGFloat(preferences.effectiveClockZoom) : 1)
+        DockLayout.clockTileWidthFactor(zoom: zoomed ? CGFloat(preferences.effectiveClockZoom) : 1,
+                                        face: preferences.clockFace)
     }
 
     var body: some View {

@@ -31,4 +31,31 @@ final class PowerCommandTests: XCTestCase {
             XCTAssertFalse(command.systemSymbol.isEmpty)
         }
     }
+
+    func testConfirmationPrompts() {
+        // Per-command wording (M35) — not derived from `title`, so the article and
+        // casing read naturally.
+        XCTAssertEqual(PowerCommand.emptyTrash.confirmationPrompt,
+                       "Are you sure you want to empty the Trash?")
+        XCTAssertEqual(PowerCommand.shutDown.confirmationPrompt,
+                       "Are you sure you want to shut down your Mac?")
+        XCTAssertEqual(PowerCommand.restart.confirmationPrompt,
+                       "Are you sure you want to restart your Mac?")
+        XCTAssertEqual(PowerCommand.logOut.confirmationPrompt,
+                       "Are you sure you want to log out?")
+        XCTAssertEqual(PowerCommand.sleep.confirmationPrompt,
+                       "Are you sure you want to put your Mac to sleep?")
+        XCTAssertEqual(PowerCommand.lockScreen.confirmationPrompt,
+                       "Are you sure you want to lock the screen?")
+    }
+
+    func testEveryCommandHasWellFormedConfirmationPrompt() {
+        for command in PowerCommand.allCases {
+            let prompt = command.confirmationPrompt
+            XCTAssertTrue(prompt.hasPrefix("Are you sure you want to "),
+                          "\(command) prompt should be a full question: \(prompt)")
+            XCTAssertTrue(prompt.hasSuffix("?"),
+                          "\(command) prompt should end with a question mark: \(prompt)")
+        }
+    }
 }

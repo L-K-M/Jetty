@@ -46,6 +46,20 @@ enum PowerCommand: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The properly worded confirmation question shown before a destructive command
+    /// runs. Written per command (not derived from `title`) so the article and
+    /// casing read naturally — "empty the Trash", not "empty trash" (M35).
+    var confirmationPrompt: String {
+        switch self {
+        case .sleep: return "Are you sure you want to put your Mac to sleep?"
+        case .lockScreen: return "Are you sure you want to lock the screen?"
+        case .logOut: return "Are you sure you want to log out?"
+        case .restart: return "Are you sure you want to restart your Mac?"
+        case .shutDown: return "Are you sure you want to shut down your Mac?"
+        case .emptyTrash: return "Are you sure you want to empty the Trash?"
+        }
+    }
+
     /// The AppleScript that performs the command, or `nil` for commands handled by a
     /// direct API/CLI (`lockScreen`). Pure — this is the bit unit tests assert on.
     var appleScript: String? {
@@ -66,13 +80,19 @@ enum PowerCommand: String, CaseIterable, Identifiable {
 enum PowerCommandRunner {
 
     static func run(_ command: PowerCommand) {
-        if let script = command.appleScript {
-            runAppleScript(script)
-        } else {
-            switch command {
-            case .lockScreen: lockScreen()
-            default: break
+        // Exhaustive over the enum on purpose (M35): adding a new command is a
+        // compile error here until its execution path is written — no more
+        // silently-do-nothing `default`.
+        switch command {
+        case .sleep, .logOut, .restart, .shutDown, .emptyTrash:
+            // These are AppleScript-backed; the mapping is unit-tested.
+            if let script = command.appleScript {
+                runAppleScript(script)
+            } else {
+                assertionFailure("PowerCommand \(command) has no AppleScript")
             }
+        case .lockScreen:
+            lockScreen()
         }
     }
 

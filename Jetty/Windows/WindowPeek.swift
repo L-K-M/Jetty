@@ -42,12 +42,19 @@ final class WindowPeekModel: ObservableObject {
         let pid = self.pid
         let mode = self.mode
         guard pid != 0, !isRefreshing else { return }   // skip if a capture is still in flight
+        // Recompute the permission each tick (one cheap local call) so the hint —
+        // and capturing — react if the user grants Screen Recording mid-peek.
+        let preflight = CGPreflightScreenCaptureAccess()
+        if canCapture != preflight { canCapture = preflight }
         isRefreshing = true
         Task { [weak self] in
             let wins = WindowLister.windows(forPID: pid)
             // Only the thumbnail mode captures images (Screen Recording); names mode
-            // never touches ScreenCaptureKit, so it needs no permission.
-            let thumbs = mode.capturesThumbnails ? await WindowThumbnailer.images(for: wins) : [:]
+            // never touches ScreenCaptureKit, so it needs no permission. And when
+            // permission is denied, skip the doomed ScreenCaptureKit query entirely
+            // instead of making a failing window-server round-trip every second.
+            let thumbs = (mode.capturesThumbnails && preflight)
+                ? await WindowThumbnailer.images(for: wins) : [:]
             await MainActor.run {
                 guard let self else { return }
                 self.isRefreshing = false

@@ -33,7 +33,8 @@ final class SystemDockController {
     var isManaging: Bool { ourDefaults.bool(forKey: Key.isManaging) }
 
     /// Hides the system Dock (auto-hide + huge reveal delay) and restarts it once to
-    /// apply. Captures the user's prior auto-hide setting so `restore()` is faithful.
+    /// apply — skipping both when the defaults already hold our values. Captures the
+    /// user's prior auto-hide setting so `restore()` is faithful.
     func hideSystemDock() {
         guard let dockDefaults else { return }
         if !ourDefaults.bool(forKey: Key.capturedPrior) {
@@ -50,12 +51,20 @@ final class SystemDockController {
             }
             ourDefaults.set(true, forKey: Key.capturedPrior)
         }
-        dockDefaults.set(true, forKey: "autohide")
-        dockDefaults.set(largeDelay, forKey: "autohide-delay")
-        dockDefaults.set(0.0, forKey: "autohide-time-modifier")
+        // Skip the writes and the Dock restart when the defaults already hold our
+        // target values — the normal case on every launch after the first. Same
+        // drift test as `reassertIfManaging()` (FAB-B5).
+        let hidden = dockDefaults.bool(forKey: "autohide")
+        let delay = dockDefaults.double(forKey: "autohide-delay")
+        let timeModifier = dockDefaults.double(forKey: "autohide-time-modifier")
+        if !hidden || delay < largeDelay - 1 || timeModifier != 0 {
+            dockDefaults.set(true, forKey: "autohide")
+            dockDefaults.set(largeDelay, forKey: "autohide-delay")
+            dockDefaults.set(0.0, forKey: "autohide-time-modifier")
+            synchronizeDockDefaults()
+            restartDock()
+        }
         ourDefaults.set(true, forKey: Key.isManaging)
-        synchronizeDockDefaults()
-        restartDock()
     }
 
     /// Re-applies the hide settings without restarting the Dock unless they drifted —
@@ -78,6 +87,16 @@ final class SystemDockController {
     /// restores their auto-hide setting) and restarts it.
     func restoreSystemDock() {
         guard let dockDefaults else { return }
+        // If we never captured prior state, we never hid the Dock — writing
+        // `autohide = false` and removing the delay keys here would clobber the
+        // user's *own* settings. Just clear our bookkeeping and leave the Dock
+        // (and its process) untouched (FAB-B4).
+        guard ourDefaults.bool(forKey: Key.capturedPrior) else {
+            ourDefaults.set(false, forKey: Key.isManaging)
+            ourDefaults.set(false, forKey: Key.hadPriorDelay)
+            ourDefaults.set(false, forKey: Key.hadPriorTimeModifier)
+            return
+        }
         let priorAutohide = ourDefaults.object(forKey: Key.priorAutohide) as? Bool ?? false
         // Restore the user's own delay / time-modifier if they had one; otherwise
         // remove ours so the Dock returns to system defaults (GI-2).

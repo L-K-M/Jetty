@@ -113,7 +113,7 @@ final class JettyMenuController {
         if command.isDestructive {
             let alert = NSAlert()
             alert.messageText = "\(command.title)?"
-            alert.informativeText = "Are you sure you want to \(command.title.lowercased())?"
+            alert.informativeText = command.confirmationPrompt
             alert.addButton(withTitle: command.title)
             alert.addButton(withTitle: "Cancel")
             NSApp.activate(ignoringOtherApps: true)

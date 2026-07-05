@@ -38,7 +38,7 @@ struct SystemMonitorGaugeView: View {
                 drawDial(ctx, size: size, value: value)
             }
             Text(label)
-                .font(.system(size: max(6, height * 0.13), weight: .bold, design: .rounded))
+                .font(.system(size: max(7, height * 0.13), weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))
                 .tracking(0.5)
         }

@@ -60,6 +60,30 @@ final class ExpressionEvaluatorTests: XCTestCase {
         XCTAssertEqual(value("200*15%"), "30")
     }
 
+    func testPercentAfterPlusMinusIsPercentOfLeftOperand() {   // FAB-B10
+        // The desk-calculator/Spotlight/Google convention: X ± Y% == X ± (Y% of X).
+        XCTAssertEqual(value("100 - 25%"), "75")
+        XCTAssertEqual(value("899 - 15%"), "764.15")
+        XCTAssertEqual(value("100 + 10%"), "110")
+        // The percent-of applies per +/- step: (100 - 25%) = 75, then + 10 = 85.
+        XCTAssertEqual(value("100-25%+10"), "85")
+    }
+
+    func testPercentTimesDivideKeepHundredthMeaning() {   // FAB-B10
+        XCTAssertEqual(value("200*15%"), "30")
+        XCTAssertEqual(value("100/50%"), "200")
+        // A percent that went through *, /, or ^ is no longer a bare percent term.
+        XCTAssertEqual(value("100+2*50%"), "101")
+    }
+
+    // MARK: Implicit multiplication (FAB-D19)
+
+    func testImplicitMultiplicationByJuxtaposition() {
+        XCTAssertEqual(value("2(3+4)"), "14")
+        XCTAssertEqual(value("(1+2)(3+4)"), "21")
+        XCTAssertEqual(value("2(3+4)+1"), "15")
+    }
+
     // MARK: Glyph aliases
 
     func testUnicodeMultiplyAndDivide() {
@@ -108,6 +132,32 @@ final class ExpressionEvaluatorTests: XCTestCase {
         XCTAssertNil(ExpressionEvaluator.evaluate("2 + abc"))
     }
 
+    // MARK: Pathological input is rejected, never crashed on (FAB-B9)
+
+    func testDeeplyNestedParenthesesReturnNil() {
+        // 100 levels blows the 64-level depth cap; the parser must bail, not
+        // stack-overflow. (Kept under the 256-character input cap so this
+        // exercises the depth counter itself.)
+        let nested = String(repeating: "(", count: 100) + "1+1" + String(repeating: ")", count: 100)
+        XCTAssertNil(ExpressionEvaluator.evaluate(nested))
+    }
+
+    func testReasonableNestingStillWorks() {
+        XCTAssertEqual(value("((((1+2))))*2"), "6")
+    }
+
+    func testOverlongInputReturnsNil() {
+        let long = String(repeating: "1+", count: 200) + "1"   // 401 chars, valid math
+        XCTAssertNil(ExpressionEvaluator.evaluate(long))
+    }
+
+    func testUnarySignWallDoesNotCrash() {
+        // A pasted wall of unary minuses is rejected by the length cap…
+        XCTAssertNil(ExpressionEvaluator.evaluate(String(repeating: "-", count: 10_000) + "5"))
+        // …and a short chain is folded iteratively (8 minuses = even = positive).
+        XCTAssertEqual(value("--------5+1"), "6")
+    }
+
     // MARK: Formatting
 
     func testWholeNumberHasNoDecimalPoint() {
@@ -118,6 +168,19 @@ final class ExpressionEvaluatorTests: XCTestCase {
     func testTrailingZerosTrimmed() {
         XCTAssertEqual(value("1/8"), "0.125")
         XCTAssertEqual(value("1/2"), "0.5")
+    }
+
+    func testTinyNonZeroResultIsNeverZero() {   // FAB-B8
+        // Below the 10-fraction-digit budget the formatter must switch to
+        // scientific notation, never print a false "0"/"-0".
+        XCTAssertEqual(value("2^-40"), "9.094947018e-13")
+        XCTAssertEqual(value("10^-11"), "1e-11")
+        XCTAssertEqual(value("0-0.00000000001"), "-1e-11")
+    }
+
+    func testNormalMagnitudeFormattingIsUnchanged() {   // FAB-B8 guard rail
+        XCTAssertEqual(value("1/3"), "0.3333333333")
+        XCTAssertEqual(value("2^-10"), "0.0009765625")
     }
 
     func testExpressionEcho() {

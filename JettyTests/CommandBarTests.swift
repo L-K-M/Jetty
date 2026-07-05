@@ -29,6 +29,15 @@ final class CommandBarTests: XCTestCase {
         XCTAssertTrue(result?.value.hasPrefix("2.2") ?? false)
     }
 
+    func testTinyConversionIsNeverZero() {   // FAB-B8
+        // Results below the 4-decimal budget switch to scientific notation
+        // instead of collapsing to a confidently wrong "0 km" / "0 kg".
+        XCTAssertEqual(UnitConverter.convert("1 mm to km")?.value, "1e-6 km")
+        XCTAssertEqual(UnitConverter.convert("5 mg to kg")?.value, "5e-6 kg")
+        // Normal magnitudes keep the plain fixed-decimal formatting.
+        XCTAssertEqual(UnitConverter.convert("1500 m to km")?.value, "1.5 km")
+    }
+
     func testCrossDimensionAndNonsenseReturnNil() {
         XCTAssertNil(UnitConverter.convert("10 km in kg"))
         XCTAssertNil(UnitConverter.convert("safari"))

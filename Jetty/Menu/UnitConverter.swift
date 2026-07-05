@@ -36,12 +36,38 @@ enum UnitConverter {
     }()
 
     /// Formats a converted value: whole numbers print plainly, else up to 4 decimals
-    /// with trailing zeros trimmed.
+    /// with trailing zeros trimmed. A non-zero value too small for the 4-decimal
+    /// budget falls back to significant-digit (scientific) notation — `1 mm to km`
+    /// shows `1e-6 km`, never a confidently wrong `0 km` (FAB-B8).
     static func format(_ value: Double) -> String {
         if value == value.rounded(), abs(value) < 1e12 { return String(Int64(value)) }
         var s = String(format: "%.4f", value)
         while s.contains("."), s.hasSuffix("0") { s.removeLast() }
         if s.hasSuffix(".") { s.removeLast() }
+        if value != 0, s == "0" || s == "-0" {
+            return scientificString(value, significantDigits: 4)
+        }
+        return s
+    }
+
+    /// `%g` significant-digit formatting with the exponent tidied
+    /// (`1e-06` → `1e-6`), used when a non-zero result underflows the fixed
+    /// decimal budget (FAB-B8).
+    private static func scientificString(_ value: Double, significantDigits: Int) -> String {
+        var s = String(format: "%.\(significantDigits)g", value)
+        if let e = s.firstIndex(of: "e") {
+            let mantissa = String(s[..<e])
+            var exponent = String(s[s.index(after: e)...])
+            var sign = ""
+            if exponent.hasPrefix("+") {
+                exponent.removeFirst()
+            } else if exponent.hasPrefix("-") {
+                sign = "-"
+                exponent.removeFirst()
+            }
+            while exponent.count > 1, exponent.hasPrefix("0") { exponent.removeFirst() }
+            s = mantissa + "e" + sign + exponent
+        }
         return s
     }
 

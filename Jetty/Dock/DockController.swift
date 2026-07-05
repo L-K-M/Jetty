@@ -428,7 +428,19 @@ final class DockController {
         case .systemMonitor:
             openActivityMonitor()
         case .weather:
-            openWeatherApp()
+            // Honor the offline glyph's "tap to retry" tooltip: while the weather is
+            // unavailable, a tap retries the fetch instead of opening the Weather app
+            // (FAB-B19). `isUnavailable` matches exactly the state that shows the glyph.
+            let weather = WeatherService.shared
+            if weather.isUnavailable(latitude: preferences.weatherLatitude,
+                                     longitude: preferences.weatherLongitude,
+                                     celsius: preferences.weatherUseCelsius) {
+                weather.refresh(latitude: preferences.weatherLatitude,
+                                longitude: preferences.weatherLongitude,
+                                celsius: preferences.weatherUseCelsius)
+            } else {
+                openWeatherApp()
+            }
         case .nowPlaying:
             openMusicApp()
         case .pomodoro:

@@ -11,7 +11,10 @@ struct WeatherWidgetView: View {
     var tint: Color
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 900)) { context in
+        // Tick every 15 minutes normally, but every minute while the last fetch failed,
+        // so a transient failure heals after ~60 s (WeatherService's failure backoff)
+        // instead of sticking for the full window (FAB-B19).
+        TimelineView(.periodic(from: .now, by: service.isOffline ? 60 : 900)) { context in
             content
                 .onChange(of: context.date) { _ in refresh() }
         }
@@ -21,11 +24,22 @@ struct WeatherWidgetView: View {
         .onChange(of: preferences.weatherLatitude) { _ in refresh() }
         .onChange(of: preferences.weatherLongitude) { _ in refresh() }
         .onChange(of: preferences.weatherUseCelsius) { _ in refresh() }
-        .help("Weather")
+        .help(helpText)
     }
 
     private var hasLocation: Bool {
         preferences.weatherLatitude != 0 || preferences.weatherLongitude != 0
+    }
+
+    /// One computed tooltip — nesting a second `.help` on the offline glyph inside the
+    /// outer one left the winner undefined (FAB-B19). Matches the tap behavior in
+    /// `DockController`: while unavailable, a tap retries the fetch.
+    private var helpText: String {
+        service.isUnavailable(latitude: preferences.weatherLatitude,
+                              longitude: preferences.weatherLongitude,
+                              celsius: preferences.weatherUseCelsius)
+            ? "Weather unavailable — tap to retry"
+            : "Weather"
     }
 
     @ViewBuilder
@@ -59,7 +73,6 @@ struct WeatherWidgetView: View {
                 Text("—").font(.system(size: max(8, height * 0.18), weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            .help("Weather unavailable — tap to retry")
         } else {
             ProgressView().controlSize(.small)
         }

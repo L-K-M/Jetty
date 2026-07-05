@@ -33,12 +33,46 @@ final class WeatherService: ObservableObject {
     private var requestedKey: String?
     private var lastKey: String?
     private var lastFetch: Date?
+    private var lastFailureKey: String?
+    private var lastFailure: Date?
+
+    /// How long a successful fetch stays fresh before `refreshIfStale` refetches.
+    static let successRefreshInterval: TimeInterval = 15 * 60
+    /// How long after a *failed* fetch before `refreshIfStale` is willing to retry —
+    /// much shorter than the success window, so a transient network blip doesn't
+    /// strand the offline glyph for 15 minutes (FAB-B19).
+    static let failureRetryInterval: TimeInterval = 60
 
     static func key(latitude: Double, longitude: Double, celsius: Bool) -> String {
         "\(latitude),\(longitude),\(celsius)"
     }
 
+    /// Pure staleness gate for `refreshIfStale` (unit-tested): a successful fetch for
+    /// the same key is fresh for `successRefreshInterval`; a failed fetch for the same
+    /// key backs retries off by `failureRetryInterval`; anything else (no history, or
+    /// the key changed) should fetch now.
+    static func shouldRefresh(now: Date, key: String,
+                              lastSuccessKey: String?, lastSuccess: Date?, snapshotKey: String?,
+                              lastFailureKey: String?, lastFailure: Date?) -> Bool {
+        if key == lastSuccessKey, let success = lastSuccess,
+           now.timeIntervalSince(success) < successRefreshInterval,
+           snapshotKey == key { return false }
+        if key == lastFailureKey, let failure = lastFailure,
+           now.timeIntervalSince(failure) < failureRetryInterval { return false }
+        return true
+    }
+
+    /// True when the tile for these coordinates is in the failed/offline state — the
+    /// last fetch failed and there is no usable reading for this key. This is exactly
+    /// the state whose tooltip promises "tap to retry" (FAB-B19).
+    func isUnavailable(latitude: Double, longitude: Double, celsius: Bool) -> Bool {
+        guard latitude != 0 || longitude != 0 else { return false }
+        return isOffline
+            && snapshot?.key != Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
+    }
+
     /// Refreshes if a location is set and the cache is stale or its key changed.
+    /// After a failure, retries are throttled to one per `failureRetryInterval`.
     func refreshIfStale(latitude: Double, longitude: Double, celsius: Bool) {
         guard latitude != 0 || longitude != 0 else { return }
         let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
@@ -48,8 +82,21 @@ final class WeatherService: ObservableObject {
         // it means flipping the unit/location back within the 15-minute freshness window
         // instantly re-displays the still-fresh reading instead of stranding a spinner
         // while the freshness gate below blocks a refetch (F-M5).
-        if key == lastKey, let last = lastFetch, Date().timeIntervalSince(last) < 15 * 60,
-           snapshot?.key == key { return }
+        guard Self.shouldRefresh(now: Date(), key: key,
+                                 lastSuccessKey: lastKey, lastSuccess: lastFetch,
+                                 snapshotKey: snapshot?.key,
+                                 lastFailureKey: lastFailureKey, lastFailure: lastFailure)
+        else { return }
+        guard inFlightKey != key else { return }
+        fetch(latitude: latitude, longitude: longitude, celsius: celsius, key: key)
+    }
+
+    /// Forces a refetch regardless of freshness or failure backoff (still coalescing
+    /// with an identical in-flight request) — the offline tile's tap-to-retry (FAB-B19).
+    func refresh(latitude: Double, longitude: Double, celsius: Bool) {
+        guard latitude != 0 || longitude != 0 else { return }
+        let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
+        requestedKey = key
         guard inFlightKey != key else { return }
         fetch(latitude: latitude, longitude: longitude, celsius: celsius, key: key)
     }
@@ -73,9 +120,15 @@ final class WeatherService: ObservableObject {
                     self.snapshot = parsed
                     self.lastKey = key
                     self.lastFetch = Date()
+                    self.lastFailureKey = nil
+                    self.lastFailure = nil
                     self.isOffline = false
                 } else {
-                    // Keep any stale snapshot; just flag offline so the view can react.
+                    // Keep any stale snapshot; just flag offline so the view can react,
+                    // and stamp the failure so `refreshIfStale` retries after
+                    // `failureRetryInterval` instead of hammering (or waiting 15 min).
+                    self.lastFailureKey = key
+                    self.lastFailure = Date()
                     self.isOffline = true
                 }
             }

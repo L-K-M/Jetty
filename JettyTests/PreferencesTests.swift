@@ -7,6 +7,9 @@ final class PreferencesTests: XCTestCase {
         let suite = "JettyTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
+        // Clean up after the test too, so runs don't leave an orphaned
+        // JettyTests-<UUID>.plist behind per call (FAB-T1).
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
         return defaults
     }
 

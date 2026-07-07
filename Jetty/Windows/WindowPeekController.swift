@@ -131,7 +131,7 @@ final class WindowPeekController {
     }
 
     private func origin(size: CGSize, near point: CGPoint, dock: CGRect, edge: DockEdge, in vf: CGRect) -> CGPoint {
-        let margin: CGFloat = 6
+        let margin: CGFloat = 10
         var x = point.x - size.width / 2
         var y = point.y - size.height / 2
         switch edge {

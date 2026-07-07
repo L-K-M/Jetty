@@ -386,9 +386,27 @@ final class DockPanelController {
 
     private func revealedFrame() -> CGRect { revealedFrameValue }
 
-    /// The dock's on-screen frame (always the revealed frame; the panel is parked
-    /// there). Used to place the folder-stack popover clear of the dock.
-    var revealedScreenFrame: CGRect { revealedFrameValue }
+    /// The visible glass strip's screen frame, excluding transparent magnification
+    /// headroom. Hover popovers anchor to this so they sit just above/beside the dock,
+    /// not above the invisible room reserved for enlarged icons.
+    var revealedDockStripFrame: CGRect {
+        let thickness = min(CGFloat(preferences.iconSize) + 2 * DockView.padding,
+                            anchor.edge.isHorizontal ? revealedFrameValue.height : revealedFrameValue.width)
+        switch anchor.edge {
+        case .bottom:
+            return CGRect(x: revealedFrameValue.minX, y: revealedFrameValue.minY,
+                          width: revealedFrameValue.width, height: thickness)
+        case .top:
+            return CGRect(x: revealedFrameValue.minX, y: revealedFrameValue.maxY - thickness,
+                          width: revealedFrameValue.width, height: thickness)
+        case .left:
+            return CGRect(x: revealedFrameValue.minX, y: revealedFrameValue.minY,
+                          width: thickness, height: revealedFrameValue.height)
+        case .right:
+            return CGRect(x: revealedFrameValue.maxX - thickness, y: revealedFrameValue.minY,
+                          width: thickness, height: revealedFrameValue.height)
+        }
+    }
 
     /// The content-layer translation that parks the dock just off its screen edge.
     /// Geometry is the layer-backed (non-flipped) view space: +y is up, +x is right.

@@ -73,5 +73,6 @@ final class FolderStackTests: XCTestCase {
         let dock = CGRect(x: 900, y: 0, width: 200, height: 70)
         let origin = FolderStack.origin(for: size, near: CGPoint(x: 1000, y: 30), dock: dock, edge: .bottom, in: vf)
         XCTAssertGreaterThanOrEqual(origin.y, dock.maxY)   // sits clear of the dock, not over it
+        XCTAssertEqual(origin.y, dock.maxY + 10, accuracy: 0.001)
     }
 }

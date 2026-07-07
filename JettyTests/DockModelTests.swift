@@ -141,4 +141,19 @@ final class DockModelTests: XCTestCase {
         // None disabled → unchanged.
         XCTAssertEqual(DockController.enabledTargets(base: [a, b], disabled: []), [a, b])
     }
+
+    func testTrashEmptinessCountsHiddenItems() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("JettyTrashTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        XCTAssertTrue(DockModel.isTrashEmpty(at: [folder]))
+
+        try Data().write(to: folder.appendingPathComponent(".DS_Store"))
+        XCTAssertTrue(DockModel.isTrashEmpty(at: [folder]))
+
+        try Data().write(to: folder.appendingPathComponent(".hidden-file"))
+        XCTAssertFalse(DockModel.isTrashEmpty(at: [folder]))
+    }
 }

@@ -353,7 +353,7 @@ final class DockController {
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let uuid = registry.key(for: screen)
         let edge = effectiveAnchor(forUUID: uuid).edge
-        let dock = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: mouse, size: .zero)
+        let dock = panels[uuid]?.revealedDockStripFrame ?? CGRect(origin: mouse, size: .zero)
         // Anchor to the app's icon (not the cursor) so the selector doesn't track the mouse.
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
@@ -515,7 +515,7 @@ final class DockController {
         let edge = effectiveAnchor(forUUID: uuid).edge
         // Place the popover clear of the dock strip, anchored to the folder's icon (like
         // the window-peek) so it sits above the tile rather than tracking the cursor.
-        let dock = panels[uuid]?.revealedScreenFrame ?? CGRect(origin: mouse, size: .zero)
+        let dock = panels[uuid]?.revealedDockStripFrame ?? CGRect(origin: mouse, size: .zero)
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         folderStack.show(folder: url, style: tile.folderDisplay ?? .grid,
                          near: anchor, dock: dock, screen: screen, edge: edge)

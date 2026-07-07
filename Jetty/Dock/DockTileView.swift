@@ -18,6 +18,9 @@ struct DockTileView: View {
     /// state, where the scroll viewport would clip the oversize face (the same
     /// reason magnification is suspended there).
     var allowsClockZoom: Bool = true
+    /// Whether this tile has its own file-drop action (app opens files, Trash deletes).
+    /// Other tiles still let the dock background pin drops, but don't show as targets.
+    var acceptsFileDrop: Bool = false
 
     var onTap: () -> Void
     var onHoverChanged: (Bool) -> Void
@@ -40,7 +43,7 @@ struct DockTileView: View {
                 loadURLs(from: providers)
                 return true
             }
-            .background(dropHighlight)
+            .overlay { dropHighlight }
             .contextMenu { contextMenuItems }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
@@ -215,8 +218,14 @@ struct DockTileView: View {
 
     @ViewBuilder
     private var dropHighlight: some View {
-        if isDropTargeted {
-            RoundedRectangle(cornerRadius: 8).stroke(preferences.tintColor, lineWidth: 2)
+        if isDropTargeted && acceptsFileDrop {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(preferences.tintColor.opacity(0.18))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(preferences.tintColor, lineWidth: 2)
+                }
+                .allowsHitTesting(false)
         }
     }
 

@@ -273,10 +273,12 @@ struct DockView: View {
                           centers: [String: CGFloat], magnifies: Bool) -> some View {
         let isDragged = draggingSlotID == slot.id
         let offset = slotOffset(for: slotIndex, base: base, spacing: spacing, zoomed: magnifies)
+        let z = slot.tiles.map { tileScale($0, centers: centers, base: base,
+                                           spacing: spacing, magnifies: magnifies) }.max() ?? 1
 
         return slotTiles(slot, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
             .offset(offset)
-            .zIndex(isDragged ? 1 : 0)
+            .zIndex(isDragged ? 10_000 : Double(z))
             .animation(isDragged ? nil : .spring(response: 0.26, dampingFraction: 0.85), value: offset)
             .gesture(reorderGesture(for: slot, zoomed: magnifies), including: slot.isReorderable ? .all : .subviews)
     }
@@ -297,18 +299,20 @@ struct DockView: View {
     }
 
     private func tileView(_ tile: DockTile, base: CGFloat, spacing: CGFloat, centers: [String: CGFloat], magnifies: Bool) -> some View {
-        DockTileView(
+        let currentScale = tileScale(tile, centers: centers, base: base, spacing: spacing, magnifies: magnifies)
+        return DockTileView(
             tile: tile,
             preferences: preferences,
             baseSize: base,
             // Zoomed clocks magnify like any tile — the panel's across headroom
             // budgets for zoom × magnification (DockLayout.clockZoomHeadroom).
-            scale: magnifies ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1,
+            scale: currentScale,
             isHovered: hoveredTileID == tile.id,
             edge: anchor.edge,
             // The overflow-scroll state passes magnifies=false; its viewport
             // clips, so the face zoom is suspended alongside magnification.
             allowsClockZoom: magnifies,
+            acceptsFileDrop: tileAcceptsFileDrop(tile),
             onTap: { model.onOpenTile?(tile) },
             onHoverChanged: { inside in
                 hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID)
@@ -320,6 +324,11 @@ struct DockView: View {
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },
             contextActions: { model.onRequestContextActions?(tile) ?? [] }
         )
+        .zIndex(Double(currentScale))
+    }
+
+    private func tileAcceptsFileDrop(_ tile: DockTile) -> Bool {
+        tile.kind == .application || tile.kind == .trash
     }
 
     // MARK: Drag-to-reorder
@@ -399,6 +408,11 @@ struct DockView: View {
         let distance = abs(hoverAlong - center)
         return MagnificationCurve.scale(distance: distance, influence: (base + spacing) * 2.2,
                                         maxScale: preferences.effectiveMagnification)
+    }
+
+    private func tileScale(_ tile: DockTile, centers: [String: CGFloat], base: CGFloat,
+                           spacing: CGFloat, magnifies: Bool) -> CGFloat {
+        magnifies ? scale(center: centers[tile.id], base: base, spacing: spacing) : 1
     }
 
     /// Resting along-axis center of each flat tile (tiles are laid uniformly with

@@ -101,10 +101,10 @@ enum FolderStack {
     }
 
     /// Top-left origin (Cocoa, y-up) for a stack of `size` opened near `point`, placed
-    /// just *outside* the `dock` frame along `edge` (so it never overlaps the dock) and
-    /// centred on the click along the dock axis, clamped inside `visibleFrame`.
+    /// just outside the visible dock strip along `edge` and centred on the click along
+    /// the dock axis, clamped inside `visibleFrame`.
     static func origin(for size: CGSize, near point: CGPoint, dock: CGRect, edge: DockEdge, in vf: CGRect) -> CGPoint {
-        let margin: CGFloat = 12
+        let margin: CGFloat = 10
         var x = point.x - size.width / 2     // centre on the click along a horizontal dock
         var y = point.y - size.height / 2    // centre on the click along a vertical dock
         switch edge {

@@ -206,19 +206,32 @@ final class DockModel: ObservableObject {
     /// The system Trash icon reflecting empty vs. full (IDEA-5). A live `DockController`
     /// trash watcher triggers a rebuild so this re-evaluates when the Trash changes.
     static func trashIcon() -> NSImage? {
-        NSImage(named: isTrashEmpty() ? NSImage.trashEmptyName : NSImage.trashFullName)
+        let isEmpty = isTrashEmpty()
+        let name = isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName
+        if let image = NSImage(named: name) { return image }
+        return NSImage(systemSymbolName: isEmpty ? "trash" : "trash.fill",
+                       accessibilityDescription: isEmpty ? "Empty Trash" : "Full Trash")
     }
 
-    /// Whether the user's Trash is empty, decided from the first visible entry alone —
+    /// Whether the user's Trash is empty, decided from the first entry alone —
     /// a shallow enumerator probe, not a materialized listing of the whole directory,
     /// so a Trash holding thousands of files costs the same as an empty one (FAB-P3).
     static func isTrashEmpty() -> Bool {
-        let trash = (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
-                                                  appropriateFor: nil, create: false))
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")
+        isTrashEmpty(at: TrashLocations.existingTrashURLs())
+    }
+
+    static func isTrashEmpty(at trashURLs: [URL]) -> Bool {
+        for trash in trashURLs where !isTrashDirectoryEmpty(trash) { return false }
+        return true
+    }
+
+    private static func isTrashDirectoryEmpty(_ trash: URL) -> Bool {
         guard let enumerator = FileManager.default.enumerator(
             at: trash, includingPropertiesForKeys: [],
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]) else { return true }
-        return enumerator.nextObject() == nil
+            options: [.skipsSubdirectoryDescendants]) else { return true }
+        while let url = enumerator.nextObject() as? URL {
+            if url.lastPathComponent != ".DS_Store" { return false }
+        }
+        return true
     }
 }

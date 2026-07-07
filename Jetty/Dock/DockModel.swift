@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Darwin
 
 /// One rendered dock tile: the merge of a pinned item and/or a running app.
 struct DockTile: Identifiable {
@@ -33,16 +34,25 @@ struct DockTile: Identifiable {
 /// a separate, cached step. See PLAN.md §6–7.
 final class DockModel: ObservableObject {
 
+    private enum TrashState {
+        case empty
+        case full
+        case unknown
+    }
+
+    private enum TrashDirectoryState: String {
+        case missing
+        case empty
+        case full
+        case unreadable
+    }
+
     /// Reorderable units (running apps collapse into one slot). The view renders these.
     @Published private(set) var slots: [DockSlot] = []
     /// Flat tiles in render order — used for deterministic panel sizing.
     @Published private(set) var tiles: [DockTile] = []
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
-    /// The Trash icon (empty/full) is recomputed only when the Trash actually changes
-    /// (via `invalidateTrashIcon()` from the controller's `TrashMonitor`), not on every
-    /// rebuild — a rebuild fires on each app focus change (IDEA-5 / ISSUE-5 spirit).
-    private var trashIconCache: NSImage?
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
@@ -72,20 +82,27 @@ final class DockModel: ObservableObject {
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
         let now = Date().timeIntervalSinceReferenceDate
         let built = Self.makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps)
+        let trashState = built.flatMap(\.tiles).contains { $0.kind == .trash }
+            ? Self.trashState() : nil
         slots = built.map { slot in
             DockSlot(id: slot.id, itemID: slot.itemID,
-                     tiles: slot.tiles.map { tile in
-                         var t = tile
-                         t.icon = icon(for: tile, now: now)
-                         return t
-                     },
+                      tiles: slot.tiles.map { tile in
+                          var t = tile
+                          if t.kind == .trash {
+                              t.icon = Self.trashIcon(state: trashState ?? .empty)
+                          } else {
+                              t.icon = icon(for: tile, now: now)
+                          }
+                          return t
+                      },
                      isRunningGroup: slot.isRunningGroup)
         }
         tiles = slots.flatMap { $0.tiles }
     }
 
-    /// Drops the cached Trash icon so the next rebuild re-reads empty/full (IDEA-5).
-    func invalidateTrashIcon() { trashIconCache = nil }
+    /// Kept as the controller's "Trash changed" hook; Trash state is intentionally
+    /// re-read on every rebuild so a missed filesystem event can't leave a stale can.
+    func invalidateTrashIcon() {}
 
     // MARK: Pure merge (unit-tested)
 
@@ -140,11 +157,16 @@ final class DockModel: ObservableObject {
                 tileID = "item:\(item.id.uuidString)"
                 seenTileIDs.insert(tileID)
             }
-            let info = item.bundleIdentifier.flatMap { runningByBundle[$0] }
-            let tile = DockTile(id: tileID, kind: item.kind, displayName: item.displayName,
-                                bundleIdentifier: item.bundleIdentifier, url: item.url, itemID: item.id,
-                                isRunning: info != nil, isActive: info?.isActive ?? false, pid: nil,
-                                customIconPath: item.customIconPath, folderDisplay: item.folderDisplay, icon: nil)
+            let isTrash = item.kind == .trash || item.url.map(TrashLocations.isTrashURL) == true
+            let info = isTrash ? nil : item.bundleIdentifier.flatMap { runningByBundle[$0] }
+            let kind: DockItemKind = isTrash ? .trash : item.kind
+            let displayName = isTrash ? (item.displayName.isEmpty ? "Trash" : item.displayName) : item.displayName
+            let customIconPath = isTrash ? nil : item.customIconPath
+            let tile = DockTile(id: tileID, kind: kind, displayName: displayName,
+                                 bundleIdentifier: isTrash ? nil : item.bundleIdentifier,
+                                 url: isTrash ? nil : item.url, itemID: item.id,
+                                 isRunning: info != nil, isActive: info?.isActive ?? false, pid: nil,
+                                 customIconPath: customIconPath, folderDisplay: item.folderDisplay, icon: nil)
             slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))
         }
@@ -163,14 +185,10 @@ final class DockModel: ObservableObject {
     // MARK: Icons (bounded LRU — BUG-8)
 
     private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
-        // The Trash reflects empty/full state (IDEA-5). Cached separately and refreshed
-        // only when the Trash changes (see `invalidateTrashIcon()`), so a moved/quit app
-        // rebuild doesn't re-list the Trash directory.
-        if tile.kind == .trash, tile.customIconPath == nil {
-            if let cached = trashIconCache { return cached }
-            let image = Self.trashIcon()
-            trashIconCache = image
-            return image
+        if tile.kind == .trash {
+            // Handled in `rebuild`, which computes the empty/full state once and then
+            // selects the native empty/full Trash image.
+            return nil
         }
         let cacheKey = tile.iconCacheKey
         if let cached = iconCache.value(for: cacheKey, now: now) { return cached }
@@ -189,7 +207,7 @@ final class DockModel: ObservableObject {
                 image = NSWorkspace.shared.icon(forFile: url.path)
             }
         case .trash:
-            image = Self.trashIcon()
+            image = nil
         case .separator, .clock, .jettyMenu, .runningApps,
              .battery, .systemMonitor, .worldClock, .pomodoro, .weather, .nowPlaying:
             image = nil   // rendered with custom views
@@ -206,32 +224,95 @@ final class DockModel: ObservableObject {
     /// The system Trash icon reflecting empty vs. full (IDEA-5). A live `DockController`
     /// trash watcher triggers a rebuild so this re-evaluates when the Trash changes.
     static func trashIcon() -> NSImage? {
-        let isEmpty = isTrashEmpty()
-        let name = isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName
-        if let image = NSImage(named: name) { return image }
-        return NSImage(systemSymbolName: isEmpty ? "trash" : "trash.fill",
-                       accessibilityDescription: isEmpty ? "Empty Trash" : "Full Trash")
+        trashIcon(state: trashState())
     }
 
-    /// Whether the user's Trash is empty, decided from the first entry alone —
-    /// a shallow enumerator probe, not a materialized listing of the whole directory,
-    /// so a Trash holding thousands of files costs the same as an empty one (FAB-P3).
+    static func trashIcon(isEmpty: Bool) -> NSImage? {
+        staticTrashIcon(isEmpty: isEmpty)
+    }
+
+    private static func trashIcon(state: TrashState) -> NSImage? {
+        switch state {
+        case .empty:
+            return staticTrashIcon(isEmpty: true)
+        case .full:
+            return staticTrashIcon(isEmpty: false)
+        case .unknown:
+            // Avoid LaunchServices' folder/content preview for ~/.Trash; if the state
+            // probe is inconclusive, prefer the full can over falsely showing empty.
+            return staticTrashIcon(isEmpty: false) ?? staticTrashIcon(isEmpty: true)
+        }
+    }
+
+    private static func staticTrashIcon(isEmpty: Bool) -> NSImage? {
+        NSImage(named: isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName)
+    }
+
+    /// Whether the user's Trash is empty. Missing candidate folders are empty; any
+    /// readable candidate containing a real entry makes the Trash full.
     static func isTrashEmpty() -> Bool {
-        isTrashEmpty(at: TrashLocations.existingTrashURLs())
+        trashState() != .full
+    }
+
+    static func trashDebugSummary() -> String {
+        let urls = TrashLocations.candidateTrashURLs()
+        let parts = urls.map { url in
+            "\(url.path)=\(trashDirectoryState(url).rawValue)"
+        }
+        return parts.isEmpty ? "no Trash candidates" : parts.joined(separator: ", ")
     }
 
     static func isTrashEmpty(at trashURLs: [URL]) -> Bool {
-        for trash in trashURLs where !isTrashDirectoryEmpty(trash) { return false }
-        return true
+        trashState(at: trashURLs) != .full
     }
 
-    private static func isTrashDirectoryEmpty(_ trash: URL) -> Bool {
-        guard let enumerator = FileManager.default.enumerator(
-            at: trash, includingPropertiesForKeys: [],
-            options: [.skipsSubdirectoryDescendants]) else { return true }
-        while let url = enumerator.nextObject() as? URL {
-            if url.lastPathComponent != ".DS_Store" { return false }
+    private static func trashState() -> TrashState {
+        trashState(at: TrashLocations.candidateTrashURLs())
+    }
+
+    private static func trashState(at trashURLs: [URL]) -> TrashState {
+        var sawUnreadable = false
+        for trash in trashURLs {
+            switch trashDirectoryState(trash) {
+            case .full: return .full
+            case .unreadable: sawUnreadable = true
+            case .empty, .missing: break
+            }
         }
-        return true
+        return sawUnreadable ? .unknown : .empty
+    }
+
+    private static func trashDirectoryState(_ trash: URL) -> TrashDirectoryState {
+        do {
+            let names = try FileManager.default.contentsOfDirectory(atPath: trash.path)
+            return names.contains(where: isRealTrashEntry) ? .full : .empty
+        } catch {
+            // Fall through to readdir: it gives us a cheap second chance before we
+            // declare the candidate unreadable.
+        }
+
+        guard let dir = opendir(trash.path) else {
+            switch errno {
+            case ENOENT, ENOTDIR: return .missing
+            default: return .unreadable
+            }
+        }
+        defer { closedir(dir) }
+
+        while let entry = readdir(dir) {
+            var dName = entry.pointee.d_name
+            let capacity = MemoryLayout.size(ofValue: dName)
+            let name = withUnsafePointer(to: &dName) { pointer in
+                pointer.withMemoryRebound(to: CChar.self, capacity: capacity) {
+                    String(cString: $0)
+                }
+            }
+            if isRealTrashEntry(name) { return .full }
+        }
+        return .empty
+    }
+
+    private static func isRealTrashEntry(_ name: String) -> Bool {
+        name != "." && name != ".." && name != ".DS_Store"
     }
 }

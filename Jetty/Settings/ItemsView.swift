@@ -76,8 +76,10 @@ struct ItemsView: View {
         .contextMenu {
             if item.kind != .separator && item.kind != .runningApps {
                 Button("Rename…") { renameItem(item) }
-                Button("Set Custom Icon…") { setCustomIcon(item) }
-                if item.customIconPath != nil {
+                if item.kind != .trash {
+                    Button("Set Custom Icon…") { setCustomIcon(item) }
+                }
+                if item.kind != .trash && item.customIconPath != nil {
                     Button("Clear Custom Icon") { store.setCustomIconPath(nil, id: item.id) }
                 }
             }
@@ -128,7 +130,7 @@ struct ItemsView: View {
 
     @ViewBuilder
     private func icon(for item: DockItem) -> some View {
-        if let path = item.customIconPath, let image = NSImage(contentsOfFile: path) {
+        if item.kind != .trash, let path = item.customIconPath, let image = NSImage(contentsOfFile: path) {
             Image(nsImage: image).resizable().scaledToFit()
         } else {
             defaultIcon(for: item)

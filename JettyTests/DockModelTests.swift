@@ -87,6 +87,27 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(tiles[1].id, "item:\(sep.id.uuidString)")
     }
 
+    func testTrashIgnoresPersistedCustomIconPath() {
+        let trash = DockItem(kind: .trash, displayName: "Trash", customIconPath: "/tmp/stale.icns")
+        let file = DockItem(kind: .file, displayName: "File", customIconPath: "/tmp/file.icns")
+
+        let tiles = DockModel.makeTiles(pinned: [trash, file], running: [], showRunningApps: true)
+
+        XCTAssertNil(tiles[0].customIconPath)
+        XCTAssertEqual(tiles[1].customIconPath, "/tmp/file.icns")
+    }
+
+    func testPinnedTrashFolderNormalizesToTrashTile() {
+        let folder = DockItem(kind: .folder, displayName: "Trash", url: TrashLocations.userTrashURL(),
+                              folderDisplay: .grid, customIconPath: "/tmp/stale.icns")
+
+        let tile = DockModel.makeTiles(pinned: [folder], running: [], showRunningApps: true)[0]
+
+        XCTAssertEqual(tile.kind, .trash)
+        XCTAssertNil(tile.url)
+        XCTAssertNil(tile.customIconPath)
+    }
+
     func testRunningAppsCollapseIntoOneSlotAtSentinel() {
         let pinned = [
             finderItem(),

@@ -76,18 +76,15 @@ final class DockController {
         // Re-resolve icons when the Trash empties/fills so its tile shows the right
         // can (IDEA-5). Only bother while a Trash tile is actually pinned. Trash events
         // arrive in bursts (dragging hundreds of files), so the handler is debounced
-        // ~300 ms, and the rebuild is skipped entirely unless the empty/full state
-        // actually flipped — the icon is the only thing a trash event changes (FAB-P3).
-        // Both locals live in the onChange closure's captures; everything runs on main.
+        // ~300 ms. Rebuild on each coalesced event rather than caching the last state;
+        // the state probe is cheap and this avoids one stale read suppressing the next
+        // real update.
         var trashWork: DispatchWorkItem?
-        var lastTrashEmpty: Bool?
         trashMonitor.onChange = { [weak self] in
             trashWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
-                guard let self, self.store.items.contains(where: { $0.kind == .trash }) else { return }
-                let isEmpty = DockModel.isTrashEmpty()
-                guard isEmpty != lastTrashEmpty else { return }
-                lastTrashEmpty = isEmpty
+                guard let self, self.store.items.contains(where: Self.isTrashItem) else { return }
+                NSLog("Jetty: Trash changed; \(DockModel.trashDebugSummary())")
                 self.model.invalidateTrashIcon()
                 self.rebuildModel()
             }
@@ -528,7 +525,10 @@ final class DockController {
                 AppLauncher.open(urls, withApplicationAt: appURL)
             }
         case .trash:
-            AppLauncher.moveToTrash(urls)
+            if AppLauncher.moveToTrash(urls) > 0 {
+                model.invalidateTrashIcon()
+                rebuildModel()
+            }
         default:
             // Dropped on a non-app tile → pin the files to the dock, skipping any
             // already-pinned URL so a repeat drop doesn't create duplicate tiles.
@@ -544,8 +544,15 @@ final class DockController {
         return item
     }
 
+    private static func isTrashItem(_ item: DockItem) -> Bool {
+        item.kind == .trash || item.url.map(TrashLocations.isTrashURL) == true
+    }
+
     /// Whether a file/folder URL is already pinned (compared by standardized path).
     private func isAlreadyPinned(_ url: URL) -> Bool {
+        if TrashLocations.isTrashURL(url) {
+            return store.items.contains(where: Self.isTrashItem)
+        }
         let target = url.standardizedFileURL
         return store.items.contains { $0.url?.standardizedFileURL == target }
     }

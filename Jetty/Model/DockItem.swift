@@ -70,6 +70,9 @@ struct DockItem: Codable, Identifiable, Equatable {
 
     /// A pinned file or folder from a URL.
     static func fromFileURL(_ url: URL) -> DockItem {
+        if TrashLocations.isTrashURL(url) {
+            return DockItem(kind: .trash, displayName: "Trash")
+        }
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
         let kind: DockItemKind = url.pathExtension == "app" ? .application : (isDir.boolValue ? .folder : .file)

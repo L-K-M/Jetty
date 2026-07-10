@@ -35,7 +35,7 @@ final class WindowPeekController {
         self.panel = panel
         if currentPID != pid || model.mode != mode {
             currentPID = pid
-            model.load(pid: pid, appName: appName, mode: mode)
+            model.load(pid: pid, appName: appName, mode: mode, initialWindows: wins)
         }
         panel.setContentSize(size)
         panel.setFrameOrigin(origin(size: size, near: point, dock: dock, edge: edge, in: screen.visibleFrame))

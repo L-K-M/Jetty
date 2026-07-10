@@ -34,7 +34,7 @@ struct DockTile: Identifiable {
 /// a separate, cached step. See PLAN.md §6–7.
 final class DockModel: ObservableObject {
 
-    private enum TrashState {
+    enum TrashState {
         case empty
         case full
         case unknown
@@ -228,24 +228,22 @@ final class DockModel: ObservableObject {
     }
 
     static func trashIcon(isEmpty: Bool) -> NSImage? {
-        staticTrashIcon(isEmpty: isEmpty)
+        trashIcon(state: isEmpty ? .empty : .full)
     }
 
     private static func trashIcon(state: TrashState) -> NSImage? {
-        switch state {
-        case .empty:
-            return staticTrashIcon(isEmpty: true)
-        case .full:
-            return staticTrashIcon(isEmpty: false)
-        case .unknown:
-            // Avoid LaunchServices' folder/content preview for ~/.Trash; if the state
-            // probe is inconclusive, prefer the full can over falsely showing empty.
-            return staticTrashIcon(isEmpty: false) ?? staticTrashIcon(isEmpty: true)
-        }
+        NSImage(named: trashImageName(for: state))
     }
 
-    private static func staticTrashIcon(isEmpty: Bool) -> NSImage? {
-        NSImage(named: isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName)
+    static func trashImageName(for state: TrashState) -> NSImage.Name {
+        // Full must mean that a real entry was positively observed. Mounted and cloud
+        // volumes can expose protected `.Trashes` paths that Jetty cannot inspect even
+        // while Finder reports an empty Trash; one unrelated permission failure must
+        // not make the can permanently full.
+        switch state {
+        case .full: return NSImage.trashFullName
+        case .empty, .unknown: return NSImage.trashEmptyName
+        }
     }
 
     /// Whether the user's Trash is empty. Missing candidate folders are empty; any
@@ -300,6 +298,11 @@ final class DockModel: ObservableObject {
     }
 
     private static func isRealTrashEntry(_ name: String) -> Bool {
-        name != "." && name != ".." && name != ".DS_Store"
+        switch name {
+        case ".", "..", ".DS_Store", ".localized", "._.DS_Store", "._.localized":
+            return false
+        default:
+            return true
+        }
     }
 }

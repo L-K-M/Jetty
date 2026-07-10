@@ -132,17 +132,20 @@ final class UpdateChecker: ObservableObject {
                 self.lastCheckDate = Date()
                 self.defaults.set(self.lastCheckDate, forKey: self.key("lastCheck"))
 
-                guard let remote = SemanticVersion(release.tagName),
-                      let current = SemanticVersion(self.configuration.currentVersion) else {
-                    if userInitiated { self.presentUpToDate() }
-                    return
-                }
-                if remote > current {
+                switch UpdateVersionComparison.evaluate(
+                    remote: release.tagName, current: self.configuration.currentVersion) {
+                case let .updateAvailable(remote, current):
                     if userInitiated || self.skippedVersion != release.tagName {
                         self.presentUpdateAvailable(release: release, remote: remote, current: current)
                     }
-                } else if userInitiated {
-                    self.presentUpToDate()
+                case .upToDate:
+                    if userInitiated { self.presentUpToDate() }
+                case let .invalidCurrent(value):
+                    self.handleVersionComparisonFailure(
+                        label: "installed version", value: value, userInitiated: userInitiated)
+                case let .invalidRemote(value):
+                    self.handleVersionComparisonFailure(
+                        label: "release tag", value: value, userInitiated: userInitiated)
                 }
             } catch {
                 if userInitiated { self.presentError(error) }
@@ -217,6 +220,22 @@ final class UpdateChecker: ObservableObject {
         alert.alertStyle = .warning
         alert.messageText = "Couldn't check for updates"
         alert.informativeText = error.localizedDescription
+        alert.addButton(withTitle: "OK")
+        _ = runModal(alert)
+    }
+
+    @MainActor
+    private func handleVersionComparisonFailure(label: String, value: String,
+                                                userInitiated: Bool) {
+        let detail = "The \(label) '\(value)' is not a valid semantic version."
+        guard userInitiated else {
+            NSLog("UpdateChecker: couldn't compare versions: \(detail)")
+            return
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Couldn't compare versions"
+        alert.informativeText = detail
         alert.addButton(withTitle: "OK")
         _ = runModal(alert)
     }

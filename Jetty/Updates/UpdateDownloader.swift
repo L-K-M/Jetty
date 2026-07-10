@@ -8,11 +8,14 @@ struct UpdateDownloader {
 
     enum DownloadError: LocalizedError {
         case noUniqueFileName(directory: String, fileName: String, attempts: Int)
+        case sizeMismatch(expected: Int, actual: Int)
 
         var errorDescription: String? {
             switch self {
             case .noUniqueFileName(let directory, let fileName, let attempts):
                 return "Couldn't find an unused name for \(fileName) in \(directory) after \(attempts) attempts."
+            case .sizeMismatch(let expected, let actual):
+                return "The downloaded update failed its size check (expected \(expected) bytes, received \(actual))."
             }
         }
     }
@@ -25,17 +28,34 @@ struct UpdateDownloader {
     /// Downloads `asset` to `~/Downloads`, returning the saved file URL.
     func downloadToDownloads(_ asset: GitHubRelease.Asset) async throws -> URL {
         let (tempURL, response) = try await session.download(from: asset.browserDownloadURL)
+        var removeTemporaryFile = true
+        defer {
+            if removeTemporaryFile { try? fileManager.removeItem(at: tempURL) }
+        }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            // Don't abandon a (potentially DMG-sized) error body in the temp dir.
-            try? FileManager.default.removeItem(at: tempURL)
             throw GitHubReleaseClient.ClientError.badResponse(http.statusCode)
         }
+        try Self.validateDownloadedFile(at: tempURL, expectedSize: asset.size,
+                                        fileManager: fileManager)
         let downloads = try fileManager.url(for: .downloadsDirectory, in: .userDomainMask,
                                             appropriateFor: nil, create: true)
         let destination = try Self.uniqueDestination(in: downloads, fileName: asset.name,
                                                      fileManager: fileManager)
         try fileManager.moveItem(at: tempURL, to: destination)
+        removeTemporaryFile = false
         return destination
+    }
+
+    /// Rejects truncated or unexpectedly enlarged downloads before they leave the
+    /// private URLSession temporary location. This is an integrity baseline, not a
+    /// substitute for the updater's future signature/Team-ID verification.
+    static func validateDownloadedFile(at url: URL, expectedSize: Int,
+                                       fileManager: FileManager = .default) throws {
+        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        let actualSize = (attributes[.size] as? NSNumber)?.intValue ?? -1
+        guard actualSize == expectedSize else {
+            throw DownloadError.sizeMismatch(expected: expectedSize, actual: actualSize)
+        }
     }
 
     /// A non-colliding URL in `directory` for `fileName` (`Foo.dmg`, then `Foo-1.dmg`,

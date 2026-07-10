@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import Jetty
 
 @MainActor
@@ -172,9 +173,18 @@ final class DockModelTests: XCTestCase {
         XCTAssertTrue(DockModel.isTrashEmpty(at: [folder]))
 
         try Data().write(to: folder.appendingPathComponent(".DS_Store"))
+        try Data().write(to: folder.appendingPathComponent(".localized"))
+        try Data().write(to: folder.appendingPathComponent("._.DS_Store"))
+        try Data().write(to: folder.appendingPathComponent("._.localized"))
         XCTAssertTrue(DockModel.isTrashEmpty(at: [folder]))
 
         try Data().write(to: folder.appendingPathComponent(".hidden-file"))
         XCTAssertFalse(DockModel.isTrashEmpty(at: [folder]))
+    }
+
+    func testUnknownTrashStateDoesNotClaimTrashIsFull() {
+        XCTAssertEqual(DockModel.trashImageName(for: .empty), NSImage.trashEmptyName)
+        XCTAssertEqual(DockModel.trashImageName(for: .unknown), NSImage.trashEmptyName)
+        XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
     }
 }

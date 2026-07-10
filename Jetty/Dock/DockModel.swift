@@ -34,7 +34,7 @@ struct DockTile: Identifiable {
 /// a separate, cached step. See PLAN.md §6–7.
 final class DockModel: ObservableObject {
 
-    private enum TrashState {
+    enum TrashState {
         case empty
         case full
         case unknown
@@ -228,38 +228,28 @@ final class DockModel: ObservableObject {
     }
 
     static func trashIcon(isEmpty: Bool) -> NSImage? {
-        staticTrashIcon(isEmpty: isEmpty)
+        trashIcon(state: isEmpty ? .empty : .full)
     }
 
     private static func trashIcon(state: TrashState) -> NSImage? {
-        switch state {
-        case .empty:
-            return staticTrashIcon(isEmpty: true)
-        case .full:
-            return staticTrashIcon(isEmpty: false)
-        case .unknown:
-            // Avoid LaunchServices' folder/content preview for ~/.Trash; if the state
-            // probe is inconclusive, prefer the full can over falsely showing empty.
-            return staticTrashIcon(isEmpty: false) ?? staticTrashIcon(isEmpty: true)
-        }
+        NSImage(named: trashImageName(for: state))
     }
 
-    private static func staticTrashIcon(isEmpty: Bool) -> NSImage? {
-        NSImage(named: isEmpty ? NSImage.trashEmptyName : NSImage.trashFullName)
+    static func trashImageName(for state: TrashState) -> NSImage.Name {
+        // Full must mean that a real entry was positively observed. Mounted and cloud
+        // volumes can expose protected `.Trashes` paths that Jetty cannot inspect even
+        // while Finder reports an empty Trash; one unrelated permission failure must
+        // not make the can permanently full.
+        switch state {
+        case .full: return NSImage.trashFullName
+        case .empty, .unknown: return NSImage.trashEmptyName
+        }
     }
 
     /// Whether the user's Trash is empty. Missing candidate folders are empty; any
     /// readable candidate containing a real entry makes the Trash full.
     static func isTrashEmpty() -> Bool {
         trashState() != .full
-    }
-
-    static func trashDebugSummary() -> String {
-        let urls = TrashLocations.candidateTrashURLs()
-        let parts = urls.map { url in
-            "\(url.path)=\(trashDirectoryState(url).rawValue)"
-        }
-        return parts.isEmpty ? "no Trash candidates" : parts.joined(separator: ", ")
     }
 
     static func isTrashEmpty(at trashURLs: [URL]) -> Bool {
@@ -283,14 +273,8 @@ final class DockModel: ObservableObject {
     }
 
     private static func trashDirectoryState(_ trash: URL) -> TrashDirectoryState {
-        do {
-            let names = try FileManager.default.contentsOfDirectory(atPath: trash.path)
-            return names.contains(where: isRealTrashEntry) ? .full : .empty
-        } catch {
-            // Fall through to readdir: it gives us a cheap second chance before we
-            // declare the candidate unreadable.
-        }
-
+        // `contentsOfDirectory` materializes every name. Trash only needs to know
+        // whether one real entry exists, so stop at the first via `readdir` instead.
         guard let dir = opendir(trash.path) else {
             switch errno {
             case ENOENT, ENOTDIR: return .missing
@@ -299,6 +283,7 @@ final class DockModel: ObservableObject {
         }
         defer { closedir(dir) }
 
+        errno = 0
         while let entry = readdir(dir) {
             var dName = entry.pointee.d_name
             let capacity = MemoryLayout.size(ofValue: dName)
@@ -309,10 +294,15 @@ final class DockModel: ObservableObject {
             }
             if isRealTrashEntry(name) { return .full }
         }
-        return .empty
+        return errno == 0 ? .empty : .unreadable
     }
 
     private static func isRealTrashEntry(_ name: String) -> Bool {
-        name != "." && name != ".." && name != ".DS_Store"
+        switch name {
+        case ".", "..", ".DS_Store", ".localized", "._.DS_Store", "._.localized":
+            return false
+        default:
+            return true
+        }
     }
 }

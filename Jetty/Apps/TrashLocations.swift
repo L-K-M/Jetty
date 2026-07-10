@@ -33,7 +33,7 @@ enum TrashLocations {
     /// `.Trashes` parents are included so a newly-created UID Trash folder is noticed.
     static func watchableTrashURLs() -> [URL] {
         let user = userTrashURL()
-        var urls = existingTrashURLs() + existingTrashParentURLs()
+        var urls = existingTrashURLs() + existingTrashParentURLs() + rootsMissingTrashParent()
         if !urls.contains(where: { samePath($0, user) }) { urls.insert(user, at: 0) }
         return unique(urls)
     }
@@ -42,6 +42,15 @@ enum TrashLocations {
         mountedVolumes()
             .map { $0.appendingPathComponent(".Trashes", isDirectory: true) }
             .filter(isDirectory)
+    }
+
+    /// Finder creates a volume's `.Trashes` directory lazily. Until it exists, watch
+    /// the volume root so the monitor sees that first creation and can attach to the
+    /// parent/UID directory immediately.
+    private static func rootsMissingTrashParent() -> [URL] {
+        mountedVolumes().filter {
+            !isDirectory($0.appendingPathComponent(".Trashes", isDirectory: true))
+        }
     }
 
     private static func makeCandidateTrashURLs() -> [URL] {
@@ -62,11 +71,6 @@ enum TrashLocations {
     private static func mountedVolumes() -> [URL] {
         var urls = FileManager.default.mountedVolumeURLs(
             includingResourceValuesForKeys: nil, options: []) ?? []
-        if let volumeDirs = try? FileManager.default.contentsOfDirectory(
-            at: URL(fileURLWithPath: "/Volumes", isDirectory: true),
-            includingPropertiesForKeys: nil, options: []) {
-            urls.append(contentsOf: volumeDirs)
-        }
         urls.append(URL(fileURLWithPath: "/", isDirectory: true))
         urls.append(URL(fileURLWithPath: "/System/Volumes/Data", isDirectory: true))
         return unique(urls)

@@ -254,14 +254,6 @@ final class DockModel: ObservableObject {
         trashState() != .full
     }
 
-    static func trashDebugSummary() -> String {
-        let urls = TrashLocations.candidateTrashURLs()
-        let parts = urls.map { url in
-            "\(url.path)=\(trashDirectoryState(url).rawValue)"
-        }
-        return parts.isEmpty ? "no Trash candidates" : parts.joined(separator: ", ")
-    }
-
     static func isTrashEmpty(at trashURLs: [URL]) -> Bool {
         trashState(at: trashURLs) != .full
     }
@@ -283,14 +275,8 @@ final class DockModel: ObservableObject {
     }
 
     private static func trashDirectoryState(_ trash: URL) -> TrashDirectoryState {
-        do {
-            let names = try FileManager.default.contentsOfDirectory(atPath: trash.path)
-            return names.contains(where: isRealTrashEntry) ? .full : .empty
-        } catch {
-            // Fall through to readdir: it gives us a cheap second chance before we
-            // declare the candidate unreadable.
-        }
-
+        // `contentsOfDirectory` materializes every name. Trash only needs to know
+        // whether one real entry exists, so stop at the first via `readdir` instead.
         guard let dir = opendir(trash.path) else {
             switch errno {
             case ENOENT, ENOTDIR: return .missing
@@ -299,6 +285,7 @@ final class DockModel: ObservableObject {
         }
         defer { closedir(dir) }
 
+        errno = 0
         while let entry = readdir(dir) {
             var dName = entry.pointee.d_name
             let capacity = MemoryLayout.size(ofValue: dName)
@@ -309,7 +296,7 @@ final class DockModel: ObservableObject {
             }
             if isRealTrashEntry(name) { return .full }
         }
-        return .empty
+        return errno == 0 ? .empty : .unreadable
     }
 
     private static func isRealTrashEntry(_ name: String) -> Bool {

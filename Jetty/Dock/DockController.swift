@@ -25,6 +25,8 @@ final class DockController {
     /// Token for the block-based wake observer, so `teardown()` can remove it (otherwise
     /// every start/teardown cycle stacks another live observer) — H24.
     private var wakeObserver: NSObjectProtocol?
+    private var trashVolumeObservers: [NSObjectProtocol] = []
+    private var trashWork: DispatchWorkItem?
 
     /// Last-seen "structural" preference signatures, so a preference mutation only
     /// does the work it actually needs: pure-appearance tweaks (opacity/tint/corner/
@@ -64,6 +66,8 @@ final class DockController {
 
         if preferences.manageSystemDock { systemDock.hideSystemDock() }
 
+        configureTrashMonitoring()
+        observe()   // install volume/wake observers before the initial Trash arm/scan
         rebuildModel()
         reconcilePanels()
         prefSig = preferenceSignatures()
@@ -73,34 +77,14 @@ final class DockController {
         }
         hoverMonitor.start()
 
-        // Re-resolve icons when the Trash empties/fills so its tile shows the right
-        // can (IDEA-5). Only bother while a Trash tile is actually pinned. Trash events
-        // arrive in bursts (dragging hundreds of files), so the handler is debounced
-        // ~300 ms. Rebuild on each coalesced event rather than caching the last state;
-        // the state probe is cheap and this avoids one stale read suppressing the next
-        // real update.
-        var trashWork: DispatchWorkItem?
-        trashMonitor.onChange = { [weak self] in
-            trashWork?.cancel()
-            let work = DispatchWorkItem { [weak self] in
-                guard let self, self.store.items.contains(where: Self.isTrashItem) else { return }
-                NSLog("Jetty: Trash changed; \(DockModel.trashDebugSummary())")
-                self.model.invalidateTrashIcon()
-                self.rebuildModel()
-            }
-            trashWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
-        }
-        trashMonitor.start()
-
         registerHotkeys()
-        observe()
     }
 
     func teardown() {
         guard started else { return }
         started = false
         hoverMonitor.stop()
+        trashWork?.cancel(); trashWork = nil
         trashMonitor.stop()
         LiveSystemStats.shared.setRunning(false)
         peekWork?.cancel(); peekWork = nil
@@ -112,6 +96,11 @@ final class DockController {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
         }
+        trashVolumeObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        trashVolumeObservers.removeAll()
+        cancellables.removeAll()
+        registry.onChange = nil
+        trashMonitor.onChange = nil
         // Leave the system Dock as the user expects: restore it on quit if we hid it.
         if systemDock.isManaging { systemDock.restoreSystemDock() }
     }
@@ -146,6 +135,17 @@ final class DockController {
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.systemDock.reassertIfManaging()
+            self?.refreshTrashMonitoring()
+        }
+
+        for name in [NSWorkspace.didMountNotification,
+                     NSWorkspace.didUnmountNotification,
+                     NSWorkspace.didRenameVolumeNotification] {
+            let observer = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: name, object: nil, queue: .main) { [weak self] _ in
+                    self?.refreshTrashMonitoring()
+                }
+            trashVolumeObservers.append(observer)
         }
     }
 
@@ -203,10 +203,47 @@ final class DockController {
     // MARK: Model
 
     private func rebuildModel() {
+        guard started else { return }
+        updateTrashMonitoring()
         model.rebuild(pinned: store.items, running: runningApps.apps,
                       showRunningApps: preferences.showRunningApps)
         relayoutPanels()
         updateLiveStats()
+    }
+
+    private func configureTrashMonitoring() {
+        trashMonitor.onChange = { [weak self] in
+            guard let self else { return }
+            self.trashWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.hasTrashItem else { return }
+                self.trashWork = nil
+                self.model.invalidateTrashIcon()
+                self.rebuildModel()
+            }
+            self.trashWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+        }
+    }
+
+    private var hasTrashItem: Bool {
+        store.items.contains(where: Self.isTrashItem)
+    }
+
+    private func updateTrashMonitoring() {
+        if started && hasTrashItem {
+            trashMonitor.start()
+        } else {
+            trashWork?.cancel(); trashWork = nil
+            trashMonitor.stop()
+        }
+    }
+
+    private func refreshTrashMonitoring() {
+        guard started, hasTrashItem else { return }
+        trashMonitor.refresh()
+        model.invalidateTrashIcon()
+        rebuildModel()
     }
 
     /// Runs the shared system sampler only while a panel actually shows a CPU/battery

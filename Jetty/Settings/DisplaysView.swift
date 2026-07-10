@@ -8,9 +8,7 @@ import AppKit
 struct DisplaysView: View {
     @ObservedObject var store: DockStore
     @ObservedObject var preferences: Preferences
-    let registry: DisplayRegistry
-
-    private struct ScreenEntry: Identifiable { let id: String; let name: String }
+    @ObservedObject var registry: DisplayRegistry
 
     var body: some View {
         Form {
@@ -19,7 +17,7 @@ struct DisplaysView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            ForEach(screenEntries) { entry in
+            ForEach(registry.entries) { entry in
                 Section(entry.name) {
                     Toggle("Show dock on this display", isOn: shownBinding(entry.id))
                     if store.isDisplayDisabled(forDisplayUUID: entry.id) {
@@ -50,17 +48,6 @@ struct DisplaysView: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    // MARK: Screens
-
-    private var screenEntries: [ScreenEntry] {
-        NSScreen.screens.map { screen in
-            // `localizedName` has existed since macOS 10.15 — the old `#available(macOS 14)`
-            // gate wrongly degraded exactly the min-target OS (13) to "Display 1/2" on the
-            // pane whose whole job is telling displays apart (F-L9).
-            ScreenEntry(id: registry.key(for: screen), name: screen.localizedName)
-        }
     }
 
     // MARK: Bindings

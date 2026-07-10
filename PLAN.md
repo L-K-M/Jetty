@@ -366,18 +366,21 @@ computed by `DockModel` from `DockDocument` + `RunningAppsModel`. Running apps s
 | Click a file/folder/url tile | Open it in Finder / the default app (a folder opens in Finder; its contents preview on hover) | `NSWorkspace.open` (none) |
 | Drag a file onto an app tile | Open the file *with* that app | `NSWorkspace.open(_:withApplicationAt:)` (none) |
 | Drag a file/app/url into the dock | Pin it as a new item | bookmark capture (none) |
-| Right-click an app tile | Synthesized menu: Activate, Hide, Quit, Options ▸ (Keep in Dock, Open at Login\*), Show in Finder, Recent Documents\* | `NSRunningApplication`/`NSWorkspace`; recents via `.sfl2` parse\* (none) |
+| Right-click an app tile | Edge-aware synthesized menu: Show, Hide, Quit, Force Quit, Keep in Dock, Show in Finder | `NSRunningApplication`/`NSWorkspace` (none) |
 | Drag tiles | Reorder; drag out to remove | (none) |
 | Click the Trash tile | Open Trash; **drop** files to delete; menu → Empty Trash | `FileManager`/`NSWorkspace` (none) |
 | Hover a tile | Running app → window peek (names, or live thumbnails); folder → contents stack; optional name label | (thumbnails: Screen Recording) |
 | Click the Jetty Menu tile / hotkey | Open the Start-menu launcher | (none; power cmds: Automation) |
 
-\* Recent-documents and "Open at Login" parity are best-effort/later (the app's *own*
-custom dock menu can't be read cross-process — we synthesize ours).
+An app's own custom Dock menu cannot be read cross-process, so Jetty synthesizes only
+the lifecycle and pinning actions it can target reliably.
 
 - **Running & launching indicators** come from `NSWorkspace.runningApplications`
   (filtered to `activationPolicy == .regular`) plus `didLaunch`/`didTerminate`/
   `didActivate`/`didHide` notifications — exactly how uBar/ActiveDock drive theirs.
+- **Not Responding** is best-effort and never guessed permission-free: if Accessibility
+  is already granted, three consecutive bounded AX messaging failures add a static badge.
+  Jetty never prompts solely for this; Force Quit remains permission-free and available.
 - **Icons** via `NSWorkspace.shared.icon(forFile:)` / `NSRunningApplication.icon`, cached
   in an LRU (reuse Zap's `LRUImageCache` pattern).
 - **Attention/bounce:** Jetty can bounce **its own** tile; it animates a **custom**
@@ -538,7 +541,8 @@ Jetty/
 │   │   └── DockLayout.swift         # pure anchor → frame math (revealed/hidden) — unit-tested
 │   ├── Apps/
 │   │   ├── RunningAppsModel.swift   # NSWorkspace running apps + launch/quit/activate observers
-│   │   ├── AppLauncher.swift        # NSWorkspace open/activate/openWith/hide/terminate
+│   │   ├── AppLauncher.swift        # NSWorkspace open/activate/openWith/hide/terminate/forceTerminate
+│   │   ├── AppResponsivenessMonitor.swift # opt-in AX health probe; no prompting or guessing
 │   │   └── TrashMonitor.swift       # DispatchSource watch → live empty/full Trash tile
 │   ├── SystemDock/
 │   │   └── SystemDockController.swift # hide/re-assert/restore the real Dock (defaults + killall)
@@ -550,6 +554,8 @@ Jetty/
 │   │   ├── DockView.swift            # SwiftUI: glass strip of slots; magnification + drag-to-reorder
 │   │   ├── DockTileView.swift        # one tile: icon, indicator, magnification, drop target
 │   │   ├── DockContextAction.swift   # synthesized right-click menu entries for a tile
+│   │   ├── DockContextMenuSource.swift # native edge-aware NSMenu presentation
+│   │   ├── DockContextMenuPlacement.swift # pure four-edge menu geometry
 │   │   ├── MagnificationCurve.swift  # pure Dock-style hover-zoom math (unit-tested)
 │   │   └── EdgeHoverMonitor.swift    # global mouse monitor → which screen edge is hovered
 │   ├── Stacks/

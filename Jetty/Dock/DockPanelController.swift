@@ -61,6 +61,7 @@ final class DockPanelController {
 
     private var revealWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
+    private var interactionHeld = false
 
     /// A thin edge window that catches file drags while the dock is auto-hidden
     /// (present only when auto-hide + edge-hover are on). See `DragRevealSensorView`.
@@ -176,6 +177,17 @@ final class DockPanelController {
         if isRevealed { hideIgnoringAutoHide() } else { reveal() }
     }
 
+    /// Keeps an auto-hidden dock visible while a menu tracks outside its window.
+    func setInteractionHeld(_ held: Bool) {
+        interactionHeld = held
+        if held {
+            hideWork?.cancel()
+            hideWork = nil
+        } else {
+            handleMouseMoved(to: NSEvent.mouseLocation)
+        }
+    }
+
     /// Force-hide regardless of the auto-hide setting — lets the global toggle-all
     /// hotkey hide even a pinned, always-shown dock (M34).
     func hideForToggle() { hideIgnoringAutoHide() }
@@ -189,6 +201,11 @@ final class DockPanelController {
 
     /// Pointer moved (global coordinates) — decide whether to reveal or hide.
     func handleMouseMoved(to point: NSPoint) {
+        if interactionHeld {
+            hideWork?.cancel()
+            hideWork = nil
+            return
+        }
         guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else { return }
         guard NSMouseInRect(point, screen.frame, false) else {
             // The pointer is off this screen. A dock on a display stacked directly against
@@ -256,7 +273,7 @@ final class DockPanelController {
     }
 
     private func scheduleHide() {
-        guard hideWork == nil else { return }
+        guard !interactionHeld, hideWork == nil else { return }
         let work = DispatchWorkItem { [weak self] in self?.hideWork = nil; self?.hide() }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + preferences.hideDelayMs / 1000.0, execute: work)

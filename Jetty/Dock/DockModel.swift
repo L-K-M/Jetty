@@ -51,6 +51,9 @@ final class DockModel: ObservableObject {
     @Published private(set) var slots: [DockSlot] = []
     /// Flat tiles in render order — used for deterministic panel sizing.
     @Published private(set) var tiles: [DockTile] = []
+    /// Best-effort Not Responding state, keyed by exact process identity. This changes
+    /// tile overlays only; it must not rebuild or relayout the dock.
+    @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
 
@@ -59,6 +62,8 @@ final class DockModel: ObservableObject {
     var onDropFiles: ((DockTile, [URL]) -> Void)?
     /// Builds the synthesized right-click menu for a tile (see PLAN.md §7).
     var onRequestContextActions: ((DockTile) -> [DockContextAction])?
+    /// Holds auto-hide while a native context menu is tracking outside the dock panel.
+    var onContextMenuPresentationChanged: ((String, Bool) -> Void)?
     /// Drag-to-reorder: the new order of the reorderable slots' backing item ids.
     var onReorder: ((_ orderedItemIDs: [UUID]) -> Void)?
     /// Drag-out-to-remove: the backing item id of a tile dragged off the dock (ND-5).
@@ -76,6 +81,14 @@ final class DockModel: ObservableObject {
 
     /// The item ids of the reorderable slots, in render order.
     var reorderableItemIDs: [UUID] { slots.compactMap { $0.itemID } }
+
+    func setUnresponsivePIDs(_ value: Set<pid_t>) {
+        if value != unresponsivePIDs { unresponsivePIDs = value }
+    }
+
+    func isUnresponsive(pid: pid_t?) -> Bool {
+        pid.map(unresponsivePIDs.contains) ?? false
+    }
 
     /// Rebuilds `slots`/`tiles` from the current pinned items + running apps and
     /// resolves icons (cached, bounded — BUG-8).
@@ -165,7 +178,7 @@ final class DockModel: ObservableObject {
             let tile = DockTile(id: tileID, kind: kind, displayName: displayName,
                                  bundleIdentifier: isTrash ? nil : item.bundleIdentifier,
                                  url: isTrash ? nil : item.url, itemID: item.id,
-                                 isRunning: info != nil, isActive: info?.isActive ?? false, pid: nil,
+                                  isRunning: info != nil, isActive: info?.isActive ?? false, pid: info?.pid,
                                  customIconPath: customIconPath, folderDisplay: item.folderDisplay, icon: nil)
             slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))

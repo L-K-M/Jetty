@@ -11,6 +11,7 @@ struct DockTileView: View {
     let baseSize: CGFloat
     let scale: CGFloat
     let isHovered: Bool
+    let isUnresponsive: Bool
     /// The edge this dock is anchored to (from the panel's anchor, not the global
     /// preference) so per-display docks with different edges lay out correctly (BUG-4).
     let edge: DockEdge
@@ -26,6 +27,7 @@ struct DockTileView: View {
     var onHoverChanged: (Bool) -> Void
     var onDropURLs: ([URL]) -> Void
     var contextActions: () -> [DockContextAction]
+    var onContextMenuPresentationChanged: (Bool) -> Void
 
     @State private var isDropTargeted = false
 
@@ -44,11 +46,28 @@ struct DockTileView: View {
                 return true
             }
             .overlay { dropHighlight }
-            .contextMenu { contextMenuItems }
+            .overlay {
+                DockContextMenuSource(
+                    edge: edge,
+                    dockThickness: baseSize + 2 * DockView.padding,
+                    actions: contextActions,
+                    onPresentationChanged: onContextMenuPresentationChanged)
+                    .accessibilityHidden(true)
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityValue(tile.isRunning && tile.kind == .application ? "Running" : "")
+            .accessibilityValue(accessibilityValue)
             .accessibilityAddTraits(tile.kind == .separator ? [] : .isButton)
+            .accessibilityActions {
+                ForEach(contextActions().filter { !$0.isSeparator }) { action in
+                    Button(role: action.isDestructive ? .destructive : nil) {
+                        action.action?()
+                    } label: {
+                        Text(action.title)
+                    }
+                }
+            }
+            .help(isUnresponsive ? "\(tile.displayName) - Not Responding" : tile.displayName)
             // Track the pointer with almost no lag so magnification feels immediate
             // even on fast moves (a long spring made the icon visibly trail the cursor).
             .animation(.interactiveSpring(response: 0.10, dampingFraction: 0.9), value: scale)
@@ -62,6 +81,7 @@ struct DockTileView: View {
         content
             .frame(width: tileWidth, height: baseSize)
             .scaleEffect(scale, anchor: scaleAnchor)
+            .overlay(alignment: .topTrailing) { unresponsiveBadge }
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
     }
@@ -95,19 +115,21 @@ struct DockTileView: View {
         }
     }
 
+    private var accessibilityValue: String {
+        guard tile.kind == .application, tile.isRunning else { return "" }
+        return isUnresponsive ? "Running, Not Responding" : "Running"
+    }
+
     @ViewBuilder
-    private var contextMenuItems: some View {
-        let actions = contextActions()
-        ForEach(actions) { action in
-            if action.isSeparator {
-                Divider()
-            } else {
-                Button(role: action.isDestructive ? .destructive : nil) {
-                    action.action?()
-                } label: {
-                    Text(action.title)
-                }
-            }
+    private var unresponsiveBadge: some View {
+        if tile.kind == .application && isUnresponsive {
+            Image(systemName: "exclamationmark.circle.fill")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .red)
+                .font(.system(size: max(12, baseSize * 0.28), weight: .bold))
+                .offset(x: 2, y: -2)
+                .help("Not Responding")
+                .accessibilityHidden(true)
         }
     }
 

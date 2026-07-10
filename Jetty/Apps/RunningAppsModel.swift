@@ -9,6 +9,7 @@ struct RunningAppInfo: Equatable, Identifiable {
     var name: String
     var isActive: Bool
     var pid: pid_t
+    var launchDate: Date? = nil
 
     var id: String { bundleIdentifier ?? "pid:\(pid)" }
 }
@@ -53,6 +54,7 @@ final class RunningAppsModel: ObservableObject {
     /// (activate/hide/quit) are O(1) instead of re-scanning `runningApplications`
     /// on every call during activation storms (GI-5).
     private var indexByBundle: [String: NSRunningApplication] = [:]
+    private var indexByPID: [pid_t: NSRunningApplication] = [:]
 
     /// Rebuilds the snapshot from `runningApplications`, keeping only `.regular`
     /// (Dock-worthy) apps and excluding Jetty itself.
@@ -71,6 +73,7 @@ final class RunningAppsModel: ObservableObject {
         // snapshot and `indexByBundle` (built in the same pass), so the process a
         // tile renders is the same one activate/hide/quit act on (F-M12).
         var index: [String: NSRunningApplication] = [:]
+        var pidIndex: [pid_t: NSRunningApplication] = [:]
         var snapshot: [RunningAppInfo] = []
         snapshot.reserveCapacity(regular.count)
         for app in regular {
@@ -78,17 +81,20 @@ final class RunningAppsModel: ObservableObject {
                 guard index[bundleID] == nil else { continue }
                 index[bundleID] = app
             }
+            pidIndex[app.processIdentifier] = app
             snapshot.append(RunningAppInfo(bundleIdentifier: app.bundleIdentifier,
                                            name: app.localizedName ?? "App",
                                            isActive: app.isActive,
-                                           pid: app.processIdentifier))
+                                           pid: app.processIdentifier,
+                                           launchDate: app.launchDate))
         }
         indexByBundle = index
+        indexByPID = pidIndex
         // Equality gate (F-P4): `didHide`/`didUnhide` can't change the snapshot
         // (`RunningAppInfo` carries no hidden flag), so skip the publish when nothing
         // changed and spare downstream a full rebuild + relayout. `RunningAppInfo`'s
         // synthesized `==` compares every stored field (bundleIdentifier, name,
-        // isActive, pid), so activate/deactivate and relaunches still propagate.
+        // isActive, pid, launchDate), so activate/deactivate and relaunches propagate.
         if snapshot != apps { apps = snapshot }
     }
 
@@ -98,6 +104,6 @@ final class RunningAppsModel: ObservableObject {
     }
 
     func runningApplication(pid: pid_t) -> NSRunningApplication? {
-        NSRunningApplication(processIdentifier: pid)
+        indexByPID[pid]
     }
 }

@@ -17,6 +17,7 @@ final class DockModelTests: XCTestCase {
         XCTAssertTrue(tiles[0].isRunning)
         XCTAssertTrue(tiles[0].isActive)
         XCTAssertEqual(tiles[0].id, "app:com.apple.finder")
+        XCTAssertEqual(tiles[0].pid, 1)
     }
 
     func testRunningOnlyAppsAppendedWhenEnabled() {

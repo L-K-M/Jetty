@@ -308,6 +308,7 @@ struct DockView: View {
             // budgets for zoom × magnification (DockLayout.clockZoomHeadroom).
             scale: currentScale,
             isHovered: hoveredTileID == tile.id,
+            isUnresponsive: model.isUnresponsive(pid: tile.pid),
             edge: anchor.edge,
             // The overflow-scroll state passes magnifies=false; its viewport
             // clips, so the face zoom is suspended alongside magnification.
@@ -322,7 +323,10 @@ struct DockView: View {
                 }
             },
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },
-            contextActions: { model.onRequestContextActions?(tile) ?? [] }
+            contextActions: { model.onRequestContextActions?(tile) ?? [] },
+            onContextMenuPresentationChanged: {
+                model.onContextMenuPresentationChanged?(anchor.displayUUID, $0)
+            }
         )
         .zIndex(Double(currentScale))
     }

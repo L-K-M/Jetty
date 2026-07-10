@@ -42,6 +42,8 @@ enum AppLauncher {
 
     static func hide(_ app: NSRunningApplication) { app.hide() }
     static func quit(_ app: NSRunningApplication) { app.terminate() }
+    @discardableResult
+    static func forceQuit(_ app: NSRunningApplication) -> Bool { app.forceTerminate() }
 
     /// Opens `files` with the application at `appURL` (drag-a-file-onto-a-tile).
     static func open(_ files: [URL], withApplicationAt appURL: URL) {

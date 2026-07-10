@@ -352,8 +352,8 @@ toggled off, and avoid unexplained Boolean snapback.
 `DockView.swift`, `Jetty/Stacks/FolderStackController.swift`,
 `Jetty/Windows/WindowPeekController.swift`, `Jetty/Menu/JettyMenuView.swift`
 
-Keep the dock revealed while a context menu, stack, peek, alert, or drag interaction is
-active. Add a hover corridor between dock and child panel. Render drag-out as an
+Keep the dock revealed while a stack, peek, alert, or drag interaction is active. Add a
+hover corridor between dock and child panel. Render drag-out as an
 unclipped outward-only ghost with a Remove cue and Undo. Device-test reorder versus
 overflow scrolling and use long-press or explicit move actions if gestures conflict. A
 subtle glass stem or glow can visually tether an open child panel to its source tile.

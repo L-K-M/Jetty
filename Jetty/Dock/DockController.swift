@@ -16,6 +16,7 @@ final class DockController {
 
     private let hoverMonitor = EdgeHoverMonitor()
     private let trashMonitor = TrashMonitor()
+    private let responsivenessMonitor = AppResponsivenessMonitor()
     private var panels: [String: DockPanelController] = [:]
     private var cancellables = Set<AnyCancellable>()
 
@@ -67,6 +68,7 @@ final class DockController {
         if preferences.manageSystemDock { systemDock.hideSystemDock() }
 
         configureTrashMonitoring()
+        configureResponsivenessMonitoring()
         observe()   // install volume/wake observers before the initial Trash arm/scan
         rebuildModel()
         reconcilePanels()
@@ -86,6 +88,8 @@ final class DockController {
         hoverMonitor.stop()
         trashWork?.cancel(); trashWork = nil
         trashMonitor.stop()
+        responsivenessMonitor.stop()
+        model.setUnresponsivePIDs([])
         LiveSystemStats.shared.setRunning(false)
         peekWork?.cancel(); peekWork = nil
         windowPeek.hide()
@@ -115,7 +119,10 @@ final class DockController {
 
         runningApps.$apps
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.rebuildModel() }
+            .sink { [weak self] apps in
+                self?.responsivenessMonitor.setApplications(apps)
+                self?.rebuildModel()
+            }
             .store(in: &cancellables)
 
         store.objectWillChange
@@ -135,6 +142,7 @@ final class DockController {
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.systemDock.reassertIfManaging()
+            self?.responsivenessMonitor.resetAfterWake()
             self?.refreshTrashMonitoring()
         }
 
@@ -226,6 +234,15 @@ final class DockController {
         }
     }
 
+    private func configureResponsivenessMonitoring() {
+        responsivenessMonitor.onChange = { [weak self] pids in
+            guard let self, self.started else { return }
+            self.model.setUnresponsivePIDs(pids)
+        }
+        responsivenessMonitor.setApplications(runningApps.apps)
+        responsivenessMonitor.start()
+    }
+
     private var hasTrashItem: Bool {
         store.items.contains(where: Self.isTrashItem)
     }
@@ -313,6 +330,9 @@ final class DockController {
         model.onOpenTile = { [weak self] tile in self?.open(tile) }
         model.onDropFiles = { [weak self] tile, urls in self?.handleDrop(urls, on: tile) }
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
+        model.onContextMenuPresentationChanged = { [weak self] displayUUID, presented in
+            self?.panels[displayUUID]?.setInteractionHeld(presented)
+        }
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
         model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
@@ -601,13 +621,19 @@ final class DockController {
         switch tile.kind {
         case .application:
             let bundleID = tile.bundleIdentifier
-            let running = bundleID.flatMap { runningApps.runningApplication(bundleIdentifier: $0) }
+            let appURL = tile.url ?? bundleID.flatMap {
+                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+            }
+            let running = runningApplication(for: tile)
             if let running {
                 actions.append(DockContextAction(title: "Show") { AppLauncher.activate(running) })
                 actions.append(DockContextAction(title: running.isHidden ? "Unhide" : "Hide") {
                     if running.isHidden { running.unhide() } else { running.hide() }
                 })
-                actions.append(DockContextAction(title: "Quit", isDestructive: true) { AppLauncher.quit(running) })
+                actions.append(DockContextAction(title: "Quit", isDestructive: true) {
+                    AppLauncher.quit(running)
+                })
+                actions.append(forceQuitAction(for: running, name: tile.displayName))
                 actions.append(.separator)
             } else {
                 actions.append(DockContextAction(title: "Open") { [weak self] in self?.openApplication(tile) })
@@ -616,10 +642,10 @@ final class DockController {
                 actions.append(DockContextAction(title: "Remove from Dock", isDestructive: true) { [weak self] in
                     self?.removeItemWithPoof(itemID)
                 })
-            } else {
+            } else if appURL != nil {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
-            if let appURL = tile.url ?? bundleID.flatMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }) {
+            if let appURL {
                 actions.append(DockContextAction(title: "Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([appURL])
                 })
@@ -670,6 +696,54 @@ final class DockController {
             break
         }
         return actions
+    }
+
+    private func runningApplication(for tile: DockTile) -> NSRunningApplication? {
+        if let pid = tile.pid {
+            return runningApps.runningApplication(pid: pid)
+        }
+        return tile.bundleIdentifier.flatMap {
+            runningApps.runningApplication(bundleIdentifier: $0)
+        }
+    }
+
+    private func forceQuitAction(for application: NSRunningApplication,
+                                 name: String) -> DockContextAction {
+        DockContextAction(title: "Force Quit…", isDestructive: true) { [weak self] in
+            self?.confirmForceQuit(application, name: name)
+        }
+    }
+
+    private func confirmForceQuit(_ application: NSRunningApplication, name: String) {
+        let appName = name.isEmpty ? (application.localizedName ?? "this app") : name
+        let appToRestore = NSWorkspace.shared.frontmostApplication
+        var forceQuitAccepted = false
+        defer {
+            if let appToRestore, !appToRestore.isTerminated,
+               !(forceQuitAccepted && appToRestore.processIdentifier == application.processIdentifier) {
+                AppLauncher.activate(appToRestore)
+            } else if let finder = NSRunningApplication.runningApplications(
+                withBundleIdentifier: "com.apple.finder").first {
+                AppLauncher.activate(finder)
+            }
+        }
+        let alert = NSAlert()
+        alert.messageText = "Force Quit \(appName)?"
+        alert.informativeText = "The app will quit immediately. Unsaved changes will be lost."
+        alert.addButton(withTitle: "Force Quit")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn, !application.isTerminated else { return }
+        guard AppLauncher.forceQuit(application) else {
+            let failure = NSAlert()
+            failure.messageText = "Could Not Force Quit \(appName)"
+            failure.informativeText = "The app may already have quit, or macOS refused the request."
+            failure.addButton(withTitle: "OK")
+            failure.runModal()
+            runningApps.refresh()
+            return
+        }
+        forceQuitAccepted = true
     }
 
     private func confirmAndEmptyTrash() {

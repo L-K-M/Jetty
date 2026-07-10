@@ -27,9 +27,9 @@ struct PermissionsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("Accessibility — for window names & click-to-raise / minimize") {
+            Section("Accessibility — for window controls & app health") {
                 statusRow(granted: accessibilityTrusted)
-                Text("Lets Jetty read window titles and raise/minimize a specific window. Without it, names mode shows generic labels and clicking just brings the app forward. Needed by both modes for precise control — but neither mode *requires* it.")
+                Text("Lets Jetty read window titles, raise/minimize a specific window, and show a best-effort Not Responding badge after repeated bounded checks. Jetty never requests this permission solely for app-health checks. Without it, Force Quit remains available from an app's context menu.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Request…") { AccessibilityAuthorizer.prompt(); refresh() }

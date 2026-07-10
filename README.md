@@ -33,9 +33,12 @@ launcher).
   core dock.
 - **Pinned + running apps**, with live running indicators, one-click launch/activate,
   drag-a-file-onto-an-app to open it there, drag-to-pin, in-dock reorder, drag-out to
-  remove (with the classic *poof*), a per-tile accent glow, and a right-click menu
-  (Show / Hide / Quit / Keep in Dock / Show in Finder). **Folders** preview their
-  contents as a grid / list / fan **stack** on hover; a click opens them in Finder.
+  remove (with the classic *poof*), a per-tile accent glow, and an edge-aware right-click
+  menu (Show / Hide / Quit / Force Quit / Keep in Dock / Show in Finder). When optional
+  Accessibility access is already granted, repeated bounded health-check failures mark
+  an app as **Not Responding** without ever prompting solely for that feature.
+  **Folders** preview their contents as a grid / list / fan **stack** on hover; a click
+  opens them in Finder.
 - **Live info tiles** right in the dock — a date/time tile (12/24-hour, seconds,
   weekday, date) with a family of **clock faces**: digital text, a seven-segment
   **LCD** in a little resin sports-watch case, and analog dials inspired by icons —
@@ -130,7 +133,8 @@ framework — it stays local, is never transmitted, and fails closed (shows a pl
 glyph) if the framework is unavailable. **Hover window previews** (opt-in) show an app's
 windows when you hover its tile: the default **Window names** mode needs nothing;
 **Live thumbnails** ask for **Screen Recording**, and click-to-raise / minimize a
-specific window asks for **Accessibility**. Jetty works fully without either.
+specific window asks for **Accessibility**. Accessibility also enables best-effort Not
+Responding badges; Force Quit itself needs no permission. Jetty works fully without either.
 
 ## Distribution
 

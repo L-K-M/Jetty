@@ -102,6 +102,14 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertEqual(rate.up, 250, accuracy: 0.001)       // (2000-1500)/2
     }
 
+    func testNetworkThroughputUsesActualElapsedTime() {
+        let rate = LiveSystemStats.throughput(current: (received: 12_000, sent: 5_000),
+                                              previous: (received: 8_000, sent: 1_000),
+                                              interval: 4)
+        XCTAssertEqual(rate.down, 1_000, accuracy: 0.001)
+        XCTAssertEqual(rate.up, 1_000, accuracy: 0.001)
+    }
+
     func testNetworkThroughputHandlesNoPreviousAndCounterReset() {
         // No baseline yet → no rate (avoids a spike on first sample / after restart).
         let first = LiveSystemStats.throughput(current: (received: 5_000, sent: 5_000),
@@ -124,6 +132,14 @@ final class InfoWidgetTests: XCTestCase {
         }
         XCTAssertEqual(history.count, 4)
         XCTAssertEqual(history.map(\.load), [6, 7, 8, 9])   // oldest trimmed, newest kept in order
+    }
+
+    func testLongSamplingGapThreshold() {
+        XCTAssertFalse(LiveSystemStats.isLongSamplingGap(elapsed: 5.9, expected: 2))
+        XCTAssertTrue(LiveSystemStats.isLongSamplingGap(elapsed: 6, expected: 2))
+        XCTAssertTrue(LiveSystemStats.isLongSamplingGap(elapsed: .nan, expected: 2))
+        XCTAssertTrue(LiveSystemStats.isLongSamplingGap(elapsed: -1, expected: 2))
+        XCTAssertTrue(LiveSystemStats.isLongSamplingGap(elapsed: 2, expected: 0))
     }
 
     func testGraphAutoScaleUsesFloorWhenQuiet() {

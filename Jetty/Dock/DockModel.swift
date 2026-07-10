@@ -161,7 +161,8 @@ final class DockModel: ObservableObject {
             let info = isTrash ? nil : item.bundleIdentifier.flatMap { runningByBundle[$0] }
             let kind: DockItemKind = isTrash ? .trash : item.kind
             let displayName = isTrash ? (item.displayName.isEmpty ? "Trash" : item.displayName) : item.displayName
-            let customIconPath = isTrash ? nil : item.customIconPath
+            let customIconPath = (!isTrash && item.kind.supportsCustomIcon)
+                ? item.customIconPath : nil
             let tile = DockTile(id: tileID, kind: kind, displayName: displayName,
                                  bundleIdentifier: isTrash ? nil : item.bundleIdentifier,
                                  url: isTrash ? nil : item.url, itemID: item.id,

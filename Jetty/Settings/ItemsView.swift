@@ -76,10 +76,10 @@ struct ItemsView: View {
         .contextMenu {
             if item.kind != .separator && item.kind != .runningApps {
                 Button("Rename…") { renameItem(item) }
-                if item.kind != .trash {
+                if supportsCustomIcon(item) {
                     Button("Set Custom Icon…") { setCustomIcon(item) }
                 }
-                if item.kind != .trash && item.customIconPath != nil {
+                if supportsCustomIcon(item) && item.customIconPath != nil {
                     Button("Clear Custom Icon") { store.setCustomIconPath(nil, id: item.id) }
                 }
             }
@@ -130,7 +130,9 @@ struct ItemsView: View {
 
     @ViewBuilder
     private func icon(for item: DockItem) -> some View {
-        if item.kind != .trash, let path = item.customIconPath, let image = NSImage(contentsOfFile: path) {
+        if supportsCustomIcon(item),
+           let path = item.customIconPath,
+           let image = NSImage(contentsOfFile: path) {
             Image(nsImage: image).resizable().scaledToFit()
         } else {
             defaultIcon(for: item)
@@ -139,7 +141,7 @@ struct ItemsView: View {
 
     @ViewBuilder
     private func defaultIcon(for item: DockItem) -> some View {
-        switch item.kind {
+        switch effectiveKind(item) {
         case .separator: Image(systemName: "minus")
         case .clock: Image(systemName: "clock")
         case .jettyMenu: Image(systemName: "square.grid.2x2.fill")
@@ -159,6 +161,19 @@ struct ItemsView: View {
                 Image(systemName: "questionmark.app.dashed")
             }
         }
+    }
+
+    private func supportsCustomIcon(_ item: DockItem) -> Bool {
+        effectiveKind(item).supportsCustomIcon
+    }
+
+    /// Older documents may persist the user's Trash as an ordinary folder URL. Match
+    /// `DockModel`'s normalization so Settings never advertises an ignored custom icon.
+    private func effectiveKind(_ item: DockItem) -> DockItemKind {
+        if item.kind == .folder, item.url.map(TrashLocations.isTrashURL) == true {
+            return .trash
+        }
+        return item.kind
     }
 
     private func displayName(_ item: DockItem) -> String {

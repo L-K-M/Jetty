@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// an optional hover label, magnification scaling, and a file-drop target. Pointer
 /// state is reported up to `DockView`, which drives the magnification curve.
 struct DockTileView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let tile: DockTile
     @ObservedObject var preferences: Preferences
     let baseSize: CGFloat
@@ -30,6 +32,7 @@ struct DockTileView: View {
     var onContextMenuPresentationChanged: (Bool) -> Void
 
     @State private var isDropTargeted = false
+    @State private var isPrimaryPressed = false
 
     var body: some View {
         visual
@@ -51,7 +54,10 @@ struct DockTileView: View {
                     edge: edge,
                     dockThickness: baseSize + 2 * DockView.padding,
                     actions: contextActions,
-                    onPresentationChanged: onContextMenuPresentationChanged)
+                    onPresentationChanged: onContextMenuPresentationChanged,
+                    onPrimaryPressChanged: { pressed in
+                        isPrimaryPressed = isActionable && pressed
+                    })
                     .accessibilityHidden(true)
             }
             .accessibilityElement(children: .ignore)
@@ -81,6 +87,10 @@ struct DockTileView: View {
         content
             .frame(width: tileWidth, height: baseSize)
             .scaleEffect(scale, anchor: scaleAnchor)
+            .scaleEffect(isPrimaryPressed && !reduceMotion ? 0.94 : 1,
+                         anchor: scaleAnchor)
+            .brightness(isPrimaryPressed ? -0.10 : 0)
+            .overlay { pressedHighlight }
             .overlay(alignment: .topTrailing) { unresponsiveBadge }
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: .top) { label }
@@ -118,6 +128,25 @@ struct DockTileView: View {
     private var accessibilityValue: String {
         guard tile.kind == .application, tile.isRunning else { return "" }
         return isUnresponsive ? "Running, Not Responding" : "Running"
+    }
+
+    private var isActionable: Bool {
+        tile.kind != .separator && tile.kind != .runningApps
+    }
+
+    @ViewBuilder
+    private var pressedHighlight: some View {
+        if isPrimaryPressed {
+            RoundedRectangle(cornerRadius: max(8, baseSize * 0.20), style: .continuous)
+                .fill(Color.black.opacity(0.14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: max(8, baseSize * 0.20), style: .continuous)
+                        .stroke(Color.white.opacity(0.34), lineWidth: 1)
+                }
+                .padding(1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     @ViewBuilder

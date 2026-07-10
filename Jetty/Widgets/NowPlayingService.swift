@@ -41,7 +41,10 @@ final class NowPlayingService: ObservableObject {
         // generation so it never clears a newer fetch's in-flight state.
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self else { return }
-            if self.inFlightGeneration == fetchGeneration { self.inFlightGeneration = nil }
+            if self.inFlightGeneration == fetchGeneration {
+                self.inFlightGeneration = nil
+                self.generation += 1   // reject a callback that arrives after timeout
+            }
         }
     }
 

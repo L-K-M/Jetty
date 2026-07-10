@@ -8,6 +8,12 @@ static const NSInteger kControllerMaxPolls = 20;   // ~1.2s budget
 
 typedef void (*MRGetInfoFn)(dispatch_queue_t, void (^)(CFDictionaryRef));
 
+// The legacy function pointer remains valid while its framework handle is held. Resolve
+// both once so a five-second widget cadence cannot accumulate handles or repeat dlsym.
+static void *sMediaRemoteHandle;
+static MRGetInfoFn sGetNowPlayingInfo;
+static dispatch_once_t sLegacyLookupOnce;
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
 
@@ -74,12 +80,20 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
 
 /// Legacy C API (macOS < 15.4): one async callback with a CFDictionary.
 + (void)fetchViaLegacy:(void (^)(NSDictionary * _Nullable))completion {
-    void *handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
+    dispatch_once(&sLegacyLookupOnce, ^{
+        sMediaRemoteHandle = dlopen(
+            "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
+        if (sMediaRemoteHandle) {
+            sGetNowPlayingInfo = (MRGetInfoFn)dlsym(
+                sMediaRemoteHandle, "MRMediaRemoteGetNowPlayingInfo");
+        }
+    });
     // Early exits must still honor the header's main-queue contract (FAB-B17).
-    if (!handle) { dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); }); return; }
-    MRGetInfoFn getInfo = (MRGetInfoFn)dlsym(handle, "MRMediaRemoteGetNowPlayingInfo");
-    if (!getInfo) { dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); }); return; }
-    getInfo(dispatch_get_main_queue(), ^(CFDictionaryRef information) {
+    if (!sGetNowPlayingInfo) {
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
+        return;
+    }
+    sGetNowPlayingInfo(dispatch_get_main_queue(), ^(CFDictionaryRef information) {
         NSDictionary *info = (__bridge NSDictionary *)information;
         completion((info.count > 0) ? info : nil);
     });
@@ -112,12 +126,19 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
     __block NSInteger pollCount = 0;
     __block BOOL done = NO;
 
-    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    __block dispatch_source_t timer = dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
     dispatch_source_set_timer(timer, DISPATCH_TIME_NOW,
                               (uint64_t)kControllerPollIntervalMs * NSEC_PER_MSEC,
                               (uint64_t)(kControllerPollIntervalMs / 10) * NSEC_PER_MSEC);
     dispatch_source_set_event_handler(timer, ^{
-        if (done) { dispatch_source_cancel(timer); return; }
+        dispatch_source_t source = timer;
+        if (!source) return;
+        if (done) {
+            dispatch_source_cancel(source);
+            timer = nil;
+            return;
+        }
         @try {
             pollCount++;
             id response = [controller valueForKey:@"response"];
@@ -125,7 +146,8 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
             BOOL hasData = (info != nil && info.count > 0);
             if (hasData || pollCount >= kControllerMaxPolls) {
                 done = YES;
-                dispatch_source_cancel(timer);
+                dispatch_source_cancel(source);
+                timer = nil;   // break source -> handler -> source retain cycle
                 [controller performSelector:NSSelectorFromString(@"endLoadingUpdates")];
                 controller = nil;
                 completion(info);
@@ -133,7 +155,11 @@ static NSDictionary *JettyBuildInfoFromResponse(id response) {
         } @catch (NSException *ex) {
             // A renamed private selector must fail closed, not crash the agent (C4).
             done = YES;
-            dispatch_source_cancel(timer);
+            dispatch_source_cancel(source);
+            timer = nil;
+            @try {
+                [controller performSelector:NSSelectorFromString(@"endLoadingUpdates")];
+            } @catch (NSException *ignored) {}
             controller = nil;
             completion(nil);
         }

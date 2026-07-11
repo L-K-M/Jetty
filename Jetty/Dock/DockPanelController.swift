@@ -131,7 +131,6 @@ final class DockPanelController {
         // The SwiftUI content lays out along the anchor's edge, so refresh it when the
         // edge changes (per-display override / MF-1).
         if edgeChanged { hostingView.rootView = DockView(model: model, preferences: preferences, anchor: anchor) }
-        recomputeFrames()
         layoutForCurrentState()
     }
 
@@ -379,26 +378,12 @@ final class DockPanelController {
 
     private func recomputeFrames() {
         let content = contentSize()
-        var frame = DockLayout.revealedFrame(anchor: anchor, contentSize: content, in: screen.visibleFrame)
-        // Stretch the panel out to the *physical* screen edge (the content stays
-        // bottom/edge-aligned) so a pointer slammed to the very edge is still over the
-        // dock — clicks there hit the icons (Fitts' law). The top edge stops at the
-        // menu-bar boundary (visibleFrame), never under the menu bar.
-        let f = screen.frame
-        switch anchor.edge {
-        case .bottom:
-            let dy = frame.minY - f.minY
-            if dy > 0 { frame.origin.y = f.minY; frame.size.height += dy }
-        case .left:
-            let dx = frame.minX - f.minX
-            if dx > 0 { frame.origin.x = f.minX; frame.size.width += dx }
-        case .right:
-            let dx = f.maxX - frame.maxX
-            if dx > 0 { frame.size.width += dx }
-        case .top:
-            break
-        }
-        revealedFrameValue = frame
+        // Keep the visual panel at the pure anchor frame. Stretching it back to the
+        // physical edge erased a positive inset on bottom/left/right and could draw
+        // Jetty over a visible system Dock. The separate drag/reveal sensor still owns
+        // hard-edge discovery without changing the dock's visible placement.
+        revealedFrameValue = DockLayout.revealedFrame(
+            anchor: anchor, contentSize: content, in: screen.visibleFrame)
     }
 
     private func revealedFrame() -> CGRect { revealedFrameValue }

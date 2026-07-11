@@ -121,4 +121,23 @@ final class GitHubReleaseTests: XCTestCase {
             "Jetty-3.dmg"
         )
     }
+
+    func testDownloadedAssetSizeValidation() throws {
+        let file = tempDir.appendingPathComponent("Jetty.dmg")
+        try Data([0, 1, 2, 3]).write(to: file)
+
+        XCTAssertNoThrow(try UpdateDownloader.validateDownloadedFile(at: file, expectedSize: 4))
+        XCTAssertThrowsError(
+            try UpdateDownloader.validateDownloadedFile(at: file, expectedSize: 5)
+        ) { error in
+            guard case UpdateDownloader.DownloadError.sizeMismatch(let expected, let actual) = error else {
+                return XCTFail("Expected sizeMismatch, got \(error)")
+            }
+            XCTAssertEqual(expected, 5)
+            XCTAssertEqual(actual, 4)
+        }
+        XCTAssertThrowsError(
+            try UpdateDownloader.validateDownloadedFile(at: file, expectedSize: 3)
+        )
+    }
 }

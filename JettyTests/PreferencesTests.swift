@@ -64,6 +64,48 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(other.tintHex, "#112233")
     }
 
+    func testCaptureThenApplyRestoresWidgetAppearance() {
+        let prefs = Preferences(defaults: freshDefaults())
+        prefs.clockFace = .jelly
+        prefs.clockFaceZoom = 2.2
+        prefs.systemMonitorStyle = .scope
+        prefs.systemMonitorShowNetwork = false
+
+        let captured = prefs.currentAppearancePreset(name: "Widgets")
+        let other = Preferences(defaults: freshDefaults())
+        other.apply(captured)
+
+        XCTAssertEqual(other.clockFace, .jelly)
+        XCTAssertEqual(other.clockFaceZoom, 2.2, accuracy: 0.001)
+        XCTAssertEqual(other.systemMonitorStyle, .scope)
+        XCTAssertFalse(other.systemMonitorShowNetwork)
+    }
+
+    func testLegacyPresetLeavesWidgetAppearanceUnchanged() throws {
+        let legacy = Data(#"{ "material": "solid", "tintHex": "#112233" }"#.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: legacy))
+        let prefs = Preferences(defaults: freshDefaults())
+        prefs.clockFace = .memphis
+        prefs.clockFaceZoom = 1.8
+        prefs.systemMonitorStyle = .gauges
+        prefs.systemMonitorShowNetwork = false
+
+        prefs.apply(preset)
+
+        XCTAssertEqual(prefs.clockFace, .memphis)
+        XCTAssertEqual(prefs.clockFaceZoom, 1.8, accuracy: 0.001)
+        XCTAssertEqual(prefs.systemMonitorStyle, .gauges)
+        XCTAssertFalse(prefs.systemMonitorShowNetwork)
+    }
+
+    func testImportedClockZoomIsClampedWhenApplied() throws {
+        let json = Data(#"{ "clockFaceZoom": 99 }"#.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        let prefs = Preferences(defaults: freshDefaults())
+        prefs.apply(preset)
+        XCTAssertEqual(prefs.clockFaceZoom, 2.5, accuracy: 0.001)
+    }
+
     func testClockFaceDefaultsToDigitalAndRoundTrips() {
         let defaults = freshDefaults()
         let a = Preferences(defaults: defaults)

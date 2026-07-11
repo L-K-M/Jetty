@@ -33,6 +33,8 @@ struct DockTileView: View {
 
     @State private var isDropTargeted = false
     @State private var isPrimaryPressed = false
+    @State private var actionPulse = false
+    @State private var dropAcceptedPulse = false
 
     var body: some View {
         visual
@@ -43,12 +45,16 @@ struct DockTileView: View {
             .padding(edgeInsets)
             .contentShape(Rectangle())
             .onHover { onHoverChanged($0) }
-            .onTapGesture(perform: onTap)
+            .onTapGesture {
+                pulseAction()
+                onTap()
+            }
             .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                 loadURLs(from: providers)
                 return true
             }
             .overlay { dropHighlight }
+            .overlay { actionHighlight }
             .overlay {
                 DockContextMenuSource(
                     edge: edge,
@@ -78,6 +84,11 @@ struct DockTileView: View {
             // even on fast moves (a long spring made the icon visibly trail the cursor).
             .animation(.interactiveSpring(response: 0.10, dampingFraction: 0.9), value: scale)
             .animation(.easeOut(duration: 0.2), value: isHovered)
+            .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.65),
+                       value: actionPulse)
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.55),
+                       value: dropAcceptedPulse)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isDropTargeted)
     }
 
     /// The icon (or widget) with its magnification scale, indicator, and label. The
@@ -270,14 +281,58 @@ struct DockTileView: View {
     @ViewBuilder
     private var dropHighlight: some View {
         if isDropTargeted && acceptsFileDrop {
+            if tile.kind == .trash {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.red.opacity(0.24))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.red, lineWidth: 3)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: max(10, baseSize * 0.22), weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(max(4, baseSize * 0.08))
+                            .background(Color.red, in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 1))
+                            .padding(2)
+                    }
+                    .shadow(color: .red.opacity(0.45), radius: 8)
+                    .allowsHitTesting(false)
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(preferences.tintColor.opacity(0.18))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(preferences.tintColor, lineWidth: 2)
+                    }
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var actionHighlight: some View {
+        if tile.kind == .trash, actionPulse || dropAcceptedPulse {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(preferences.tintColor.opacity(0.18))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(preferences.tintColor, lineWidth: 2)
-                }
+                .stroke(dropAcceptedPulse ? Color.red : preferences.tintColor,
+                        lineWidth: dropAcceptedPulse ? 4 : 2)
+                .padding(3)
+                .opacity(reduceMotion ? 1 : 0.9)
                 .allowsHitTesting(false)
         }
+    }
+
+    private func pulseAction() {
+        guard tile.kind == .trash else { return }
+        actionPulse = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { actionPulse = false }
+    }
+
+    private func pulseDropAccepted() {
+        guard tile.kind == .trash else { return }
+        dropAcceptedPulse = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { dropAcceptedPulse = false }
     }
 
     // MARK: Geometry
@@ -323,7 +378,10 @@ struct DockTileView: View {
             }
         }
         group.notify(queue: .main) {
-            if !urls.isEmpty { onDropURLs(urls) }
+            if !urls.isEmpty {
+                onDropURLs(urls)
+                pulseDropAccepted()
+            }
         }
     }
 }

@@ -91,6 +91,12 @@ final class CommandBarTests: XCTestCase {
         XCTAssertNil(CurrencyService.parseQuery("10 km in mi"))   // 2-letter tokens → not currency
     }
 
+    func testCurrencySupportRejectsArbitraryThreeLetterTokens() {
+        XCTAssertTrue(CurrencyService.supports("usd"))
+        XCTAssertTrue(CurrencyService.supports("EUR"))
+        XCTAssertFalse(CurrencyService.supports("QQQ"))
+    }
+
     func testCurrencyConversionMath() {
         let rates = ["USD": 1.0, "EUR": 0.9]
         XCTAssertEqual(CurrencyService.convert(amount: 100, from: "USD", to: "EUR", rates: rates)!, 90, accuracy: 0.001)

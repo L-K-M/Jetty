@@ -16,6 +16,10 @@ final class JettyMenuModel: ObservableObject {
     @Published private(set) var conversion: UnitConverter.Result?
     /// An inline currency conversion (e.g. `100 usd to eur`), else `nil` (ND-9).
     @Published private(set) var currency: String?
+    /// True while a valid currency query is waiting for its first rate table.
+    @Published private(set) var currencyLoading = false
+    /// A valid ISO code for which the current provider returned no rate.
+    @Published private(set) var currencyUnsupported: String?
     /// Set when the query parses as a currency conversion but no rates are loaded
     /// (offline / failed fetch). Shown as an inline banner that owns Return, so the
     /// query is never silently leaked to a web search (FAB-B12).
@@ -53,7 +57,8 @@ final class JettyMenuModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.recompute() }
         // Recompute when currency rates arrive so a pending conversion fills in (ND-9).
-        currencyCancellable = CurrencyService.shared.$rates
+        currencyCancellable = Publishers.CombineLatest(CurrencyService.shared.$rates,
+                                                        CurrencyService.shared.$fetchState)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.recompute() }
         recompute()
@@ -83,15 +88,30 @@ final class JettyMenuModel: ObservableObject {
     /// loaded at all, the menu must show a "rates unavailable" banner instead of
     /// silently falling through to a web search of the query (FAB-B12).
     private func computeCurrency() -> String? {
+        currencyLoading = false
+        currencyUnsupported = nil
         currencyUnavailable = false
         guard calculation == nil, conversion == nil,
               let parsed = CurrencyService.parseQuery(query) else { return nil }
-        guard CurrencyService.shared.known(parsed.from), CurrencyService.shared.known(parsed.to),
-              let value = CurrencyService.shared.convert(amount: parsed.amount, from: parsed.from, to: parsed.to)
+        guard CurrencyService.supports(parsed.from), CurrencyService.supports(parsed.to) else {
+            return nil
+        }
+        if parsed.from == "USD", parsed.to == "USD" {
+            return Self.formatCurrency(parsed.amount, code: parsed.to)
+        }
+        let service = CurrencyService.shared
+        // Refresh stale rates only after explicit currency intent. Existing rates can
+        // still produce an immediate result while the coalesced refresh runs.
+        service.ensureFresh()
+        if service.rates.isEmpty {
+            currencyLoading = service.fetchState != .failed
+            currencyUnavailable = service.fetchState == .failed
+            return nil
+        }
+        guard service.known(parsed.from), service.known(parsed.to),
+              let value = service.convert(amount: parsed.amount, from: parsed.from, to: parsed.to)
         else {
-            // Distinguish "rates never arrived" (offline) from "not a real currency
-            // code" — only the former earns the banner; the latter falls through.
-            currencyUnavailable = CurrencyService.shared.rates.isEmpty
+            currencyUnsupported = !service.known(parsed.from) ? parsed.from : parsed.to
             return nil
         }
         return Self.formatCurrency(value, code: parsed.to)
@@ -166,7 +186,9 @@ final class JettyMenuModel: ObservableObject {
         if let calculation { onCopyValue?(calculation.value); return }
         if let conversion { onCopyValue?(conversion.value); return }
         if let currency { onCopyValue?(currency); return }
-        if currencyUnavailable { CurrencyService.shared.ensureFresh(); return }
+        if currencyLoading { return }
+        if currencyUnavailable { CurrencyService.shared.ensureFresh(force: true); return }
+        if currencyUnsupported != nil { return }
         if let command { onRunCommand?(command); return }
         if results.indices.contains(selectedIndex) { onLaunch?(results[selectedIndex]); return }
         if let query = webSearchQuery { onWebSearch?(query) }

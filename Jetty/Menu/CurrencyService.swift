@@ -6,33 +6,55 @@ import Foundation
 /// Parsing is pure and unit-tested.
 final class CurrencyService: ObservableObject {
 
+    enum FetchState: Equatable {
+        case idle
+        case loading
+        case failed
+    }
+
     static let shared = CurrencyService()
 
     /// Units of each currency per 1 USD (e.g. `["EUR": 0.92]`); always includes USD = 1.
     @Published private(set) var rates: [String: Double] = [:]
+    @Published private(set) var fetchState: FetchState = .idle
 
     private var lastFetch: Date?
-    private var inFlight = false
+
+    /// Local ISO validation rejects arbitrary three-letter search tokens without
+    /// coupling Jetty to a provider list that changes as currencies enter/leave ECB.
+    private static let supportedCodes = Set(Locale.commonISOCurrencyCodes)
+    private var retryAfter: Date?
 
     /// Loads rates if missing or older than 6 hours.
-    func ensureFresh() {
+    func ensureFresh(force: Bool = false) {
         if !rates.isEmpty, let last = lastFetch, Date().timeIntervalSince(last) < 6 * 3600 { return }
-        guard !inFlight else { return }
+        guard fetchState != .loading else { return }
+        if !force, let retryAfter, retryAfter > Date() { return }
         fetch()
     }
 
     private func fetch() {
         guard let url = URL(string: "https://api.frankfurter.app/latest?from=USD") else { return }
-        inFlight = true
+        fetchState = .loading
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             let parsed = Self.parseRates(data)
             DispatchQueue.main.async {
-                self?.inFlight = false
-                guard let parsed else { return }
-                self?.rates = parsed
-                self?.lastFetch = Date()
+                guard let self else { return }
+                guard let parsed else {
+                    self.retryAfter = Date().addingTimeInterval(60)
+                    self.fetchState = .failed
+                    return
+                }
+                self.rates = parsed
+                self.lastFetch = Date()
+                self.retryAfter = nil
+                self.fetchState = .idle
             }
         }.resume()
+    }
+
+    static func supports(_ code: String) -> Bool {
+        supportedCodes.contains(code.uppercased())
     }
 
     func known(_ code: String) -> Bool {

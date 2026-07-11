@@ -27,9 +27,17 @@ struct JettyMenuView: View {
                 Divider().opacity(0.5)
                 copyRow(symbol: "banknote", value: currency)
             }
+            if model.currencyLoading {
+                Divider().opacity(0.5)
+                currencyLoadingRow
+            }
             if model.currencyUnavailable {
                 Divider().opacity(0.5)
                 currencyUnavailableRow
+            }
+            if let code = model.currencyUnsupported {
+                Divider().opacity(0.5)
+                currencyUnsupportedRow(code)
             }
             if let command = model.command {
                 Divider().opacity(0.5)
@@ -137,6 +145,28 @@ struct JettyMenuView: View {
         }
     }
 
+    private var currencyLoadingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            Text("Loading currency rates…")
+                .font(.callout).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func currencyUnsupportedRow(_ code: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "banknote").font(.title3).foregroundStyle(.secondary)
+            Text("No exchange rate is available for \(code)")
+                .font(.callout).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+    }
+
     /// Shown when the query parses as a currency conversion but rates never loaded
     /// (offline / failed fetch). Owns the space where the result would be so the
     /// query isn't silently shipped to a web search on Return (FAB-B12). Click to
@@ -151,11 +181,11 @@ struct JettyMenuView: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
-        .onTapGesture { CurrencyService.shared.ensureFresh() }
+        .onTapGesture { CurrencyService.shared.ensureFresh(force: true) }
         .help("Currency rates unavailable — click to retry")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { CurrencyService.shared.ensureFresh() }
+        .accessibilityAction { CurrencyService.shared.ensureFresh(force: true) }
     }
 
     /// A quick-toggle command row (e.g. Toggle Dark Mode) — click to run (ND-9).

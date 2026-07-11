@@ -65,7 +65,6 @@ final class JettyMenuController {
             NSPasteboard.general.setString(value, forType: .string)
             self?.close()
         }
-        CurrencyService.shared.ensureFresh()
         appIndex.reload()   // pick up newly installed/removed apps each open (ISSUE-6)
 
         let panel = self.panel ?? makePanel()

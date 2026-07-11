@@ -1,6 +1,6 @@
 # Jetty Review
 
-Updated 2026-07-10 against `main @ 8a4612f`.
+Updated 2026-07-11 against `main @ ea14a4b`.
 
 This is the active code-review backlog for Jetty. It consolidates the unresolved work
 from the former `ANALYSIS.md`, `fable-is-awesome.md`, `sol.md`, and earlier versions of
@@ -8,9 +8,11 @@ this document. Completed findings and review-session history have been removed; 
 history and merged pull requests preserve that detail.
 
 The current review was static because the review host has no Xcode or macOS GUI session.
-The pending PRs below received focused static review and passed `git diff --check`, but
-their GitHub jobs did not execute because of the repository's Actions budget. Treat them
-as unverified until they build and pass tests on macOS.
+The pending PRs below received focused static review and passed `git diff --check`.
+GitHub reports failed checks because the jobs were not started: the repository's Actions
+budget prevented execution. Treat them as unverified until they build and pass tests on
+macOS. PR #32 currently conflicts with the newer `DockTileView` interaction/menu work and
+must be rebased without restoring SwiftUI's old pointer-relative context menu.
 
 [Pending PRs](#pending-pull-requests) | [Critical](#critical) |
 [High](#high-priority) | [Performance](#performance-and-architecture) |
@@ -48,6 +50,10 @@ column is work the PR deliberately does not cover.
 | [#39](https://github.com/L-K-M/Jetty/pull/39) | Failure-safe temporary backup rotation with fault-injected coverage | Visible recovery/save state and background persistence |
 | [#40](https://github.com/L-K-M/Jetty/pull/40) | Intent-driven currency fetch with loading/failure/unsupported states | Provider controls, HTTP/date validation, persistence, stale-age display |
 | [#41](https://github.com/L-K-M/Jetty/pull/41) | Scope custom-icon controls and loading to supported kinds, suppress unsupported persisted paths, normalize legacy Trash aliases | Durable copied/bookmarked and downsampled image storage |
+| [#42](https://github.com/L-K-M/Jetty/pull/42) | Immediate mouse-down feedback for every actionable tile; Reduce Motion treatment; cancellation on drag exit/external release | Actual launch/move success and error feedback remains separate |
+| [#43](https://github.com/L-K-M/Jetty/pull/43) | Strict SemVer release/prerelease identifiers and overflow-safe numeric ordering | macOS test execution |
+| [#44](https://github.com/L-K-M/Jetty/pull/44) | Truthful invalid-current/invalid-release comparison outcomes instead of false up-to-date status | Background/manual check coordination and focus-safe presentation |
+| [#45](https://github.com/L-K-M/Jetty/pull/45) | Optional tolerant clock face/zoom and System Monitor style/network preset round-trip | Preset naming, atomic export, and operation-status UX |
 
 ## Critical
 
@@ -201,8 +207,7 @@ confirmation prompt.
 
 Automatic update checks must notify or defer instead of activating Jetty; manual intent
 must queue or upgrade an in-flight background check; download progress, saved path, and
-failures must be visible. A malformed local or remote version must report Couldn't
-Compare Versions rather than You're Up to Date.
+failures must be visible.
 
 Lock Screen is part of this contract: inspect `SACLockScreenImmediate`'s return value.
 Missing symbol or failure must be visible. A screen-saver fallback must be labeled Start
@@ -216,12 +221,11 @@ to match the final behavior.
 `HotkeyRecorder.swift`, `Jetty/Hotkeys/`
 
 Tiles and widgets do not expose most visible dynamic information. Settings has drag-only
-or glyph-only controls without complete semantics. For accessibility, PR #32 adds
-default tile actions and hides separators; dynamic values remain.
+or glyph-only controls without complete semantics. Main exposes named tile context
+actions; PR #32 adds default tile activation and hides separators. Dynamic values remain.
 
 - Expose dynamic clock, Trash, battery, weather, CPU/RAM/network, media, world-clock, and
   Pomodoro values and hints.
-- Add named context actions where useful.
 - Keep AngleDial's numeric degree value and add adjustable actions; expose units on the
   remaining custom controls.
 - Label and select glyph controls; give sliders unit-bearing values.
@@ -417,7 +421,6 @@ aliases. Detect the default browser instead of assuming Safari.
 | Area | Remaining action |
 |---|---|
 | Carbon hotkeys | Replace per-instance event handlers and `passUnretained` lifetime assumptions with one app-wide handler. |
-| Semantic versions | Reject or explicitly support leading zeros consistently in release and prerelease components. |
 | Update scheduling | Add ETag/`If-None-Match`, jitter, backoff, and GitHub rate-limit awareness. |
 | Running apps | Observe runtime activation-policy changes and remove the full-scan bundle fallback. |
 | Caches | Consolidate duplicate LRU implementations and add explicit invalidation. |
@@ -428,7 +431,6 @@ aliases. Detect the default browser instead of assuming Safari.
 | Dead code | Remove or reconnect `DockLayout.hiddenFrame`/`edgeReveal` and dead divergent `AppLauncher` helpers. |
 | Poof | Correct the comment that promises sound or deliberately add one. |
 | Folder stack | Add per-stack Name/Date/Kind sorting, Quick Look, and URL drag-out. |
-| Presets | Extend tolerant presets to clock face/zoom and monitor style/network fields. |
 
 ## Product gaps
 

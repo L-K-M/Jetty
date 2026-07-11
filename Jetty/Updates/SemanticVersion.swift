@@ -31,8 +31,20 @@ struct SemanticVersion: Comparable, Equatable, CustomStringConvertible {
         let numberPart = dashSplit.first.map(String.init) ?? s
         let pre = dashSplit.count > 1 ? String(dashSplit[1]) : nil
 
-        let parsed = numberPart.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        let numberIdentifiers = numberPart.split(separator: ".", omittingEmptySubsequences: false)
+        guard !numberIdentifiers.contains(where: { Self.hasInvalidNumericLeadingZero($0) }) else { return nil }
+        let parsed = numberIdentifiers.map { Int($0) }
         guard !parsed.isEmpty, parsed.allSatisfy({ ($0 ?? -1) >= 0 }) else { return nil }
+
+        if let pre {
+            let identifiers = pre.split(separator: ".", omittingEmptySubsequences: false)
+            guard !pre.isEmpty,
+                  !identifiers.contains(where: {
+                      $0.isEmpty || !$0.allSatisfy(Self.isAllowedPrereleaseCharacter)
+                          || Self.hasInvalidNumericLeadingZero($0)
+                  })
+            else { return nil }
+        }
 
         self.components = parsed.compactMap { $0 }
         self.prerelease = (pre?.isEmpty == false) ? pre : nil
@@ -68,16 +80,17 @@ struct SemanticVersion: Comparable, Equatable, CustomStringConvertible {
             let l = lParts[index]
             let r = rParts[index]
             if l == r { continue }
-            let lNumber = numericPrereleaseIdentifier(l)
-            let rNumber = numericPrereleaseIdentifier(r)
-            switch (lNumber, rNumber) {
-            case let (l?, r?):
-                if l != r { return l < r ? .orderedAscending : .orderedDescending }
-            case (_?, nil):
+            let lIsNumeric = isASCIINumeric(l)
+            let rIsNumeric = isASCIINumeric(r)
+            switch (lIsNumeric, rIsNumeric) {
+            case (true, true):
+                if l.count != r.count { return l.count < r.count ? .orderedAscending : .orderedDescending }
+                return l.lexicographicallyPrecedes(r) ? .orderedAscending : .orderedDescending
+            case (true, false):
                 return .orderedAscending
-            case (nil, _?):
+            case (false, true):
                 return .orderedDescending
-            case (nil, nil):
+            case (false, false):
                 let result = l.compare(r)
                 if result != .orderedSame { return result }
             }
@@ -85,10 +98,23 @@ struct SemanticVersion: Comparable, Equatable, CustomStringConvertible {
         return .orderedSame
     }
 
-    private static func numericPrereleaseIdentifier(_ value: String) -> Int? {
-        guard !value.isEmpty, value.allSatisfy({ $0.isNumber }) else { return nil }
-        if value.count > 1, value.first == "0" { return nil }
-        return Int(value)
+    private static func isASCIINumeric<S: StringProtocol>(_ value: S) -> Bool {
+        !value.isEmpty && value.allSatisfy {
+            guard let scalar = $0.unicodeScalars.first, $0.unicodeScalars.count == 1 else { return false }
+            return scalar.value >= 48 && scalar.value <= 57
+        }
+    }
+
+    private static func hasInvalidNumericLeadingZero<S: StringProtocol>(_ value: S) -> Bool {
+        value.count > 1 && value.first == "0" && isASCIINumeric(value)
+    }
+
+    private static func isAllowedPrereleaseCharacter(_ character: Character) -> Bool {
+        guard let scalar = character.unicodeScalars.first,
+              character.unicodeScalars.count == 1 else { return false }
+        let value = scalar.value
+        return (value >= 48 && value <= 57) || (value >= 65 && value <= 90)
+            || (value >= 97 && value <= 122) || value == 45
     }
 
     /// Semantic equality (so `1.2` equals `1.2.0`), independent of the raw string.

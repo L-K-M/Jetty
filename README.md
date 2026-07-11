@@ -1,83 +1,33 @@
 # Jetty
 
-A fast, native, **auto-hiding dock for macOS Tahoe** — a stand-in for the system Dock
-with the things the real Dock still won't give you: **position it anywhere**, **style
-it deeply**, and **do more with it**.
+A more feature-rich Dock for macOS.
 
 **Latest release:** v<!-- version -->1.0.1<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)
 
-> [!IMPORTANT]
-> LLM Disclosure: Jetty was built with substantial help from large language models —
-> primarily Anthropic's Claude, via Claude Code. Much of the code arrived through
-> AI-authored commits and `claude/*` branches, with agent guidance kept in
-> [`AGENTS.md`](AGENTS.md).
+![screenshot.png](screenshot.png)
 
-Jetty hides Apple's Dock and floats its own in its place — but only when you want it.
-It's the third app in the L-K-M family alongside **[Zap](https://github.com/L-K-M/Zap)**
-(a ⌘-Tab switcher) and **[MacDring](https://github.com/L-K-M/MacDring)** (edge-tab
+> [!IMPORTANT]
+> LLM Disclosure: Jetty was built with substantial help from large language models.
+
+If you like this, also look at alongside **[Zap](https://github.com/L-K-M/Zap)**
+(a ⌘-Tab switcher) and **[Top Drawer](https://github.com/L-K-M/TopDrawer)** (edge-tab
 launcher).
 
 ## Features
 
 - **Position it anywhere.** Any **edge** (bottom / top / left / right) × any
   **alignment** (leading / center / trailing) × a fine offset and an edge inset, **per
-  display**. Want a **bottom-right** dock, or a floating island top-center? Two clicks.
-  The real Dock gives you three positions, always centered; Jetty doesn't.
-- **Native Liquid Glass, your way.** Real macOS 26 Liquid Glass (regular / clear /
-  tinted), or solid / gradient — with tunable tint, icon size, tile spacing, corner
-  radius, hover **magnification**, and running-indicator style. Save and share your
-  look as a **preset** (`.json` import/export), or start from a built-in theme.
-- **Auto-hidden, overlaps on reveal.** Jetty stays out of the way and slides in over
-  whatever's on screen when you push the pointer to its edge (or hit a hotkey). No
-  reserved strip, no windows getting shoved around — and **no permissions** for the
-  core dock.
-- **Pinned + running apps**, with live running indicators, one-click launch/activate,
-  drag-a-file-onto-an-app to open it there, drag-to-pin, in-dock reorder, drag-out to
-  remove (with the classic *poof*), a per-tile accent glow, and an edge-aware right-click
-  menu (Show / Hide / Quit / Force Quit / Keep in Dock / Show in Finder). When optional
-  Accessibility access is already granted, repeated bounded health-check failures mark
-  an app as **Not Responding** without ever prompting solely for that feature.
-  **Folders** preview their contents as a grid / list / fan **stack** on hover; a click
-  opens them in Finder.
-- **Live info tiles** right in the dock — a date/time tile (12/24-hour, seconds,
-  weekday, date) with a family of **clock faces**: digital text, a seven-segment
-  **LCD** in a little resin sports-watch case, and analog dials inspired by icons —
-  **Clock Face 2000** (a clean station-style dial), the mid-90s **rainbow-era Mac**
-  wristwatch (blue studded bezel, yellow squiggle second hand), an 80s **Memphis**
-  Swatch, a translucent 90s **jelly** watch, and **Color Time**, a 70s
-  Chromachron-style hour wedge sweeping a hidden color wheel, with an optional
-  **face zoom** (up to 250%) that lets the dial float out over the dock's edge —
-  plus **battery**,
-  **weather** (no location permission — you supply coordinates), a **world clock**,
-  a **Pomodoro** timer, a **CPU/RAM** monitor (bars, glass-plate graph, phosphor
-  **oscilloscope**, hi-fi **LED meter**, or analog **gauges**), and a
-  **now-playing** tile.
+  display**.
+- **Live info tiles** — date/time, weather, and more.
 - **Make it yours** — rename a pinned item or give it a custom icon, optional retro
   flourishes (corner decorations + CRT scanlines), and **customizable global
   shortcuts** (General ▸ Shortcuts).
-- **The Jetty Menu** — a Windows-Start-style launcher and **command bar**: instant
+- **The Jetty Menu** — a launcher and **command bar**: instant
   app search (type to filter, ↑/↓, ⏎) and recents, an inline **calculator**,
-  **unit & currency conversion** (`10 km in miles`, `100 usd to eur`), a
-  **web-search** fallback, quick toggles (dark mode), and **power commands** (Sleep,
+  **unit & currency conversion** (`10 km in miles`, `100 usd to eur`), and **power commands** (Sleep,
   Lock Screen, Log Out, Restart, Shut Down, Empty Trash).
 - **Trash tile** — click to open, drop files to delete.
-- **Multi-monitor** aware, with placements that **restore after restart**, resolution
-  change, and reconnection (keyed to a stable display identity).
-- **Menu-bar agent** (no Dock icon of its own), launch-at-login via `SMAppService`,
-  and an in-app GitHub updater.
-
-## How it works (and what it can't do)
-
-macOS doesn't let *any* app truly replace or remove the Dock — it's a protected system
-process that also runs Mission Control and window minimizing. So Jetty does what every
-reliable third-party dock does: it **hides** Apple's Dock (auto-hide + a long reveal
-delay) and runs its own **alongside** it, using only public APIs (no SIP changes, no
-code injection). One click in **Settings → General → Restore System Dock** puts the
-real Dock back. See [`PLAN.md`](PLAN.md) for the full feasibility analysis.
-
-Because Jetty floats over content instead of reserving space, maximized windows aren't
-pushed aside — which is exactly why it auto-hides and needs no Accessibility permission
-to run.
+- **Multi-monitor** aware.
 
 ### Getting the real Dock back
 
@@ -140,5 +90,4 @@ Responding badges; Force Quit itself needs no permission. Jetty works fully with
 
 Developer ID-signed + notarized, non-sandboxed (no Mac App Store — the sandbox can't
 grant the access the window features need). CI publishes an **unsigned** build for each
-tag; Gatekeeper will warn on first launch (right-click → Open, or
-`xattr -dr com.apple.quarantine /Applications/Jetty.app`).
+tag; Gatekeeper will warn on first launch (`xattr -dr com.apple.quarantine /Applications/Jetty.app`).

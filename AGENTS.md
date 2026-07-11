@@ -2,6 +2,19 @@
 
 Guidance for AI coding agents working in the **Jetty** repository.
 
+## How it works (and what it can't do)
+
+macOS doesn't let *any* app truly replace or remove the Dock — it's a protected system
+process that also runs Mission Control and window minimizing. So Jetty does what every
+reliable third-party dock does: it **hides** Apple's Dock (auto-hide + a long reveal
+delay) and runs its own **alongside** it, using only public APIs (no SIP changes, no
+code injection). One click in **Settings → General → Restore System Dock** puts the
+real Dock back. See [`PLAN.md`](PLAN.md) for the full feasibility analysis.
+
+Because Jetty floats over content instead of reserving space, maximized windows aren't
+pushed aside — which is exactly why it auto-hides and needs no Accessibility permission
+to run.
+
 ## What Jetty Is
 
 Jetty is a fast, native, **auto-hiding dock for macOS Tahoe (26)** that stands in for

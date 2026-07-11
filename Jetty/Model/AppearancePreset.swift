@@ -31,6 +31,11 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     var decorationSize: Double
     var crtEnabled: Bool
     var crtIntensity: Double
+    /// Optional so older and built-in themes do not unexpectedly replace widget styles.
+    var clockFace: ClockFaceStyle?
+    var clockFaceZoom: Double?
+    var systemMonitorStyle: SystemMonitorStyle?
+    var systemMonitorShowNetwork: Bool?
 
     var id: String { name }
 
@@ -55,7 +60,11 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
          decorationOpacity: Double = 1,
          decorationSize: Double = 12,
          crtEnabled: Bool = false,
-         crtIntensity: Double = 0.5) {
+         crtIntensity: Double = 0.5,
+         clockFace: ClockFaceStyle? = nil,
+         clockFaceZoom: Double? = nil,
+         systemMonitorStyle: SystemMonitorStyle? = nil,
+         systemMonitorShowNetwork: Bool? = nil) {
         self.name = name
         self.material = material
         self.tintHex = tintHex
@@ -78,6 +87,10 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         self.decorationSize = decorationSize
         self.crtEnabled = crtEnabled
         self.crtIntensity = crtIntensity
+        self.clockFace = clockFace
+        self.clockFaceZoom = clockFaceZoom
+        self.systemMonitorStyle = systemMonitorStyle
+        self.systemMonitorShowNetwork = systemMonitorShowNetwork
     }
 
     init(from decoder: Decoder) throws {
@@ -110,6 +123,18 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         decorationSize = try c.decodeIfPresent(Double.self, forKey: .decorationSize) ?? d.decorationSize
         crtEnabled = try c.decodeIfPresent(Bool.self, forKey: .crtEnabled) ?? d.crtEnabled
         crtIntensity = try c.decodeIfPresent(Double.self, forKey: .crtIntensity) ?? d.crtIntensity
+        if let raw = (try? c.decodeIfPresent(String.self, forKey: .clockFace)) ?? nil {
+            clockFace = ClockFaceStyle.stored(raw)
+        } else {
+            clockFace = nil
+        }
+        clockFaceZoom = try? c.decodeIfPresent(Double.self, forKey: .clockFaceZoom)
+        if let raw = (try? c.decodeIfPresent(String.self, forKey: .systemMonitorStyle)) ?? nil {
+            systemMonitorStyle = SystemMonitorStyle(rawValue: raw)
+        } else {
+            systemMonitorStyle = nil
+        }
+        systemMonitorShowNetwork = try? c.decodeIfPresent(Bool.self, forKey: .systemMonitorShowNetwork)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -117,6 +142,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         case iconSize, tileSpacing, cornerRadius, magnificationEnabled, magnification
         case indicatorStyle, indicatorHex, showLabels, accentGlow, glyphHex
         case decorationStyle, decorationPosition, decorationOpacity, decorationSize, crtEnabled, crtIntensity
+        case clockFace, clockFaceZoom, systemMonitorStyle, systemMonitorShowNetwork
     }
 
     // MARK: Import (Jetty or Zap format)
@@ -128,7 +154,10 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     /// tell the two formats apart and only fall back to Jetty otherwise.
     static func decode(from data: Data) -> AppearancePreset? {
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let hasJettyKeys = obj["material"] != nil || obj["tintHex"] != nil || obj["indicatorStyle"] != nil
+            let hasJettyKeys = obj["material"] != nil || obj["tintHex"] != nil
+                || obj["indicatorStyle"] != nil || obj["clockFace"] != nil
+                || obj["clockFaceZoom"] != nil || obj["systemMonitorStyle"] != nil
+                || obj["systemMonitorShowNetwork"] != nil
             let hasZapKeys = obj["backgroundColorHex"] != nil || obj["useGradientBackground"] != nil || obj["showAppName"] != nil
             if !hasJettyKeys, hasZapKeys, let zap = try? JSONDecoder().decode(ZapTheme.self, from: data) {
                 return zap.asJettyPreset

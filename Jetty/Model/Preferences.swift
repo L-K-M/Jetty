@@ -334,11 +334,14 @@ final class Preferences: ObservableObject {
         AppearancePreset(name: name, material: material, tintHex: tintHex, gradientHex: gradientHex,
                          gradientAngle: gradientAngle, backgroundOpacity: backgroundOpacity, iconSize: iconSize,
                          tileSpacing: tileSpacing, cornerRadius: cornerRadius, magnificationEnabled: magnificationEnabled,
-                         magnification: magnification, indicatorStyle: indicatorStyle, indicatorHex: indicatorHex,
-                         showLabels: showLabels, accentGlow: accentGlow, glyphHex: glyphHex,
+                          magnification: magnification, indicatorStyle: indicatorStyle, indicatorHex: indicatorHex,
+                          showLabels: showLabels, accentGlow: accentGlow, glyphHex: glyphHex,
                          decorationStyle: decorationStyle.rawValue, decorationPosition: decorationPosition.rawValue,
                          decorationOpacity: decorationOpacity, decorationSize: decorationSize,
-                         crtEnabled: crtEnabled, crtIntensity: crtIntensity)
+                         crtEnabled: crtEnabled, crtIntensity: crtIntensity,
+                         clockFace: clockFace, clockFaceZoom: clockFaceZoom,
+                         systemMonitorStyle: systemMonitorStyle,
+                         systemMonitorShowNetwork: systemMonitorShowNetwork)
     }
 
     /// Applies a preset's appearance values (leaves position/behavior untouched).
@@ -364,6 +367,16 @@ final class Preferences: ObservableObject {
         decorationSize = Self.clamp(preset.decorationSize, 4, 80)
         crtEnabled = preset.crtEnabled
         crtIntensity = Self.clamp(preset.crtIntensity, 0, 1)
+        if let clockFace = preset.clockFace { self.clockFace = clockFace }
+        if let clockFaceZoom = preset.clockFaceZoom {
+            self.clockFaceZoom = Self.clamp(clockFaceZoom, 1, 2.5)
+        }
+        if let systemMonitorStyle = preset.systemMonitorStyle {
+            self.systemMonitorStyle = systemMonitorStyle
+        }
+        if let systemMonitorShowNetwork = preset.systemMonitorShowNetwork {
+            self.systemMonitorShowNetwork = systemMonitorShowNetwork
+        }
     }
 
     // MARK: Launch at login

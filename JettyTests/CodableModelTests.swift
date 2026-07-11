@@ -144,6 +144,44 @@ final class CodableModelTests: XCTestCase {
                        Preferences.Default.accentGlow)
     }
 
+    func testWidgetAppearancePresetFieldsRoundTrip() throws {
+        var preset = AppearancePreset.builtIns[0]
+        preset.clockFace = .colorTime
+        preset.clockFaceZoom = 2.4
+        preset.systemMonitorStyle = .led
+        preset.systemMonitorShowNetwork = false
+
+        let decoded = try JSONDecoder().decode(
+            AppearancePreset.self, from: JSONEncoder().encode(preset))
+
+        XCTAssertEqual(decoded, preset)
+    }
+
+    func testUnknownWidgetStylesRemainUnspecified() throws {
+        let json = Data("""
+        {
+          "material": "solid",
+          "clockFace": "futureFace",
+          "systemMonitorStyle": "futureMonitor"
+        }
+        """.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        XCTAssertNil(preset.clockFace)
+        XCTAssertNil(preset.systemMonitorStyle)
+    }
+
+    func testScalarOnlyWidgetPresetIsRecognized() throws {
+        let json = Data(#"{ "clockFaceZoom": 2.1, "systemMonitorShowNetwork": false }"#.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        XCTAssertEqual(preset.clockFaceZoom, 2.1)
+        XCTAssertEqual(preset.systemMonitorShowNetwork, false)
+    }
+
+    func testRetiredClockFaceNameMigratesInPreset() throws {
+        let json = Data(#"{ "clockFace": "swiss" }"#.utf8)
+        XCTAssertEqual(try XCTUnwrap(AppearancePreset.decode(from: json)).clockFace, .face2000)
+    }
+
     func testNormalizeAngleWrapsAndGuards() {
         XCTAssertEqual(Preferences.normalizeAngle(370), 10, accuracy: 0.001)
         XCTAssertEqual(Preferences.normalizeAngle(-90), 270, accuracy: 0.001)

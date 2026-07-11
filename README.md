@@ -9,7 +9,7 @@ A more feature-rich Dock for macOS.
 > [!IMPORTANT]
 > LLM Disclosure: Jetty was built with substantial help from large language models.
 
-If you like this, also look at alongside **[Zap](https://github.com/L-K-M/Zap)**
+If you like this, also look at **[Zap](https://github.com/L-K-M/Zap)**
 (a ⌘-Tab switcher) and **[Top Drawer](https://github.com/L-K-M/TopDrawer)** (edge-tab
 launcher).
 

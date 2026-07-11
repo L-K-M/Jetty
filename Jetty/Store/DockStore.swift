@@ -177,9 +177,7 @@ final class DockStore: ObservableObject {
             // still decodes. Otherwise a corrupt primary (which we may have just
             // recovered from `.bak`) would overwrite the last good backup (ISSUE-9).
             if fileManager.fileExists(atPath: fileURL.path), Self.fileDecodes(fileURL) {
-                let bak = fileURL.appendingPathExtension("bak")
-                try? fileManager.removeItem(at: bak)
-                try? fileManager.copyItem(at: fileURL, to: bak)
+                try rotateBackup()
             }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -191,6 +189,25 @@ final class DockStore: ObservableObject {
             try data.write(to: fileURL, options: .atomic)
         } catch {
             NSLog("Jetty: failed to save dock document: \(error.localizedDescription)")
+        }
+    }
+
+    /// Copies the current good primary to a verified sibling, then atomically replaces
+    /// `.bak`. The prior backup remains untouched if copy or validation fails.
+    private func rotateBackup() throws {
+        let backupURL = fileURL.appendingPathExtension("bak")
+        let candidateURL = backupURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(backupURL.lastPathComponent).tmp-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: candidateURL) }
+
+        try fileManager.copyItem(at: fileURL, to: candidateURL)
+        guard Self.fileDecodes(candidateURL) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        if fileManager.fileExists(atPath: backupURL.path) {
+            _ = try fileManager.replaceItemAt(backupURL, withItemAt: candidateURL)
+        } else {
+            try fileManager.moveItem(at: candidateURL, to: backupURL)
         }
     }
 

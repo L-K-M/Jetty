@@ -7,6 +7,15 @@ import XCTest
 /// Uses a per-test temp directory and the store's `fileURL` injection.
 final class StoreBackupTests: XCTestCase {
 
+    private final class FailingBackupCopyFileManager: FileManager {
+        override func copyItem(at srcURL: URL, to dstURL: URL) throws {
+            if dstURL.lastPathComponent.hasPrefix(".dock.json.bak.tmp-") {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+            try super.copyItem(at: srcURL, to: dstURL)
+        }
+    }
+
     private var dir: URL!
     private var fileURL: URL!
     private var bakURL: URL!
@@ -70,5 +79,20 @@ final class StoreBackupTests: XCTestCase {
         store.flush()
         XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO"])
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])
+    }
+
+    func testBackupCopyFailurePreservesPrimaryAndPriorBackup() throws {
+        let primary = DockDocument(disabledDisplayUUIDs: ["PRIMARY"])
+        let backup = DockDocument(disabledDisplayUUIDs: ["BACKUP"])
+        try write(primary, to: fileURL)
+        try write(backup, to: bakURL)
+
+        let store = DockStore(fileURL: fileURL,
+                              fileManager: FailingBackupCopyFileManager(), debounce: 0)
+        store.setDisplayDisabled(true, forDisplayUUID: "UNSAVED")
+        store.flush()
+
+        XCTAssertEqual(try decode(fileURL), primary)
+        XCTAssertEqual(try decode(bakURL), backup)
     }
 }

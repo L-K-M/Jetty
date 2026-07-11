@@ -8,11 +8,11 @@ this document. Completed findings and review-session history have been removed; 
 history and merged pull requests preserve that detail.
 
 The current review was static because the review host has no Xcode or macOS GUI session.
-The pending PRs below received focused static review and passed `git diff --check`.
-GitHub reports failed checks because the jobs were not started: the repository's Actions
-budget prevented execution. Treat them as unverified until they build and pass tests on
-macOS. PR #32 currently conflicts with the newer `DockTileView` interaction/menu work and
-must be rebased without restoring SwiftUI's old pointer-relative context menu.
+PRs #32-33 and #35-45 were re-reviewed against `main` on 2026-07-11 and merged; #32 was
+hand-resolved to keep the native `DockContextMenuSource` context menu and the
+`accessibilityActions` block that superseded its SwiftUI `.contextMenu` and default
+accessibility action. Treat the merged result as unverified until it builds and passes
+tests on macOS CI.
 
 [Pending PRs](#pending-pull-requests) | [Critical](#critical) |
 [High](#high-priority) | [Performance](#performance-and-architecture) |
@@ -40,20 +40,7 @@ column is work the PR deliberately does not cover.
 
 | PR | Implemented scope | Residual work |
 |---|---|---|
-| [#32](https://github.com/L-K-M/Jetty/pull/32) | Strong Trash target, bounded accepted-action pulse, Reduce Motion behavior, default accessibility action, separators hidden from VoiceOver | Actual move results, partial/total failure UI, dynamic accessibility values |
-| [#33](https://github.com/L-K-M/Jetty/pull/33) | Restore the pure revealed frame, fixing bottom/left/right inset and visible-system-Dock overlap; remove one duplicate frame calculation | Four-edge device validation and authoritative hit testing |
-| [#34](https://github.com/L-K-M/Jetty/pull/34) | Exact display reverse mapping, collision-resolved entries, in-session key reservation, live Settings updates | Investigate public durable discriminators and document session-only fallback where none exists |
-| [#35](https://github.com/L-K-M/Jetty/pull/35) | Real elapsed network timing, long-gap reset, timer generation guard | True CPU utilization, 64-bit counters, utility-queue sampling, demand scoping |
-| [#36](https://github.com/L-K-M/Jetty/pull/36) | Reuse initial window listing; cancel and generation-gate stale captures | Cadence, capture size, minimized windows, permission-aware controls |
-| [#37](https://github.com/L-K-M/Jetty/pull/37) | Reject late media callbacks, cache legacy lookup, break poll-source cycle | Long-lived notifications, originating player identity, shared hidden-work policy |
-| [#38](https://github.com/L-K-M/Jetty/pull/38) | Validate downloaded byte count and clean temporary files | Cryptographic authenticity, publisher identity, trusted redirect policy |
-| [#39](https://github.com/L-K-M/Jetty/pull/39) | Failure-safe temporary backup rotation with fault-injected coverage | Visible recovery/save state and background persistence |
-| [#40](https://github.com/L-K-M/Jetty/pull/40) | Intent-driven currency fetch with loading/failure/unsupported states | Provider controls, HTTP/date validation, persistence, stale-age display |
-| [#41](https://github.com/L-K-M/Jetty/pull/41) | Scope custom-icon controls and loading to supported kinds, suppress unsupported persisted paths, normalize legacy Trash aliases | Durable copied/bookmarked and downsampled image storage |
-| [#42](https://github.com/L-K-M/Jetty/pull/42) | Immediate mouse-down feedback for every actionable tile; Reduce Motion treatment; cancellation on drag exit/external release | Actual launch/move success and error feedback remains separate |
-| [#43](https://github.com/L-K-M/Jetty/pull/43) | Strict SemVer release/prerelease identifiers and overflow-safe numeric ordering | macOS test execution |
-| [#44](https://github.com/L-K-M/Jetty/pull/44) | Truthful invalid-current/invalid-release comparison outcomes instead of false up-to-date status | Background/manual check coordination and focus-safe presentation |
-| [#45](https://github.com/L-K-M/Jetty/pull/45) | Optional tolerant clock face/zoom and System Monitor style/network preset round-trip | Preset naming, atomic export, and operation-status UX |
+| [#34](https://github.com/L-K-M/Jetty/pull/34) | Exact display reverse mapping, collision-resolved entries, in-session key reservation, live Settings updates | Blocked on rework: monotonic key reservation drifts a reconnected display's base UUID to `#2`, `#3`, … (new `CGDirectDisplayID` + new `NSScreen` miss both reverse maps while the UUID stays reserved), orphaning persisted per-display settings. The reverse-mapping and DisplaysView halves are sound and worth resubmitting; see the PR review comment. |
 
 ## Critical
 
@@ -159,7 +146,11 @@ Device-test whether the main panel and child panels can sit below real pop-up me
 remaining visible over normal/fullscreen windows. Define offset semantics at leading and
 trailing extremes so a legal slider direction does not silently clamp to a no-op. PR #33
 restores the pure revealed frame and removes one duplicate recomputation; it does not
-provide authoritative hit testing.
+provide authoritative hit testing. Follow-up from its merge: with inset > 12 the
+keep-revealed test (`revealedFrame().insetBy(dx: -12, dy: -12)`) no longer covers the
+band between the panel and the physical edge, while the hard-edge reveal still fires
+there instantly — a pointer parked at the screen edge can flap reveal/hide. Extend the
+keep-revealed region to include that band (pure DockLayout math plus a test).
 
 ### H4. Correct System Monitor values and execution context
 
@@ -184,7 +175,10 @@ replacement, backward/wrapped counters, and long suspension.
 surface.
 
 Current backup rotation removes the old backup before proving its replacement exists.
-PR #39 fixes that narrow failure mode. Remaining work is to snapshot and write on one
+PR #39 fixes that narrow failure mode, with two deliberate trade-offs to revisit: a
+failed rotation now aborts the primary write too (log-and-continue would keep new edits
+at the cost of a stale backup), and orphaned `.dock.json.bak.tmp-*` siblings are never
+swept if the process dies mid-rotation. Remaining work is to snapshot and write on one
 serial I/O queue, keep a synchronous termination flush, and expose whether primary,
 backup, or defaults loaded. Show persistent save errors, clearly disable future-version
 read-only mutations, and offer backup export and restore when recovery occurred.
@@ -395,8 +389,12 @@ clear stale banners after a successful export.
 `Jetty/Settings/MenuView.swift`, `Jetty/Widgets/WeatherWidgetView.swift`,
 `WeatherService.swift`
 
-PR #40 makes currency access intent-driven. Add provider disclosure and opt-out, validate
-HTTP status and payload date, persist source/date, and label stale rates. Replace weather
+PR #40 makes currency access intent-driven. Two small follow-ups from its merge: Return
+is swallowed forever for valid-ISO-but-provider-unsupported codes (web search becomes
+mouse-only there), and same-code identity conversion is only special-cased for USD, so
+"100 eur to eur" offline shows the loading state instead of the trivial answer. Add
+provider disclosure and opt-out, validate HTTP status and payload date, persist
+source/date, and label stale rates. Replace weather
 coordinate `(0,0)` as the unconfigured sentinel with explicit migrated state; show the
 selected location and support city input through forward geocoding. Add apparent
 temperature, humidity, wind, and daily high/low to tooltip and accessibility output.

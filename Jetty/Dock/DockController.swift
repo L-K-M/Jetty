@@ -552,7 +552,7 @@ final class DockController {
             PomodoroTimer.shared.tap()
             return   // the timer toggles in place; keep the dock as-is
         case .jettyMenu:
-            openJettyMenu()
+            openJettyMenu(from: tile)
             return   // don't hide the dock; the menu is its own panel
         case .separator, .runningApps:
             return
@@ -711,7 +711,7 @@ final class DockController {
             })
             actions.append(DockContextAction(title: "Reset") { PomodoroTimer.shared.reset() })
         case .jettyMenu:
-            actions.append(DockContextAction(title: "Open Jetty Menu") { [weak self] in self?.openJettyMenu() })
+            actions.append(DockContextAction(title: "Open Jetty Menu") { [weak self] in self?.openJettyMenu(from: tile) })
         case .separator, .runningApps:
             break
         }
@@ -831,6 +831,21 @@ final class DockController {
         let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
             ?? NSScreen.main ?? NSScreen.screens.first
         jettyMenu.toggle(on: screen)
+    }
+
+    /// Opens the menu anchored next to the clicked Jetty tile, like a pop-up menu.
+    /// The hotkey / status-item paths use `openJettyMenu()`, which centers it.
+    private func openJettyMenu(from tile: DockTile) {
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? NSScreen.main else { openJettyMenu(); return }
+        let uuid = registry.key(for: screen)
+        let edge = effectiveAnchor(forUUID: uuid).edge
+        let dock = panels[uuid]?.revealedDockStripFrame ?? CGRect(origin: mouse, size: .zero)
+        // Anchor to the tile's icon (not the cursor), mirroring the hover previews.
+        let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
+        jettyMenu.toggle(on: screen,
+                         from: .init(point: anchor, dockFrame: dock, edge: edge))
     }
 
     private func openCalendar() {

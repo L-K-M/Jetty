@@ -8,12 +8,21 @@ private final class KeyableMenuPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Presents the Jetty Menu launcher: builds the key panel, centers it, briefly
-/// activates Jetty so the search field is focused, and installs a local key monitor
-/// for ↑/↓/Return/Esc (so it works on macOS 13+, where SwiftUI `onKeyPress` isn't
-/// available). Closing returns activation to the previously-frontmost app. See
-/// PLAN.md §8.2.
+/// Presents the Jetty Menu launcher: builds the key panel, positions it (centered
+/// for the hotkey / status-item paths, or anchored to the Jetty tile like a pop-up
+/// menu when opened from the dock), briefly activates Jetty so the search field is
+/// focused, and installs a local key monitor for ↑/↓/Return/Esc (so it works on
+/// macOS 13+, where SwiftUI `onKeyPress` isn't available). Closing returns
+/// activation to the previously-frontmost app. See PLAN.md §8.2.
 final class JettyMenuController {
+
+    /// Where a dock-tile-initiated open should anchor the panel: the tile's
+    /// screen-space center, the dock strip it sits in, and the dock's edge.
+    struct TileAnchor {
+        let point: CGPoint
+        let dockFrame: CGRect
+        let edge: DockEdge
+    }
 
     private let preferences: Preferences
     private let appIndex = AppIndex()
@@ -35,11 +44,11 @@ final class JettyMenuController {
         self.preferences = preferences
     }
 
-    func toggle(on screen: NSScreen?) {
-        if isOpen { close() } else { show(on: screen) }
+    func toggle(on screen: NSScreen?, from anchor: TileAnchor? = nil) {
+        if isOpen { close() } else { show(on: screen, from: anchor) }
     }
 
-    func show(on screen: NSScreen?) {
+    func show(on screen: NSScreen?, from anchor: TileAnchor? = nil) {
         guard !isOpen else { return }
         let frontmost = NSWorkspace.shared.frontmostApplication
         appToRestoreOnClose = frontmost?.processIdentifier == NSRunningApplication.current.processIdentifier ? nil : frontmost
@@ -69,7 +78,7 @@ final class JettyMenuController {
 
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        positionPanel(panel, on: screen ?? NSScreen.main)
+        positionPanel(panel, on: screen ?? NSScreen.main, anchor: anchor)
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
@@ -121,11 +130,20 @@ final class JettyMenuController {
         return panel
     }
 
-    private func positionPanel(_ panel: NSPanel, on screen: NSScreen?) {
+    private func positionPanel(_ panel: NSPanel, on screen: NSScreen?, anchor: TileAnchor?) {
         guard let screen = screen ?? NSScreen.main else { return }
         let size = panel.frame.size
         let vf = screen.visibleFrame
-        let origin = NSPoint(x: vf.midX - size.width / 2, y: vf.midY - size.height / 2)
+        // A dock-tile click anchors the menu to the clicked tile like a pop-up menu;
+        // the hotkey / status-item paths keep the Spotlight-style centered position.
+        let origin: NSPoint
+        if let anchor {
+            origin = DockContextMenuPlacement.panelOrigin(
+                panelSize: size, sourcePoint: anchor.point, dockFrame: anchor.dockFrame,
+                visibleFrame: vf, edge: anchor.edge)
+        } else {
+            origin = NSPoint(x: vf.midX - size.width / 2, y: vf.midY - size.height / 2)
+        }
         panel.setFrameOrigin(origin)
     }
 

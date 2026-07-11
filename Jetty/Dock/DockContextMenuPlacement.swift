@@ -32,6 +32,18 @@ enum DockContextMenuPlacement {
         return point
     }
 
+    /// Bottom-left frame origin for a popup-style *panel* (e.g. the Jetty Menu opened
+    /// from its dock tile) placed adjacent to the dock like a menu — the same geometry
+    /// as `topLeft`, converted to the origin `NSWindow.setFrameOrigin` expects.
+    static func panelOrigin(panelSize: CGSize, sourcePoint: CGPoint, dockFrame: CGRect,
+                            visibleFrame: CGRect, edge: DockEdge, gap: CGFloat = 8,
+                            margin: CGFloat = 4) -> CGPoint {
+        let top = topLeft(menuSize: panelSize, sourcePoint: sourcePoint,
+                          dockFrame: dockFrame, visibleFrame: visibleFrame,
+                          edge: edge, gap: gap, margin: margin)
+        return CGPoint(x: top.x, y: top.y - panelSize.height)
+    }
+
     static func dockStripFrame(panelFrame: CGRect, thickness: CGFloat,
                                edge: DockEdge) -> CGRect {
         let value = min(thickness, edge.isHorizontal ? panelFrame.height : panelFrame.width)

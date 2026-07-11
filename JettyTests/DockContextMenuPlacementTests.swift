@@ -50,6 +50,28 @@ final class DockContextMenuPlacementTests: XCTestCase {
         XCTAssertLessThanOrEqual(point.y, frame.maxY - 4)
     }
 
+    func testPanelOriginSitsAboveBottomDockCenteredOnSource() {
+        let dock = CGRect(x: 500, y: 0, width: 600, height: 70)
+        let size = CGSize(width: 420, height: 460)
+        let origin = DockContextMenuPlacement.panelOrigin(
+            panelSize: size, sourcePoint: CGPoint(x: 800, y: 20), dockFrame: dock,
+            visibleFrame: visible, edge: .bottom)
+        XCTAssertEqual(origin.y, dock.maxY + 8, accuracy: 0.001)
+        XCTAssertEqual(origin.x + size.width / 2, 800, accuracy: 0.001)
+    }
+
+    func testPanelOriginClampsInsideVisibleFrame() {
+        let dock = CGRect(x: 0, y: 200, width: 70, height: 600)
+        let size = CGSize(width: 420, height: 460)
+        // Source near the top of a left-edge dock: the panel would poke past the top.
+        let origin = DockContextMenuPlacement.panelOrigin(
+            panelSize: size, sourcePoint: CGPoint(x: 35, y: 990), dockFrame: dock,
+            visibleFrame: visible, edge: .left)
+        XCTAssertEqual(origin.x, dock.maxX + 8, accuracy: 0.001)
+        XCTAssertGreaterThanOrEqual(origin.y, visible.minY + 4)
+        XCTAssertLessThanOrEqual(origin.y + size.height, visible.maxY - 4)
+    }
+
     func testDockStripFrameUsesConfiguredEdge() {
         let panel = CGRect(x: 100, y: 200, width: 600, height: 180)
         XCTAssertEqual(DockContextMenuPlacement.dockStripFrame(

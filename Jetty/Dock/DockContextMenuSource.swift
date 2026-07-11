@@ -8,6 +8,7 @@ struct DockContextMenuSource: NSViewRepresentable {
     let dockThickness: CGFloat
     let actions: () -> [DockContextAction]
     let onPresentationChanged: (Bool) -> Void
+    let onPrimaryPressChanged: (Bool) -> Void
 
     func makeNSView(context: Context) -> DockContextMenuSourceView {
         let view = DockContextMenuSourceView()
@@ -19,11 +20,16 @@ struct DockContextMenuSource: NSViewRepresentable {
         update(nsView)
     }
 
+    static func dismantleNSView(_ nsView: DockContextMenuSourceView, coordinator: ()) {
+        nsView.stopObservingPrimaryPress()
+    }
+
     private func update(_ view: DockContextMenuSourceView) {
         view.edge = edge
         view.dockThickness = dockThickness
         view.actions = actions
         view.onPresentationChanged = onPresentationChanged
+        view.onPrimaryPressChanged = onPrimaryPressChanged
     }
 }
 
@@ -32,8 +38,12 @@ final class DockContextMenuSourceView: NSView {
     var dockThickness: CGFloat = 0
     var actions: (() -> [DockContextAction])?
     var onPresentationChanged: ((Bool) -> Void)?
+    var onPrimaryPressChanged: ((Bool) -> Void)?
 
     private var actionTargets: [DockMenuActionTarget] = []
+    private var primaryPressMonitor: Any?
+    private var globalMouseUpMonitor: Any?
+    private var isPrimaryPressed = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -42,6 +52,22 @@ final class DockContextMenuSourceView: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        if let primaryPressMonitor { NSEvent.removeMonitor(primaryPressMonitor) }
+        if let globalMouseUpMonitor { NSEvent.removeMonitor(globalMouseUpMonitor) }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        stopObservingPrimaryPress()
+        guard window != nil else { return }
+        primaryPressMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+                self?.observePrimaryPress(event)
+                return event
+            }
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -61,6 +87,49 @@ final class DockContextMenuSourceView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { presentMenu(for: event) }
+    }
+
+    func stopObservingPrimaryPress() {
+        if let primaryPressMonitor {
+            NSEvent.removeMonitor(primaryPressMonitor)
+            self.primaryPressMonitor = nil
+        }
+        setPrimaryPressed(false)
+    }
+
+    private func observePrimaryPress(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            guard !event.modifierFlags.contains(.control), event.window === window else {
+                setPrimaryPressed(false)
+                return
+            }
+            let localPoint = convert(event.locationInWindow, from: nil)
+            setPrimaryPressed(bounds.contains(localPoint))
+        case .leftMouseDragged:
+            guard isPrimaryPressed, event.window === window else { return }
+            let localPoint = convert(event.locationInWindow, from: nil)
+            if !bounds.contains(localPoint) { setPrimaryPressed(false) }
+        case .leftMouseUp:
+            setPrimaryPressed(false)
+        default:
+            break
+        }
+    }
+
+    private func setPrimaryPressed(_ pressed: Bool) {
+        guard pressed != isPrimaryPressed else { return }
+        isPrimaryPressed = pressed
+        if pressed {
+            globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: .leftMouseUp) { [weak self] _ in
+                    DispatchQueue.main.async { self?.setPrimaryPressed(false) }
+                }
+        } else if let globalMouseUpMonitor {
+            NSEvent.removeMonitor(globalMouseUpMonitor)
+            self.globalMouseUpMonitor = nil
+        }
+        onPrimaryPressChanged?(pressed)
     }
 
     private func presentMenu(for event: NSEvent) {

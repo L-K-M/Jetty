@@ -49,6 +49,15 @@ extension DockItemKind {
         default: return false
         }
     }
+
+    /// These tile kinds render `DockTile.icon`. Built-ins and live widgets draw their
+    /// own SwiftUI content, so accepting a custom path for them would be misleading.
+    var supportsCustomIcon: Bool {
+        switch self {
+        case .application, .file, .folder, .url: return true
+        default: return false
+        }
+    }
 }
 
 /// How a `.folder` tile presents its contents when clicked.

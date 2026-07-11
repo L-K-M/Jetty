@@ -61,10 +61,13 @@ enum WindowThumbnailer {
     /// from it — far cheaper than querying the window server per window.
     @available(macOS 14, *)
     private static func sckImages(for windows: [AppWindow]) async -> [CGWindowID: CGImage] {
+        guard !Task.isCancelled else { return [:] }
         guard let content = try? await SCShareableContent.current else { return [:] }
+        guard !Task.isCancelled else { return [:] }
         let byID = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { first, _ in first })
         var result: [CGWindowID: CGImage] = [:]
         for window in windows {
+            guard !Task.isCancelled else { return [:] }
             guard let scWindow = byID[window.id], let image = await capture(scWindow) else { continue }
             result[window.id] = image
         }

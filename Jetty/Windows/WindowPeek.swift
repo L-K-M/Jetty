@@ -14,18 +14,23 @@ final class WindowPeekModel: ObservableObject {
 
     private(set) var pid: pid_t = 0
     private var timer: Timer?
-    private var isRefreshing = false
+    private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration = 0
 
-    func load(pid: pid_t, appName: String, mode: WindowPreviewMode) {
+    func load(pid: pid_t, appName: String, mode: WindowPreviewMode,
+              initialWindows: [AppWindow]) {
         timer?.invalidate()
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshGeneration += 1
         self.pid = pid
         self.appName = appName
         self.mode = mode
         canCapture = CGPreflightScreenCaptureAccess()
         // Show the window list right away (glyphs); the async capture fills thumbnails in.
-        windows = WindowLister.windows(forPID: pid)
+        windows = initialWindows
         thumbnails = [:]
-        refresh()
+        refresh(using: initialWindows)
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -33,32 +38,37 @@ final class WindowPeekModel: ObservableObject {
 
     func stop() {
         timer?.invalidate(); timer = nil
+        refreshTask?.cancel(); refreshTask = nil
+        refreshGeneration += 1
         windows = []
         thumbnails = [:]
         pid = 0
     }
 
-    private func refresh() {
+    private func refresh(using initialWindows: [AppWindow]? = nil) {
         let pid = self.pid
         let mode = self.mode
-        guard pid != 0, !isRefreshing else { return }   // skip if a capture is still in flight
+        guard pid != 0, refreshTask == nil else { return }
         // Recompute the permission each tick (one cheap local call) so the hint —
         // and capturing — react if the user grants Screen Recording mid-peek.
         let preflight = CGPreflightScreenCaptureAccess()
         if canCapture != preflight { canCapture = preflight }
-        isRefreshing = true
-        Task { [weak self] in
-            let wins = WindowLister.windows(forPID: pid)
+        let generation = refreshGeneration
+        refreshTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            let wins = initialWindows ?? WindowLister.windows(forPID: pid)
+            guard !Task.isCancelled else { return }
             // Only the thumbnail mode captures images (Screen Recording); names mode
             // never touches ScreenCaptureKit, so it needs no permission. And when
             // permission is denied, skip the doomed ScreenCaptureKit query entirely
             // instead of making a failing window-server round-trip every second.
             let thumbs = (mode.capturesThumbnails && preflight)
                 ? await WindowThumbnailer.images(for: wins) : [:]
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
-                self.isRefreshing = false
-                guard self.pid == pid else { return }   // ignore stale loads
+                guard self.pid == pid, self.refreshGeneration == generation else { return }
+                self.refreshTask = nil
                 self.windows = wins
                 self.thumbnails = thumbs
             }

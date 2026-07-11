@@ -331,7 +331,21 @@ final class DockController {
         model.onDropFiles = { [weak self] tile, urls in self?.handleDrop(urls, on: tile) }
         model.onRequestContextActions = { [weak self] tile in self?.contextActions(for: tile) ?? [] }
         model.onContextMenuPresentationChanged = { [weak self] displayUUID, presented in
-            self?.panels[displayUUID]?.setInteractionHeld(presented)
+            guard let self else { return }
+            self.panels[displayUUID]?.setInteractionHeld(presented)
+            // The context menu gates the hover previews: the dwell timer still fires
+            // while the menu tracks (GCD main-queue work runs in the event-tracking
+            // run-loop mode), so without this a window peek or folder stack pops up
+            // *over* the open menu. Close anything open, cancel the pending dwell,
+            // and resume normal hover behavior once the menu dismisses.
+            self.contextMenuOpen = presented
+            if presented {
+                self.peekWork?.cancel()
+                self.windowPeek.hide()
+                self.folderStack.close()
+            } else {
+                self.scheduleApplyPreview()
+            }
         }
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
@@ -345,6 +359,11 @@ final class DockController {
     /// coalesced so that moving between tiles — which fires an exit and an enter in either
     /// order — settles on the latest intent before we act (no flicker-close-then-reopen).
     private var hoveredPreviewTile: DockTile?
+
+    /// True while a tile's context menu is up. Hover previews are suppressed for the
+    /// duration so they can't appear over the menu; the presentation callback
+    /// reschedules them when the menu dismisses.
+    private var contextMenuOpen = false
 
     /// The kind of preview a tile shows on hover, or nil if it shows none.
     private enum HoverPreview { case windows, folder }
@@ -385,6 +404,7 @@ final class DockController {
     }
 
     private func applyPreview() {
+        guard !contextMenuOpen else { return }
         guard let tile = hoveredPreviewTile, let kind = hoverPreview(for: tile) else {
             windowPeek.scheduleHide()
             folderStack.scheduleHide()

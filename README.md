@@ -2,7 +2,7 @@
 
 A more feature-rich Dock for macOS.
 
-**Latest release:** v<!-- version -->1.0.1<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)
+**Latest release:** v<!-- version -->1.5.0<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)
 
 ![screenshot.png](screenshot.png)
 

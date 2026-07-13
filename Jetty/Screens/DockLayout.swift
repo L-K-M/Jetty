@@ -147,6 +147,32 @@ enum DockLayout {
         }
     }
 
+    /// The region the pointer may occupy while a revealed dock stays up: the revealed
+    /// frame grown by `slop` points (the user's hide-distance preference), extended to
+    /// the physical screen edge on the dock's side. The extension matters whenever the
+    /// dock is inset from its edge: the hard-edge reveal fires instantly at the
+    /// physical edge, so treating the strip between the panel and that edge as
+    /// "outside" would make the dock flap reveal/hide while the pointer rests there.
+    static func keepRevealedFrame(revealed: CGRect, screenFrame: CGRect, edge: DockEdge,
+                                  slop: CGFloat) -> CGRect {
+        var r = revealed.insetBy(dx: -slop, dy: -slop)
+        switch edge {
+        case .bottom:
+            let gap = r.minY - screenFrame.minY
+            if gap > 0 { r.origin.y -= gap; r.size.height += gap }
+        case .top:
+            let gap = screenFrame.maxY - r.maxY
+            if gap > 0 { r.size.height += gap }
+        case .left:
+            let gap = r.minX - screenFrame.minX
+            if gap > 0 { r.origin.x -= gap; r.size.width += gap }
+        case .right:
+            let gap = screenFrame.maxX - r.maxX
+            if gap > 0 { r.size.width += gap }
+        }
+        return r
+    }
+
     /// Places a segment of `length` within `bounds` per `alignment`, nudged by
     /// `offset` (positive → toward trailing), then clamped to stay fully inside.
     /// When `reversed`, `leading` aligns to the high end (so a vertical dock's

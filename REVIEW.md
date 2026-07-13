@@ -146,11 +146,9 @@ Device-test whether the main panel and child panels can sit below real pop-up me
 remaining visible over normal/fullscreen windows. Define offset semantics at leading and
 trailing extremes so a legal slider direction does not silently clamp to a no-op. PR #33
 restores the pure revealed frame and removes one duplicate recomputation; it does not
-provide authoritative hit testing. Follow-up from its merge: with inset > 12 the
-keep-revealed test (`revealedFrame().insetBy(dx: -12, dy: -12)`) no longer covers the
-band between the panel and the physical edge, while the hard-edge reveal still fires
-there instantly — a pointer parked at the screen edge can flap reveal/hide. Extend the
-keep-revealed region to include that band (pure DockLayout math plus a test).
+provide authoritative hit testing. (`DockLayout.keepRevealedFrame` now bridges the
+inset gap to the physical edge, so the post-#33 reveal/hide flapping follow-up is
+resolved.)
 
 ### H4. Correct System Monitor values and execution context
 

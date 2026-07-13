@@ -218,10 +218,11 @@ final class DockPanelController {
             // The reveal band is generous (24pt) because, unlike a real screen edge, a seam
             // doesn't clamp the cursor — a fast slam can overshoot well past it between two
             // samples, so a tight band would still be missed. A wider keep-revealed band
-            // (36pt) gives hysteresis (reveal ≤24, stay ≤36, hide >36) so the dock can't
-            // flap while the pointer lingers just past the seam.
+            // (36pt, or the hide-distance preference when larger) gives hysteresis
+            // (reveal ≤24, stay ≤36, hide beyond) so the dock can't flap while the
+            // pointer lingers just past the seam.
             if isRevealed {
-                if pointerCrossedDockEdge(point, band: 36) {
+                if pointerCrossedDockEdge(point, band: max(36, CGFloat(preferences.hideDistance))) {
                     hideWork?.cancel(); hideWork = nil
                 } else {
                     scheduleHide()
@@ -238,8 +239,14 @@ final class DockPanelController {
             return
         }
         if isRevealed {
-            // Hide once the pointer leaves the revealed dock (plus a little slop).
-            if !NSMouseInRect(point, revealedFrame().insetBy(dx: -12, dy: -12), false) {
+            // Hide once the pointer moves more than the configured hide distance from
+            // the revealed dock. The keep-revealed region also spans any inset gap to
+            // the physical edge, where the hard-edge reveal would instantly re-fire.
+            let keep = DockLayout.keepRevealedFrame(revealed: revealedFrame(),
+                                                    screenFrame: screen.frame,
+                                                    edge: anchor.edge,
+                                                    slop: CGFloat(preferences.hideDistance))
+            if !NSMouseInRect(point, keep, false) {
                 scheduleHide()
             } else {
                 hideWork?.cancel(); hideWork = nil

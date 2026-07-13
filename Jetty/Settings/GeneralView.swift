@@ -64,6 +64,12 @@ struct GeneralView: View {
                 }
                 .disabled(!preferences.autoHide)
                 HStack {
+                    Text("Hide distance")
+                    Slider(value: $preferences.hideDistance, in: 0...100)
+                    Text("\(Int(preferences.hideDistance)) pt").monospacedDigit().frame(width: 64, alignment: .trailing)
+                }
+                .disabled(!preferences.autoHide)
+                HStack {
                     Text("Animation")
                     Slider(value: $preferences.animationMs, in: 0...600)
                     Text("\(Int(preferences.animationMs)) ms").monospacedDigit().frame(width: 64, alignment: .trailing)

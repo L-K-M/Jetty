@@ -46,10 +46,11 @@ enum MenuCommand: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Runs the command (AppleScript via System Events).
+    /// Runs the command (AppleScript via System Events). Off the main thread on the
+    /// shared serial queue — like the power commands, the send blocks until System
+    /// Events replies (and the first use blocks on the Automation prompt), which on
+    /// the main thread would freeze the UI.
     static func run(_ command: MenuCommand) {
-        var error: NSDictionary?
-        NSAppleScript(source: command.appleScript)?.executeAndReturnError(&error)
-        if let error { NSLog("Jetty: menu command failed: \(error)") }
+        AppleScriptRunner.runAsync(command.appleScript)
     }
 }

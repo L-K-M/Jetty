@@ -47,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setUpStatusItem()
         controller.start()
         updateChecker.start()
+        // Prime AppleScript / XProtect init on the main thread before any power or
+        // menu command can run it on a background thread (macOS 26 deadlock guard —
+        // see AppleScriptRunner.warmUp). Deferred so it stays off the launch path.
+        DispatchQueue.main.async { AppleScriptRunner.warmUp() }
     }
 
     /// Re-launching the (already-running) app — double-clicking it again, or `open`ing

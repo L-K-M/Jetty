@@ -32,4 +32,18 @@ enum AppleScriptRunner {
             if let error { NSLog("Jetty: AppleScript failed: \(error)") }
         }
     }
+
+    /// Primes AppleScript / XProtect initialization on the main thread, once, at
+    /// launch. On macOS 26 the *first* `NSAppleScript` execution kicks off XProtect
+    /// malware-evaluation init that `dispatch_sync`s to the main queue; if that first
+    /// call lands on a background thread while the main thread is busy, it can
+    /// deadlock — reintroducing the very freeze this indirection removes. Running a
+    /// trivial script here does the init inline on the main thread (safe: when
+    /// already on main it runs inline, never a self-`dispatch_sync`), so every later
+    /// background send is safe. The bare `return` script triggers the OSA/XProtect
+    /// init without sending an Apple Event, so it never prompts for Automation.
+    /// Call on the main thread during app startup.
+    static func warmUp() {
+        _ = NSAppleScript(source: "return")?.executeAndReturnError(nil)
+    }
 }

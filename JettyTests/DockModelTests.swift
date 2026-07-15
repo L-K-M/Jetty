@@ -190,4 +190,12 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(DockModel.trashImageName(for: .unknown), NSImage.trashEmptyName)
         XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
     }
+
+    func testTrashIconResolvesForBothStates() {
+        // The legacy named Trash images return nil on macOS 26; the icon must still
+        // resolve (via the SF Symbol fallback) so a full can never falls through to the
+        // empty-looking generic glyph.
+        XCTAssertNotNil(DockModel.trashIcon(isEmpty: false))
+        XCTAssertNotNil(DockModel.trashIcon(isEmpty: true))
+    }
 }

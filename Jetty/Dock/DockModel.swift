@@ -246,7 +246,16 @@ final class DockModel: ObservableObject {
     }
 
     private static func trashIcon(state: TrashState) -> NSImage? {
-        NSImage(named: trashImageName(for: state))
+        // The legacy named Trash images (`NSImage.trashFullName`/`trashEmptyName`) do
+        // not resolve on macOS 26 — `NSImage(named:)` returns nil. Without a fallback the
+        // tile then falls through to `DockTileView`'s single generic "trash" glyph for
+        // *both* states, so a full can always looked empty. Back the named lookup with an
+        // SF Symbol that still distinguishes full from empty. `.unknown` renders empty
+        // (see `trashImageName`): a can we could not inspect must not look full.
+        if let named = NSImage(named: trashImageName(for: state)) { return named }
+        let showsFull = (state == .full)
+        return NSImage(systemSymbolName: showsFull ? "trash.fill" : "trash",
+                       accessibilityDescription: showsFull ? "Full Trash" : "Empty Trash")
     }
 
     static func trashImageName(for state: TrashState) -> NSImage.Name {

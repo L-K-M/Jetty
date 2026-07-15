@@ -79,23 +79,50 @@ enum PowerCommand: String, CaseIterable, Identifiable {
 /// Events / Finder).
 enum PowerCommandRunner {
 
+    /// Serial + user-initiated. The AppleScript-backed commands run OFF the main
+    /// thread here because `NSAppleScript.executeAndReturnError` performs a
+    /// *synchronous* Apple Event send that BLOCKS the calling thread until Finder /
+    /// System Events replies. On the main thread that froze the whole UI — emptying
+    /// a full Trash beachballed Jetty until Finder finished deleting (it looked like
+    /// a crash). Dispatching the send frees the main run loop so the dock and menu
+    /// stay live; Finder still owns and shows its native progress UI, and the Apple
+    /// Event still originates from the Jetty process, so the existing Automation
+    /// (TCC) grant applies unchanged.
+    ///
+    /// MUST stay a *serial* queue: `NSAppleScript` is not safe for simultaneous use
+    /// from multiple threads, and serializing also stops a double-tap from firing
+    /// two shutdowns. Do NOT change this to `DispatchQueue.global()` / a concurrent
+    /// queue, and do NOT add a second queue.
+    private static let scriptQueue = DispatchQueue(
+        label: "com.jettyapp.Jetty.PowerCommandRunner",
+        qos: .userInitiated)
+
     static func run(_ command: PowerCommand) {
         // Exhaustive over the enum on purpose (M35): adding a new command is a
         // compile error here until its execution path is written — no more
         // silently-do-nothing `default`.
         switch command {
         case .sleep, .logOut, .restart, .shutDown, .emptyTrash:
-            // These are AppleScript-backed; the mapping is unit-tested.
+            // AppleScript-backed (mapping is unit-tested). The send blocks until the
+            // target app replies, so run it on the serial background queue, not the
+            // caller's (main) thread. Fire-and-forget: both call sites already ignore
+            // the result and failures are only logged.
             if let script = command.appleScript {
-                runAppleScript(script)
+                scriptQueue.async { runAppleScript(script) }
             } else {
                 assertionFailure("PowerCommand \(command) has no AppleScript")
             }
         case .lockScreen:
+            // Not AppleScript; SACLockScreenImmediate signals loginwindow and returns
+            // instantly (and the screen-saver fallback only spawns a process), so it
+            // stays on the caller's thread.
             lockScreen()
         }
     }
 
+    /// Sends `source` via NSAppleScript and logs any failure. Invoked on
+    /// `scriptQueue` (never the main thread); a fresh `NSAppleScript` is created and
+    /// executed entirely within this call, so no instance is shared across threads.
     private static func runAppleScript(_ source: String) {
         var error: NSDictionary?
         if let script = NSAppleScript(source: source) {

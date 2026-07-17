@@ -8,6 +8,13 @@ private final class KeyableMenuPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+extension Notification.Name {
+    /// Posted by `JettyMenuController.show` after the panel becomes key, so the
+    /// search field re-asserts focus on every open (the reused hosting view's
+    /// `.onAppear` doesn't reliably refire).
+    static let jettyMenuDidShow = Notification.Name("JettyMenuDidShowNotification")
+}
+
 /// Presents the Jetty Menu launcher: builds the key panel, positions it (centered
 /// for the hotkey / status-item paths, or anchored to the Jetty tile like a pop-up
 /// menu when opened from the dock), briefly activates Jetty so the search field is
@@ -45,6 +52,13 @@ final class JettyMenuController {
     }
 
     func toggle(on screen: NSScreen?, from anchor: TileAnchor? = nil) {
+        // Spotlight/Raycast behavior: re-invoking the hotkey while the menu is open
+        // on *another* display moves it to the active screen rather than dismissing.
+        if isOpen, let panel, let target = screen ?? NSScreen.main, panel.screen !== target {
+            positionPanel(panel, on: target, anchor: nil)
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
         if isOpen { close() } else { show(on: screen, from: anchor) }
     }
 
@@ -56,6 +70,7 @@ final class JettyMenuController {
 
         model.reset()
         model.recentsProvider = { RecentAppsStore.shared.recentItems() }
+        model.snapshotRecents()   // read UserDefaults once per show, not per keystroke
         model.onLaunch = { [weak self] item in
             RecentAppsStore.shared.record(name: item.name, bundleID: item.bundleID, url: item.url)
             // The launched app is being given focus (config.activates) — don't let close()
@@ -82,6 +97,9 @@ final class JettyMenuController {
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        // The hosting view is reused across opens and `.onAppear` doesn't reliably
+        // refire — tell the search field to re-assert focus on every show.
+        NotificationCenter.default.post(name: .jettyMenuDidShow, object: nil)
         installKeyMonitor()
         installResignObserver(for: panel)
         isOpen = true

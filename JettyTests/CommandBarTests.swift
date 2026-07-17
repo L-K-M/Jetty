@@ -38,6 +38,13 @@ final class CommandBarTests: XCTestCase {
         XCTAssertEqual(UnitConverter.convert("1500 m to km")?.value, "1.5 km")
     }
 
+    func testHugeConversionUsesSignificantDigits() {
+        // Fixed-fraction printing would dump binary64 noise
+        // ("999999999999999868928 KB"); significant digits stay truthful.
+        XCTAssertEqual(UnitConverter.convert("999999999 tb to kb")?.value, "1e18 KB")
+        XCTAssertEqual(UnitConverter.format(1.23456789e13), "1.23457e13")
+    }
+
     func testCrossDimensionAndNonsenseReturnNil() {
         XCTAssertNil(UnitConverter.convert("10 km in kg"))
         XCTAssertNil(UnitConverter.convert("safari"))

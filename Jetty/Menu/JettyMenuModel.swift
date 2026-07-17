@@ -49,6 +49,17 @@ final class JettyMenuModel: ObservableObject {
     /// Supplies recently-launched apps to surface first on an empty query (MF-5).
     var recentsProvider: (() -> [AppSearchItem])?
 
+    /// Recents captured once per menu show (`snapshotRecents`). Re-reading and
+    /// JSON-decoding UserDefaults on every keystroke is per-key waste, and recents
+    /// can't change while the menu is open except through the menu's own launches.
+    private var recentsSnapshot: [AppSearchItem]?
+
+    /// Captures the recents for this showing of the menu — call on every show.
+    func snapshotRecents() {
+        recentsSnapshot = recentsProvider?()
+        recompute()
+    }
+
     private var currencyCancellable: AnyCancellable?
 
     init(appIndex: AppIndex) {
@@ -74,7 +85,7 @@ final class JettyMenuModel: ObservableObject {
         currency = computeCurrency()
         command = MenuCommand.match(query)
         results = Array(Self.rankedResults(query: query, apps: appIndex.apps,
-                                           recents: recentsProvider?() ?? []).prefix(maxResults))
+                                           recents: recentsSnapshot ?? recentsProvider?() ?? []).prefix(maxResults))
         if let previouslySelectedID, let idx = results.firstIndex(where: { $0.id == previouslySelectedID }) {
             selectedIndex = idx
         } else if selectedIndex >= results.count {
@@ -119,13 +130,21 @@ final class JettyMenuModel: ObservableObject {
 
     /// Formats a converted amount as money — currency symbol and the currency's own
     /// decimal convention (2 for EUR, 0 for JPY) — instead of the unit converter's
-    /// 4-decimals-plus-ISO-code (M12).
+    /// 4-decimals-plus-ISO-code (M12). Formatters are cached per currency code:
+    /// building a NumberFormatter is one of the pricier Foundation operations and
+    /// this runs per keystroke (main-thread only).
     static func formatCurrency(_ value: Double, code: String) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = code
+        let formatter = currencyFormatters[code] ?? {
+            let f = NumberFormatter()
+            f.numberStyle = .currency
+            f.currencyCode = code
+            currencyFormatters[code] = f
+            return f
+        }()
         return formatter.string(from: NSNumber(value: value)) ?? "\(UnitConverter.format(value)) \(code)"
     }
+
+    private static var currencyFormatters: [String: NumberFormatter] = [:]
 
     /// The trimmed query to offer as a web search (nil when empty).
     var webSearchQuery: String? {
@@ -134,15 +153,16 @@ final class JettyMenuModel: ObservableObject {
     }
 
     /// Pure ranking: an empty query lists recents first (then the rest, de-duplicated);
-    /// a non-empty query is fuzzy-ranked over all apps. Unit-tested.
+    /// a non-empty query is fuzzy-ranked over all apps. `apps` must be in `AppIndex`
+    /// order — already name-sorted — so the empty path preserves it instead of paying
+    /// for a second full ICU sort on every keystroke (FAB-P4 follow-up). Unit-tested.
     static func rankedResults(query: String, apps: [AppSearchItem],
                               recents: [AppSearchItem]) -> [AppSearchItem] {
         guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return AppSearch.rank(query, in: apps)
         }
         let recentIDs = Set(recents.map(\.id))
-        let rest = AppSearch.rank("", in: apps).filter { !recentIDs.contains($0.id) }
-        return recents + rest
+        return recents + apps.filter { !recentIDs.contains($0.id) }
     }
 
     private var iconCache: [String: NSImage] = [:]

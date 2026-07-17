@@ -183,6 +183,14 @@ final class ExpressionEvaluatorTests: XCTestCase {
         XCTAssertEqual(value("2^-10"), "0.0009765625")
     }
 
+    func testHugeMagnitudeUsesSignificantDigits() {
+        // Past the integer fast path, fixed-fraction printing would dump binary64
+        // noise (~200 digits for 2^700); significant digits stay truthful.
+        XCTAssertEqual(value("2^700"), "5.260135902e210")
+        XCTAssertEqual(ExpressionEvaluator.format(1.5e16), "1.5e16")
+        XCTAssertEqual(ExpressionEvaluator.format(-2.5e15), "-2.5e15")
+    }
+
     func testExpressionEcho() {
         XCTAssertEqual(ExpressionEvaluator.evaluate(" 2 + 2 ")?.expression, "2 + 2")
     }

@@ -104,7 +104,7 @@ struct DockTileView: View {
             .overlay { pressedHighlight }
             .overlay(alignment: .topTrailing) { unresponsiveBadge }
             .overlay(alignment: indicatorAlignment) { indicator }
-            .overlay(alignment: .top) { label }
+            .overlay(alignment: labelAlignment) { label }
     }
 
     /// Padding added on the edge-facing side only, turning the gap between the icon and
@@ -264,6 +264,28 @@ struct DockTileView: View {
 
     // MARK: Hover label
 
+    /// The label floats toward screen center (never toward the screen edge, where it
+    /// would leave the panel and be clipped): above a bottom dock, below a top dock,
+    /// and beside a vertical dock — matching the system Dock (BUG: clipped labels).
+    private var labelAlignment: Alignment {
+        switch edge {
+        case .bottom: return .top
+        case .top: return .bottom
+        case .left: return .trailing
+        case .right: return .leading
+        }
+    }
+
+    private var labelOffset: CGSize {
+        let d = baseSize * 0.75
+        switch edge {
+        case .bottom: return CGSize(width: 0, height: -d)
+        case .top: return CGSize(width: 0, height: d)
+        case .left: return CGSize(width: d, height: 0)
+        case .right: return CGSize(width: -d, height: 0)
+        }
+    }
+
     @ViewBuilder
     private var label: some View {
         if isHovered && preferences.showLabels && !tile.displayName.isEmpty
@@ -273,7 +295,7 @@ struct DockTileView: View {
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(.thinMaterial, in: Capsule())
                 .fixedSize()
-                .offset(y: -baseSize * 0.75)
+                .offset(labelOffset)
                 .allowsHitTesting(false)
         }
     }

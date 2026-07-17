@@ -204,6 +204,14 @@ final class DockLayoutTests: XCTestCase {
 
     // MARK: Clock face zoom headroom & tile widening
 
+    func testLabelHeadroomCoversOffsetPlusCapsule() {
+        // 0.75 × icon toward screen center plus room for the capsule itself.
+        XCTAssertEqual(DockLayout.labelHeadroom(iconSize: 52), 55, accuracy: 0.001)
+        XCTAssertGreaterThan(DockLayout.labelHeadroom(iconSize: 52), 52 * 0.75)
+        XCTAssertLessThan(DockLayout.labelHeadroom(iconSize: 32),
+                          DockLayout.labelHeadroom(iconSize: 64))
+    }
+
     func testClockZoomHeadroom() {
         // No zoom → no headroom: the face already fits inside the resting strip.
         XCTAssertEqual(DockLayout.clockZoomHeadroom(iconSize: 52, padding: 10, zoom: 1.0), 0, accuracy: 0.001)

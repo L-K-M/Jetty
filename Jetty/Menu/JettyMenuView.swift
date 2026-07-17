@@ -74,6 +74,10 @@ struct JettyMenuView: View {
                 .font(.title3)
                 .focused($searchFocused)
                 .onAppear { searchFocused = true }
+                // The hosting view is reused across opens; re-assert focus every show.
+                .onReceive(NotificationCenter.default.publisher(for: .jettyMenuDidShow)) { _ in
+                    searchFocused = true
+                }
         }
         .padding(14)
     }
@@ -286,7 +290,10 @@ struct JettyMenuView: View {
             .onChange(of: model.selectedIndex) { newValue in
                 if suppressScroll { suppressScroll = false; return }
                 guard model.results.indices.contains(newValue) else { return }
-                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(model.results[newValue].id, anchor: .center) }
+                // Minimal-visibility scroll (Spotlight-style): no anchor, so the list
+                // stays put while the selection moves inside the viewport instead of
+                // sliding the whole list on every arrow press.
+                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(model.results[newValue].id) }
             }
         }
     }

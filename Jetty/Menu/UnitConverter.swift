@@ -38,9 +38,13 @@ enum UnitConverter {
     /// Formats a converted value: whole numbers print plainly, else up to 4 decimals
     /// with trailing zeros trimmed. A non-zero value too small for the 4-decimal
     /// budget falls back to significant-digit (scientific) notation — `1 mm to km`
-    /// shows `1e-6 km`, never a confidently wrong `0 km` (FAB-B8).
+    /// shows `1e-6 km`, never a confidently wrong `0 km` (FAB-B8). Huge magnitudes
+    /// switch to significant digits too (see below).
     static func format(_ value: Double) -> String {
         if value == value.rounded(), abs(value) < 1e12 { return String(Int64(value)) }
+        // Huge magnitudes: fixed-fraction printing just dumps binary64 noise
+        // (`999999999 tb to kb` rendered as `999999999999999868928 KB`).
+        if abs(value) >= 1e12 { return scientificString(value, significantDigits: 6) }
         var s = String(format: "%.4f", value)
         while s.contains("."), s.hasSuffix("0") { s.removeLast() }
         if s.hasSuffix(".") { s.removeLast() }

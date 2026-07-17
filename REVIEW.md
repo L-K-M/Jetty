@@ -37,20 +37,13 @@ tests on macOS CI.
 ## Pending pull requests
 
 These implementations are not on `main` and therefore remain unresolved. The residual
-column is work the PR deliberately does not cover.
+column is work the PR deliberately does not cover. (k3 PRs #46–#54 have since been
+merged or superseded; only #58 remains open.)
 
 | PR | Implemented scope | Residual work |
 |---|---|---|
 | [#34](https://github.com/L-K-M/Jetty/pull/34) | Exact display reverse mapping, collision-resolved entries, in-session key reservation, live Settings updates | Blocked on rework: monotonic key reservation drifts a reconnected display's base UUID to `#2`, `#3`, … (new `CGDirectDisplayID` + new `NSScreen` miss both reverse maps while the UUID stays reserved), orphaning persisted per-display settings. The reverse-mapping and DisplaysView halves are sound and worth resubmitting; see the PR review comment. |
-| [#46](https://github.com/L-K-M/Jetty/pull/46) | Trash tile icon from the workspace's system-maintained empty/full icon (no TCC-gated enumeration, no fragile named images); per-rebuild Trash filesystem scan removed; `invalidateTrashIcon` actually invalidates | Live-flip verification on device; background Empty Trash/move outcomes (H2) |
-| [#47](https://github.com/L-K-M/Jetty/pull/47) | Edge-aware hover labels (all four edges) + `DockLayout.labelHeadroom` so labels aren't clipped with magnification off | Device check on four edges; unified geometry (H3) |
-| [#48](https://github.com/L-K-M/Jetty/pull/48) | Dock stays revealed while window-peek/folder-stack popovers are open (`onOpenChange` hold) | Hover corridor; panel-recreate hold seam; child-panel drag lifetimes (U2) |
-| [#49](https://github.com/L-K-M/Jetty/pull/49) | Magnification tracks across the whole panel (no headroom snap-off); overflow glow-dot lead fixed | Body-granularity perf (P1); overflow headroom trimming |
-| [#50](https://github.com/L-K-M/Jetty/pull/50) | Menu: no per-keystroke ICU re-sort or UserDefaults recents reads; cached currency formatter; minimal scroll; toggle re-centers on active display; focus re-assert per show; significant-digit formatting for huge results | Async row icons, double app scan, hover-scroll selection (P4); web-search engine choice |
-| [#51](https://github.com/L-K-M/Jetty/pull/51) | Power-command confirmation can't render behind the menu; update alerts above `.popUpMenu` (its AppleScript-async half landed as `cc9bba3`/`f29c62b`) | Result visibility, denied-Automation recovery, background-check focus coordination (H6) |
-| [#52](https://github.com/L-K-M/Jetty/pull/52) | Weather 10 s timeout + coordinate validation + neutral missing-code glyph; world-clock +1d/−1d badge and invalid-zone fallback; Pomodoro "Done" state; VPN/tunnel interface exclusion; timer tolerances | City input/geocoding, data-source age (U5); sampler cadence/context (H4) |
-| [#53](https://github.com/L-K-M/Jetty/pull/53) | Window Peek: 0.5 s AX messaging timeout, conditional AX title fetch, truly-detached refresh task (its double-enumeration half landed as #36) | Minimized windows, capture cadence/size, permission-aware controls (H9) |
-| [#54](https://github.com/L-K-M/Jetty/pull/54) | Folder-stack Escape monitor removed; Settings deminiaturizes; Restore System Dock disabled when inapplicable; toggle-hide latch; under-pointer reveal seeding | Hotkey registration failure UI (U1) |
+| [#58](https://github.com/L-K-M/Jetty/pull/58) | Trash tile rebuilt: real CoreTypes can artwork, tiered exact state (home probe → preflighted Finder Automation → honest default), Permissions consent row, timeliness triggers; research in TRASH.md | Device verification; background Empty Trash/move outcomes (H2); per-volume Trash beyond the home directory |
 
 ## Critical
 
@@ -117,12 +110,14 @@ does not depend on a valid captured preference snapshot.
 **Paths:** `Jetty/Apps/TrashLocations.swift`, `TrashMonitor.swift`, `AppLauncher.swift`,
 `Jetty/Dock/DockController.swift`, `DockModel.swift`
 
-**Resolved by PR #46:** the tile icon no longer comes from the TCC-gated `readdir`
-probe (which reported `.unknown` → stuck-empty can for anyone without Full Disk
-Access); it uses `NSWorkspace.icon(forFile:)` on the user's Trash, whose empty/full
-state Finder/IconServices maintains permission-free, cached and invalidated by the
-watcher. The per-rebuild synchronous scan of every mounted volume (a hung network
-share could beach-ball every app activation) is gone.
+**Resolved by PR #58 (pending) / researched in TRASH.md:** two root causes were at
+play — the legacy named Trash images don't resolve on macOS 26, and enumerating
+`~/.Trash` requires Full Disk Access (TCC), so the probe reported `.unknown` →
+stuck-empty can. PR #46's workspace-icon detour rendered a generic *folder* and was
+reverted. PR #58 uses the CoreTypes can artwork and a tiered, prompt-free state
+pipeline (home-Trash probe → silently preflighted Finder Automation `count` → honest
+empty-can default with a one-click consent flow in Settings → Permissions), cached
+and recomputed on watch events, own actions, and reveal.
 
 Remaining:
 
@@ -508,7 +503,8 @@ Highest-value ideas and dependent follow-ons:
 
 - A display-topology editor with disconnected-display management.
 - Restrained Trash wobble or gulp only after confirmed success, Empty Trash poof, and an
-  on-demand-only count/size X-ray (PR #46 makes the can truthful, unblocking this).
+  on-demand-only count/size X-ray (PR #58 makes the can truthful, unblocking this;
+  the Finder-Automation count is already available for it).
 - Now-playing upgrade: album-art thumbnail, animated equalizer bars while playing, and
   a Play/Pause context action via `MRMediaRemoteSendCommand`; carry the source player's
   identity so the tile opens the right app (H10).

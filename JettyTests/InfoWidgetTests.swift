@@ -83,7 +83,8 @@ final class InfoWidgetTests: XCTestCase {
     func testVirtualInterfacesAreNotCounted() {
         XCTAssertTrue(SystemStats.isCountedInterface("en0"))
         XCTAssertTrue(SystemStats.isCountedInterface("en7"))
-        for virtual in ["utun0", "utun4", "ipsec0", "ppp0", "awdl0", "llw0", "anpi0", "bridge0", "gif0", "stf0"] {
+        for virtual in ["utun0", "utun4", "ipsec0", "ppp0", "awdl0", "llw0", "anpi0", "bridge0", "gif0", "stf0",
+                        "vmenet0", "vboxnet0", "vlan0", "tap0", "vmnet0"] {
             XCTAssertFalse(SystemStats.isCountedInterface(virtual), virtual)
         }
     }

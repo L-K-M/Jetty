@@ -98,7 +98,8 @@ enum SystemStats {
     /// user's network. Pure, unit-tested.
     static func isCountedInterface(_ name: String) -> Bool {
         let virtualPrefixes = ["utun", "ipsec", "ppp", "awdl", "llw", "anpi",
-                               "gif", "stf", "bridge", "vmenet", "vboxnet"]
+                               "gif", "stf", "bridge", "vmenet", "vboxnet",
+                               "vlan", "tap", "vmnet"]
         return !virtualPrefixes.contains(where: { name.hasPrefix($0) })
     }
 

@@ -139,7 +139,7 @@ final class CodableModelTests: XCTestCase {
         let data = try JSONEncoder().encode(preset)
         XCTAssertEqual(try JSONDecoder().decode(AppearancePreset.self, from: data).accentGlow, false)
         // A theme predating the field decodes to the default (true), not false.
-        let legacy = Data(#"{ "material": "liquidGlass", "tintHex": "#0A7AFF" }"#.utf8)
+        let legacy = Data(##"{ "material": "liquidGlass", "tintHex": "#0A7AFF" }"##.utf8)
         XCTAssertEqual(try XCTUnwrap(AppearancePreset.decode(from: legacy)).accentGlow,
                        Preferences.Default.accentGlow)
     }

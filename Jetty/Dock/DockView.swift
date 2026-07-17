@@ -53,6 +53,20 @@ struct DockView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edgeAlignment(edge))
             .contentShape(Rectangle())
+            // Continuous pointer tracking → fluid, real-Dock-style magnification (ND-2).
+            // Lives on the full-panel container (converted into the slot stack's
+            // coordinate space) so magnification keeps tracking through the across
+            // headroom the magnified tiles render into — attached to the resting-height
+            // slot stack it snapped off as soon as the pointer rode up a zoomed icon.
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let point):
+                    hoverAlong = stackLocalAlong(for: point, in: geo.size, edge: edge,
+                                                 base: base, spacing: spacing, overflows: overflows)
+                case .ended:
+                    hoverAlong = nil
+                }
+            }
             // Dropping a folder/file on the dock background (not a specific tile) pins it.
             // A tile under the cursor handles its own drop first; this catches the rest.
             .onDrop(of: [.fileURL], isTargeted: $isStripDropTargeted) { providers in
@@ -176,13 +190,15 @@ struct DockView: View {
             let spacing = CGFloat(preferences.tileSpacing)
             let centers = tileCenters(base: base, spacing: spacing, zoomed: zoomed)
             // The same along-axis headroom the panel budgets (widest tile), so the
-            // glow positions stay aligned with the centered content.
+            // glow positions stay aligned with the centered content. In the
+            // overflow-scroll state (zoomed == false) magnification is suspended and
+            // the stack is leading-aligned — there is no centered headroom to skip.
             let widest = edge.isHorizontal
                 ? DockLayout.widestTileFactor(kinds: model.tiles.map(\.kind),
                                               clockWidthFactor: clockWidthFactor(zoomed: zoomed)) : 1
-            let extra = DockLayout.magnificationAlongExtra(iconSize: base,
-                                                           magnification: preferences.effectiveMagnification,
-                                                           widestFactor: widest)
+            let extra = zoomed ? DockLayout.magnificationAlongExtra(iconSize: base,
+                                                                    magnification: preferences.effectiveMagnification,
+                                                                    widestFactor: widest) : 0
             let lead = extra / 2 + Self.padding   // first tile's offset from the strip's leading edge
             ZStack {
                 ForEach(model.tiles.filter(isActiveAppTile)) { tile in
@@ -258,13 +274,6 @@ struct DockView: View {
                         slotView(slot, slotIndex: index, base: base, spacing: spacing, centers: centers, magnifies: magnifies)
                     }
                 }
-            }
-        }
-        // Continuous pointer tracking → fluid, real-Dock-style magnification (ND-2).
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case .active(let point): hoverAlong = edge.isHorizontal ? point.x : point.y
-            case .ended: hoverAlong = nil
             }
         }
     }
@@ -405,6 +414,24 @@ struct DockView: View {
     }
 
     // MARK: Magnification (continuous — ND-2)
+
+    /// Converts a pointer position in the panel's local space into the slot stack's
+    /// along-axis coordinate space (the space `tileCenters` is built in). Non-overflow
+    /// layout centers the stack along the dock axis inside the panel, so the stack's
+    /// leading edge sits at `(geo − content) / 2 + padding`.
+    private func stackLocalAlong(for point: CGPoint, in size: CGSize, edge: DockEdge,
+                                 base: CGFloat, spacing: CGFloat, overflows: Bool) -> CGFloat {
+        let pointAlong = edge.isHorizontal ? point.x : point.y
+        // In the overflow-scroll state magnification is suspended, so the (scrolled,
+        // leading-aligned) conversion would be unused — return the raw coordinate.
+        guard !overflows else { return pointAlong }
+        let content = DockLayout.contentSize(tiles: model.tiles.map(\.kind), iconSize: base,
+                                             spacing: spacing, padding: Self.padding, edge: edge,
+                                             clockWidthFactor: clockWidthFactor(zoomed: true))
+        let geoAlong = edge.isHorizontal ? size.width : size.height
+        let contentAlong = edge.isHorizontal ? content.width : content.height
+        return pointAlong - ((geoAlong - contentAlong) / 2 + Self.padding)
+    }
 
     private func scale(center: CGFloat?, base: CGFloat, spacing: CGFloat) -> CGFloat {
         guard preferences.magnificationEnabled, draggingSlotID == nil,

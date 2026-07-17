@@ -32,6 +32,7 @@ final class WindowPeekModel: ObservableObject {
         thumbnails = [:]
         refresh(using: initialWindows)
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.refresh() }
+        t.tolerance = 0.2
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }
@@ -54,7 +55,9 @@ final class WindowPeekModel: ObservableObject {
         let preflight = CGPreflightScreenCaptureAccess()
         if canCapture != preflight { canCapture = preflight }
         let generation = refreshGeneration
-        refreshTask = Task { [weak self] in
+        // Detached: an unstructured Task would inherit the main actor and the window
+        // enumeration (CGWindowList + AX IPC) would run on the main thread after all.
+        refreshTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard !Task.isCancelled else { return }
             let wins = initialWindows ?? WindowLister.windows(forPID: pid)
             guard !Task.isCancelled else { return }

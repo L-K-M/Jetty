@@ -33,8 +33,9 @@ enum WindowLister {
         }
         // CGWindowList only yields kCGWindowName with Screen Recording. Fill missing
         // titles from Accessibility when that's granted (no Screen Recording needed) so
-        // the names view is useful without the capture permission.
-        let axTitles = WindowActions.titles(forPID: pid)
+        // the names view is useful without the capture permission. Skip the AX
+        // round-trips entirely when every window already has a title.
+        let axTitles = result.contains { $0.title.isEmpty } ? WindowActions.titles(forPID: pid) : [:]
         let merged: [AppWindow] = result.map { window in
             guard window.title.isEmpty, let title = axTitles[window.id] else { return window }
             var copy = window
@@ -112,6 +113,9 @@ enum WindowActions {
     static func titles(forPID pid: pid_t) -> [CGWindowID: String] {
         guard AXIsProcessTrusted(), let getWindow = Self.getWindowFn else { return [:] }
         let app = AXUIElementCreateApplication(pid)
+        // Bound every message to this app: without a timeout, querying a hung target
+        // blocks for the system default (~6 s) per window — and this runs on hover.
+        AXUIElementSetMessagingTimeout(app, 0.5)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
               let axWindows = value as? [AXUIElement] else { return [:] }
@@ -134,6 +138,8 @@ enum WindowActions {
     private static func axWindow(for window: AppWindow) -> AXUIElement? {
         guard AXIsProcessTrusted(), let getWindow = Self.getWindowFn else { return nil }
         let app = AXUIElementCreateApplication(window.pid)
+        // Same 0.5 s bound as `titles(forPID:)` — a hung target must not freeze the UI.
+        AXUIElementSetMessagingTimeout(app, 0.5)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
               let axWindows = value as? [AXUIElement] else { return nil }

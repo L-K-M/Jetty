@@ -17,6 +17,11 @@ final class FolderStackController {
     private(set) var isOpen = false
     private var rootFolder: URL?
 
+    /// Called when the popover opens or closes, so the dock can hold its reveal while
+    /// the user is interacting with the popover (a close can come from an outside
+    /// click, bypassing the dock's hover tracking).
+    var onOpenChange: ((Bool) -> Void)?
+
     /// Hover lifecycle (the stack is opened by hovering a folder tile): a pending hide is
     /// cancelled when the pointer moves into the popover, so it stays up while browsed.
     private var hideWork: DispatchWorkItem?
@@ -70,6 +75,7 @@ final class FolderStackController {
         isOpen = true
         model.open(folder)          // kicks the async load; the glass panel shows immediately
         installMonitors()
+        onOpenChange?(true)
     }
 
     func close() {
@@ -84,6 +90,7 @@ final class FolderStackController {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         panel?.orderOut(nil)
         panel = nil
+        onOpenChange?(false)
     }
 
     /// Hides after a short grace period unless the pointer moved into the popover — so a

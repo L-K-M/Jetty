@@ -351,9 +351,32 @@ final class DockController {
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
         model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
         model.onHoverTile = { [weak self] tile, entered in self?.handleTileHover(tile, entered: entered) }
+        // A popover close can bypass the hover path entirely (outside click, Escape,
+        // selection) — always release the dock hold from the popover's own callback.
+        windowPeek.onOpenChange = { [weak self] open in if !open { self?.releasePreviewDock() } }
+        folderStack.onOpenChange = { [weak self] open in if !open { self?.releasePreviewDock() } }
     }
 
     // MARK: Hover previews (app windows / folder contents)
+
+    /// The display whose dock is being held revealed while a hover-preview popover
+    /// (window peek / folder stack) is open on it. Without the hold, crossing the gap
+    /// from tile to popover leaves the dock's hover region and the auto-hide timer
+    /// slides the dock away mid-interaction (flicker loop).
+    private var previewHeldPanelUUID: String?
+
+    private func holdPreviewDock(uuid: String) {
+        guard previewHeldPanelUUID != uuid else { return }
+        releasePreviewDock()
+        previewHeldPanelUUID = uuid
+        panels[uuid]?.setInteractionHeld(true)
+    }
+
+    private func releasePreviewDock() {
+        guard let uuid = previewHeldPanelUUID else { return }
+        previewHeldPanelUUID = nil
+        panels[uuid]?.setInteractionHeld(false)
+    }
 
     /// The tile the pointer is currently over that offers a hover preview (nil → none),
     /// coalesced so that moving between tiles — which fires an exit and an enter in either
@@ -433,6 +456,7 @@ final class DockController {
         let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
         windowPeek.show(pid: pid, appName: name, near: anchor, dock: dock,
                         screen: screen, edge: edge, mode: preferences.windowPreviewMode)
+        if windowPeek.isOpen { holdPreviewDock(uuid: uuid) }
     }
 
     /// The screen-space centre of `tile`'s icon along the dock axis, so the peek anchors
@@ -593,6 +617,7 @@ final class DockController {
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         folderStack.show(folder: url, style: tile.folderDisplay ?? .grid,
                          near: anchor, dock: dock, screen: screen, edge: edge)
+        if folderStack.isOpen { holdPreviewDock(uuid: uuid) }
     }
 
     private func handleDrop(_ urls: [URL], on tile: DockTile) {

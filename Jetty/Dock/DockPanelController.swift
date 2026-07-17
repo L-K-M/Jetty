@@ -159,11 +159,17 @@ final class DockPanelController {
 
     // MARK: Reveal / hide
 
+    /// Fired whenever the dock reveals, so state that must never be staler than the
+    /// user's last look at the dock (the Trash fullness resolution — TRASH.md) can
+    /// refresh on the one moment it matters.
+    var onReveal: (() -> Void)?
+
     func reveal(animated: Bool = true) {
         hideWork?.cancel(); hideWork = nil
         guard !isRevealed else { return }
         isRevealed = true
         applyRevealState(animated: animated)
+        onReveal?()
     }
 
     func hide(animated: Bool = true) {

@@ -303,7 +303,10 @@ final class Preferences: ObservableObject {
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)
         toggleHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.toggleHotkey), fallback: d.toggleHotkey)
         menuHotkey = HotkeyBinding.decode(defaults.string(forKey: Key.menuHotkey), fallback: d.menuHotkey)
-        worldClockTimeZone = string(Key.worldClockTimeZone, d.worldClockTimeZone)
+        // A stale/removed IANA identifier must not silently render local time
+        // labeled with another city — fall back to the default at load.
+        let persistedZone = string(Key.worldClockTimeZone, d.worldClockTimeZone)
+        worldClockTimeZone = TimeZone(identifier: persistedZone) != nil ? persistedZone : d.worldClockTimeZone
         pomodoroMinutes = Self.clamp(double(Key.pomodoroMinutes, d.pomodoroMinutes), 1, 180)
         weatherLatitude = Self.clamp(double(Key.weatherLatitude, d.weatherLatitude), -90, 90)
         weatherLongitude = Self.clamp(double(Key.weatherLongitude, d.weatherLongitude), -180, 180)

@@ -55,4 +55,18 @@ final class ClockFormatterTests: XCTestCase {
         // Result is never in the future relative to its input.
         XCTAssertLessThanOrEqual(start.timeIntervalSince1970, date.timeIntervalSince1970)
     }
+
+    func testWorldClockDayOffset() {
+        let utc = TimeZone(identifier: "UTC")!
+        let auckland = TimeZone(identifier: "Pacific/Auckland")!   // UTC+12/+13
+        let la = TimeZone(identifier: "America/Los_Angeles")!      // UTC-7/-8
+        // 2026-01-01 12:00 UTC → already Jan 2 in Auckland, same day in LA.
+        let noonUTC = Date(timeIntervalSince1970: 1_767_268_800)
+        XCTAssertEqual(ClockFormatter.dayOffset(for: noonUTC, remoteTimeZone: auckland, localTimeZone: utc), 1)
+        XCTAssertNil(ClockFormatter.dayOffset(for: noonUTC, remoteTimeZone: la, localTimeZone: utc))
+        // 2026-01-01 01:00 UTC → still Dec 31 in LA.
+        let earlyUTC = Date(timeIntervalSince1970: 1_767_229_200)
+        XCTAssertEqual(ClockFormatter.dayOffset(for: earlyUTC, remoteTimeZone: la, localTimeZone: utc), -1)
+        XCTAssertNil(ClockFormatter.dayOffset(for: earlyUTC, remoteTimeZone: utc, localTimeZone: utc))
+    }
 }

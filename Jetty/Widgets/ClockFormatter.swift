@@ -74,6 +74,34 @@ enum ClockFormatter {
         return f
     }
 
+    // MARK: World-clock day offset
+
+    /// The whole-day difference between a remote zone's calendar day and the local
+    /// one at `date`: `+1` when it's already tomorrow there, `-1` when still
+    /// yesterday, `nil` when it's the same day. A bare "9:24 Tokyo" actively
+    /// misleads when Tokyo is a day ahead. Time zones are injectable so tests are
+    /// machine-locale independent. Pure, unit-tested.
+    static func dayOffset(for date: Date, remoteTimeZone: TimeZone,
+                          localTimeZone: TimeZone = .current) -> Int? {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        // Pin the civil (year, month, day) each zone is in, then re-materialise both in
+        // a fixed UTC calendar so a plain day-count is exact. `ordinality(of: .day, in:
+        // .era, …)` — the obvious approach — is unreliable on the current Foundation
+        // (it ignores the calendar's time zone) and pathologically slow, so it is
+        // deliberately avoided here.
+        func civilDay(in zone: TimeZone) -> Date? {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = zone
+            return utc.date(from: calendar.dateComponents([.year, .month, .day], from: date))
+        }
+        guard let local = civilDay(in: localTimeZone), let remote = civilDay(in: remoteTimeZone) else {
+            return nil
+        }
+        let days = utc.dateComponents([.day], from: local, to: remote).day ?? 0
+        return days == 0 ? nil : days
+    }
+
     // MARK: Minute-cadence alignment (M29)
 
     /// The start of the minute containing `date`. Used as the phase for a minute-

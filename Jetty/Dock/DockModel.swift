@@ -56,6 +56,9 @@ final class DockModel: ObservableObject {
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+    /// Cached Trash icon. The workspace already reflects empty vs. full, so this only
+    /// needs re-reading when the Trash actually changes (`invalidateTrashIcon`).
+    private var cachedTrashIcon: NSImage?
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
@@ -95,17 +98,11 @@ final class DockModel: ObservableObject {
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
         let now = Date().timeIntervalSinceReferenceDate
         let built = Self.makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps)
-        let trashState = built.flatMap(\.tiles).contains { $0.kind == .trash }
-            ? Self.trashState() : nil
         slots = built.map { slot in
             DockSlot(id: slot.id, itemID: slot.itemID,
                       tiles: slot.tiles.map { tile in
                           var t = tile
-                          if t.kind == .trash {
-                              t.icon = Self.trashIcon(state: trashState ?? .empty)
-                          } else {
-                              t.icon = icon(for: tile, now: now)
-                          }
+                          t.icon = t.kind == .trash ? trashTileIcon() : icon(for: tile, now: now)
                           return t
                       },
                      isRunningGroup: slot.isRunningGroup)
@@ -113,9 +110,9 @@ final class DockModel: ObservableObject {
         tiles = slots.flatMap { $0.tiles }
     }
 
-    /// Kept as the controller's "Trash changed" hook; Trash state is intentionally
-    /// re-read on every rebuild so a missed filesystem event can't leave a stale can.
-    func invalidateTrashIcon() {}
+    /// The controller's "Trash changed" hook: drop the cached workspace icon so the
+    /// next rebuild re-reads the system-maintained empty/full appearance (IDEA-5).
+    func invalidateTrashIcon() { cachedTrashIcon = nil }
 
     // MARK: Pure merge (unit-tested)
 
@@ -200,8 +197,7 @@ final class DockModel: ObservableObject {
 
     private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
         if tile.kind == .trash {
-            // Handled in `rebuild`, which computes the empty/full state once and then
-            // selects the native empty/full Trash image.
+            // Handled by `trashTileIcon()`, which rebuild calls directly.
             return nil
         }
         let cacheKey = tile.iconCacheKey
@@ -235,29 +231,25 @@ final class DockModel: ObservableObject {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     }
 
-    /// The system Trash icon reflecting empty vs. full (IDEA-5). A live `DockController`
-    /// trash watcher triggers a rebuild so this re-evaluates when the Trash changes.
-    static func trashIcon() -> NSImage? {
-        trashIcon(state: trashState())
+    // MARK: Trash icon (workspace-maintained — IDEA-5)
+
+    /// The Trash tile's icon, taken from the workspace's icon for the user's Trash
+    /// folder. Finder/IconServices keeps that icon in the correct empty/full state —
+    /// no filesystem enumeration and no Full Disk Access required. (Two failure
+    /// modes killed the old approaches: enumerating `~/.Trash` is TCC-gated, so the
+    /// `readdir` probe reported `.unknown` — which renders EMPTY — for anyone without
+    /// FDA; and the legacy named images don't resolve on macOS 26, as worked around
+    /// in d5d671e.) The probe below stays as pure, unit-tested vocabulary for tests
+    /// and future dynamic values; it no longer gates the icon.
+    private func trashTileIcon() -> NSImage {
+        if let cachedTrashIcon { return cachedTrashIcon }
+        let icon = NSWorkspace.shared.icon(forFile: TrashLocations.userTrashURL().path)
+        cachedTrashIcon = icon
+        return icon
     }
 
-    static func trashIcon(isEmpty: Bool) -> NSImage? {
-        trashIcon(state: isEmpty ? .empty : .full)
-    }
-
-    private static func trashIcon(state: TrashState) -> NSImage? {
-        // The legacy named Trash images (`NSImage.trashFullName`/`trashEmptyName`) do
-        // not resolve on macOS 26 — `NSImage(named:)` returns nil. Without a fallback the
-        // tile then falls through to `DockTileView`'s single generic "trash" glyph for
-        // *both* states, so a full can always looked empty. Back the named lookup with an
-        // SF Symbol that still distinguishes full from empty. `.unknown` renders empty
-        // (see `trashImageName`): a can we could not inspect must not look full.
-        if let named = NSImage(named: trashImageName(for: state)) { return named }
-        let showsFull = (state == .full)
-        return NSImage(systemSymbolName: showsFull ? "trash.fill" : "trash",
-                       accessibilityDescription: showsFull ? "Full Trash" : "Empty Trash")
-    }
-
+    /// Image-name mapping for the probe's states. Kept for tests and any future UI
+    /// that renders the probe result; the dock tile itself uses `trashTileIcon()`.
     static func trashImageName(for state: TrashState) -> NSImage.Name {
         // Full must mean that a real entry was positively observed. Mounted and cloud
         // volumes can expose protected `.Trashes` paths that Jetty cannot inspect even

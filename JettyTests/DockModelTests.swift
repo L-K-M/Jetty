@@ -191,11 +191,20 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
     }
 
-    func testTrashIconResolvesForBothStates() {
-        // The legacy named Trash images return nil on macOS 26; the icon must still
-        // resolve (via the SF Symbol fallback) so a full can never falls through to the
-        // empty-looking generic glyph.
-        XCTAssertNotNil(DockModel.trashIcon(isEmpty: false))
-        XCTAssertNotNil(DockModel.trashIcon(isEmpty: true))
+    func testTrashTileUsesWorkspaceIconWithoutProbingTheFilesystem() {
+        // The tile's icon comes from the workspace (Finder maintains its empty/full
+        // appearance) — never nil, never dependent on the legacy named images that
+        // don't resolve on macOS 26, and independent of the TCC-gated contents probe
+        // that reports .unknown without Full Disk Access.
+        let model = DockModel()
+        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
+                      running: [], showRunningApps: false)
+        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
+
+        // Invalidation must be safe and the icon must survive a rebuild.
+        model.invalidateTrashIcon()
+        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
+                      running: [], showRunningApps: false)
+        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
     }
 }

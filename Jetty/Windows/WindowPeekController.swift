@@ -22,6 +22,11 @@ final class WindowPeekController {
 
     var isOpen: Bool { panel != nil }
 
+    /// Called when the popover opens or closes, so the dock can hold its reveal while
+    /// the user is interacting with the popover (a close can come from an outside
+    /// click, bypassing the dock's hover tracking).
+    var onOpenChange: ((Bool) -> Void)?
+
     /// Shows (or re-targets) the popover for `pid`. Does nothing if the app has no
     /// listable on-screen windows.
     func show(pid: pid_t, appName: String, near point: CGPoint, dock: CGRect,
@@ -41,6 +46,7 @@ final class WindowPeekController {
         panel.setFrameOrigin(origin(size: size, near: point, dock: dock, edge: edge, in: screen.visibleFrame))
         panel.orderFrontRegardless()
         installMonitors()
+        onOpenChange?(true)
     }
 
     /// Hides after a short grace period unless the pointer moved into the popover.
@@ -64,6 +70,7 @@ final class WindowPeekController {
         panel = nil
         currentPID = nil
         hoveringPanel = false
+        onOpenChange?(false)
     }
 
     // MARK: Build

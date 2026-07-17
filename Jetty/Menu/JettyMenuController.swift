@@ -155,11 +155,26 @@ final class JettyMenuController {
             alert.addButton(withTitle: command.title)
             alert.addButton(withTitle: "Cancel")
             NSApp.activate(ignoringOtherApps: true)
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            // The menu panel sits at .popUpMenu — far above a modal alert's level —
+            // so the confirmation could render *behind* the menu: an invisible modal
+            // whose default button is the destructive command. Take the menu off
+            // screen for the session and give it back on cancel.
+            presentingModalAlert = true
+            panel?.orderOut(nil)
+            let confirmed = alert.runModal() == .alertFirstButtonReturn
+            presentingModalAlert = false
+            guard confirmed else {
+                if isOpen { panel?.makeKeyAndOrderFront(nil) }
+                return
+            }
         }
         close()
         PowerCommandRunner.run(command)
     }
+
+    /// Set while a destructive-command confirmation alert is up: ordering the menu
+    /// out for the alert resigns key, and that must not count as a dismissal.
+    private var presentingModalAlert = false
 
     /// Opens a default-browser web search for `query`, then closes the menu (ND-9).
     private func webSearch(_ query: String) {
@@ -188,13 +203,14 @@ final class JettyMenuController {
     /// Dismisses the menu when it stops being the key window — i.e. the user
     /// clicked another app, ⌘-Tabbed away, or otherwise moved focus — matching how
     /// Spotlight/Alfred/Raycast behave. Guards against the confirmation alert for a
-    /// destructive power command (which is itself modal) self-dismissing the menu.
+    /// destructive power command (which is itself modal, and which we order the
+    /// panel out for) self-dismissing the menu.
     private func installResignObserver(for panel: NSPanel) {
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
         ) { [weak self] _ in
-            guard NSApp.modalWindow == nil else { return }
-            self?.close()
+            guard let self, !self.presentingModalAlert, NSApp.modalWindow == nil else { return }
+            self.close()
         }
     }
 

@@ -242,7 +242,9 @@ final class UpdateChecker: ObservableObject {
 
     /// Brings the alert forward before running it modally — a menu-bar agent isn't the
     /// active app, so without this the alert can appear behind other windows with no
-    /// Dock icon to click.
+    /// Dock icon to click. The level must clear the Jetty Menu's `.popUpMenu` panel:
+    /// at `.floating` an update alert completing while the menu is open rendered
+    /// *behind* it — an invisible modal that froze the menu out of input.
     @MainActor
     private func runModal(_ alert: NSAlert) -> NSApplication.ModalResponse {
         if #available(macOS 14.0, *) {
@@ -250,7 +252,7 @@ final class UpdateChecker: ObservableObject {
         } else {
             NSApp.activate(ignoringOtherApps: true)
         }
-        alert.window.level = .floating
+        alert.window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
         return alert.runModal()
     }
 

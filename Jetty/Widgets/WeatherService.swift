@@ -47,6 +47,14 @@ final class WeatherService: ObservableObject {
         "\(latitude),\(longitude),\(celsius)"
     }
 
+    /// Plausibility gate for user-entered coordinates: (0,0) is Jetty's "unset"
+    /// sentinel, and out-of-range values would just earn an HTTP 400 that is
+    /// indistinguishable from a network failure in the tile. Pure, unit-tested.
+    static func validCoordinates(latitude: Double, longitude: Double) -> Bool {
+        (latitude != 0 || longitude != 0)
+            && (-90...90).contains(latitude) && (-180...180).contains(longitude)
+    }
+
     /// Pure staleness gate for `refreshIfStale` (unit-tested): a successful fetch for
     /// the same key is fresh for `successRefreshInterval`; a failed fetch for the same
     /// key backs retries off by `failureRetryInterval`; anything else (no history, or
@@ -74,7 +82,7 @@ final class WeatherService: ObservableObject {
     /// Refreshes if a location is set and the cache is stale or its key changed.
     /// After a failure, retries are throttled to one per `failureRetryInterval`.
     func refreshIfStale(latitude: Double, longitude: Double, celsius: Bool) {
-        guard latitude != 0 || longitude != 0 else { return }
+        guard Self.validCoordinates(latitude: latitude, longitude: longitude) else { return }
         let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
         requestedKey = key
         // Deliberately do NOT clear `snapshot` here. The view only shows a snapshot whose
@@ -94,12 +102,23 @@ final class WeatherService: ObservableObject {
     /// Forces a refetch regardless of freshness or failure backoff (still coalescing
     /// with an identical in-flight request) — the offline tile's tap-to-retry (FAB-B19).
     func refresh(latitude: Double, longitude: Double, celsius: Bool) {
-        guard latitude != 0 || longitude != 0 else { return }
+        guard Self.validCoordinates(latitude: latitude, longitude: longitude) else { return }
         let key = Self.key(latitude: latitude, longitude: longitude, celsius: celsius)
         requestedKey = key
         guard inFlightKey != key else { return }
         fetch(latitude: latitude, longitude: longitude, celsius: celsius, key: key)
     }
+
+    /// A dedicated session with a real request timeout: the default 60 s could
+    /// strand the tile in its spinner for a full minute on a hung connection —
+    /// both refresh gates no-op while a request is in flight, so the offline
+    /// glyph and retry backoff couldn't even begin (H15 follow-up).
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
 
     private func fetch(latitude: Double, longitude: Double, celsius: Bool, key: String) {
         let unit = celsius ? "celsius" : "fahrenheit"
@@ -107,7 +126,7 @@ final class WeatherService: ObservableObject {
             + "&current=temperature_2m,weather_code&temperature_unit=\(unit)"
         guard let url = URL(string: string) else { return }
         inFlightKey = key
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+        Self.session.dataTask(with: url) { [weak self] data, response, error in
             // Honor transport errors and non-2xx responses instead of silently swallowing
             // them — otherwise a down network / API error left the tile spinning forever (H15).
             let httpOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? true
@@ -141,7 +160,9 @@ final class WeatherService: ObservableObject {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let current = json["current"] as? [String: Any],
               let temp = (current["temperature_2m"] as? NSNumber)?.doubleValue else { return nil }
-        let code = (current["weather_code"] as? NSNumber)?.intValue ?? 0
+        // A partially-decodable payload (temperature but no code) must not render as
+        // code 0 — "clear sky". -1 falls through `symbol(forCode:)` to a neutral glyph.
+        let code = (current["weather_code"] as? NSNumber)?.intValue ?? -1
         return WeatherSnapshot(temperature: temp, code: code, celsius: celsius, key: key)
     }
 

@@ -61,6 +61,33 @@ final class InfoWidgetTests: XCTestCase {
         XCTAssertNil(WeatherService.parse(Data("{}".utf8), celsius: true))
     }
 
+    func testWeatherParseMissingCodeIsNeutralNotSunny() {
+        // A partial payload (temperature, no code) must not render as code 0
+        // ("clear sky"); -1 falls through to the neutral cloud glyph.
+        let json = """
+        { "current": { "temperature_2m": 18.0 } }
+        """.data(using: .utf8)
+        let snap = WeatherService.parse(json, celsius: true)
+        XCTAssertEqual(snap?.code, -1)
+        XCTAssertEqual(WeatherService.symbol(forCode: -1), "cloud.fill")
+    }
+
+    func testWeatherCoordinateValidation() {
+        XCTAssertFalse(WeatherService.validCoordinates(latitude: 0, longitude: 0))       // unset sentinel
+        XCTAssertFalse(WeatherService.validCoordinates(latitude: 91, longitude: 0))
+        XCTAssertFalse(WeatherService.validCoordinates(latitude: 0, longitude: -181))
+        XCTAssertTrue(WeatherService.validCoordinates(latitude: 47.37, longitude: 8.54))
+        XCTAssertTrue(WeatherService.validCoordinates(latitude: -90, longitude: 180))    // edges are legal
+    }
+
+    func testVirtualInterfacesAreNotCounted() {
+        XCTAssertTrue(SystemStats.isCountedInterface("en0"))
+        XCTAssertTrue(SystemStats.isCountedInterface("en7"))
+        for virtual in ["utun0", "utun4", "ipsec0", "ppp0", "awdl0", "llw0", "anpi0", "bridge0", "gif0", "stf0"] {
+            XCTAssertFalse(SystemStats.isCountedInterface(virtual), virtual)
+        }
+    }
+
     // MARK: Now playing
 
     func testNowPlayingParsePlaying() {

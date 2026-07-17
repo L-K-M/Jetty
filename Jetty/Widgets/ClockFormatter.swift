@@ -74,6 +74,25 @@ enum ClockFormatter {
         return f
     }
 
+    // MARK: World-clock day offset
+
+    /// The whole-day difference between a remote zone's calendar day and the local
+    /// one at `date`: `+1` when it's already tomorrow there, `-1` when still
+    /// yesterday, `nil` when it's the same day. A bare "9:24 Tokyo" actively
+    /// misleads when Tokyo is a day ahead. Time zones are injectable so tests are
+    /// machine-locale independent. Pure, unit-tested.
+    static func dayOffset(for date: Date, remoteTimeZone: TimeZone,
+                          localTimeZone: TimeZone = .current) -> Int? {
+        func ordinal(in zone: TimeZone) -> Int? {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = zone
+            return calendar.ordinality(of: .day, in: .era, for: date)
+        }
+        guard let local = ordinal(in: localTimeZone), let remote = ordinal(in: remoteTimeZone),
+              remote != local else { return nil }
+        return remote - local
+    }
+
     // MARK: Minute-cadence alignment (M29)
 
     /// The start of the minute containing `date`. Used as the phase for a minute-

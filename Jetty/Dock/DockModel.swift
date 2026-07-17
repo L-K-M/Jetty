@@ -56,9 +56,6 @@ final class DockModel: ObservableObject {
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
-    /// Cached Trash icon. The workspace already reflects empty vs. full, so this only
-    /// needs re-reading when the Trash actually changes (`invalidateTrashIcon`).
-    private var cachedTrashIcon: NSImage?
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
@@ -93,6 +90,17 @@ final class DockModel: ObservableObject {
         pid.map(unresponsivePIDs.contains) ?? false
     }
 
+    /// The currently resolved Trash fullness, pushed by the controller's
+    /// `TrashStateResolver` pipeline (probe → Finder Automation → honest default;
+    /// see TRASH.md). `.unknown` renders the empty can by policy. Never probed
+    /// synchronously in `rebuild` — that was the old main-thread beach-ball and the
+    /// reason the can was stuck (TCC denies enumeration without Full Disk Access).
+    private(set) var trashState: TrashState = .unknown
+
+    /// Updates the resolved Trash state; the controller calls `rebuild` afterwards
+    /// when it changed.
+    func setTrashState(_ state: TrashState) { trashState = state }
+
     /// Rebuilds `slots`/`tiles` from the current pinned items + running apps and
     /// resolves icons (cached, bounded — BUG-8).
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
@@ -102,17 +110,20 @@ final class DockModel: ObservableObject {
             DockSlot(id: slot.id, itemID: slot.itemID,
                       tiles: slot.tiles.map { tile in
                           var t = tile
-                          t.icon = t.kind == .trash ? trashTileIcon() : icon(for: tile, now: now)
+                          if t.kind == .trash {
+                              // Policy: `.unknown` renders empty — the Trash is empty
+                              // most of the time, and a false full cried wolf
+                              // constantly in the old code (41d4b62).
+                              t.icon = TrashIconProvider.icon(isFull: trashState == .full)
+                          } else {
+                              t.icon = icon(for: tile, now: now)
+                          }
                           return t
                       },
                      isRunningGroup: slot.isRunningGroup)
         }
         tiles = slots.flatMap { $0.tiles }
     }
-
-    /// The controller's "Trash changed" hook: drop the cached workspace icon so the
-    /// next rebuild re-reads the system-maintained empty/full appearance (IDEA-5).
-    func invalidateTrashIcon() { cachedTrashIcon = nil }
 
     // MARK: Pure merge (unit-tested)
 
@@ -197,7 +208,8 @@ final class DockModel: ObservableObject {
 
     private func icon(for tile: DockTile, now: TimeInterval) -> NSImage? {
         if tile.kind == .trash {
-            // Handled by `trashTileIcon()`, which rebuild calls directly.
+            // Handled by `rebuild` directly, from the resolved `trashState` via
+            // `TrashIconProvider` (never probed synchronously here — see TRASH.md).
             return nil
         }
         let cacheKey = tile.iconCacheKey
@@ -231,48 +243,29 @@ final class DockModel: ObservableObject {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     }
 
-    // MARK: Trash icon (workspace-maintained — IDEA-5)
+    // MARK: Trash fullness probe (tier 1 — see TRASH.md)
 
-    /// The Trash tile's icon, taken from the workspace's icon for the user's Trash
-    /// folder. Finder/IconServices keeps that icon in the correct empty/full state —
-    /// no filesystem enumeration and no Full Disk Access required. (Two failure
-    /// modes killed the old approaches: enumerating `~/.Trash` is TCC-gated, so the
-    /// `readdir` probe reported `.unknown` — which renders EMPTY — for anyone without
-    /// FDA; and the legacy named images don't resolve on macOS 26, as worked around
-    /// in d5d671e.) The probe below stays as pure, unit-tested vocabulary for tests
-    /// and future dynamic values; it no longer gates the icon.
-    private func trashTileIcon() -> NSImage {
-        if let cachedTrashIcon { return cachedTrashIcon }
-        let icon = NSWorkspace.shared.icon(forFile: TrashLocations.userTrashURL().path)
-        cachedTrashIcon = icon
-        return icon
-    }
-
-    /// Image-name mapping for the probe's states. Kept for tests and any future UI
-    /// that renders the probe result; the dock tile itself uses `trashTileIcon()`.
-    static func trashImageName(for state: TrashState) -> NSImage.Name {
-        // Full must mean that a real entry was positively observed. Mounted and cloud
-        // volumes can expose protected `.Trashes` paths that Jetty cannot inspect even
-        // while Finder reports an empty Trash; one unrelated permission failure must
-        // not make the can permanently full.
-        switch state {
-        case .full: return NSImage.trashFullName
-        case .empty, .unknown: return NSImage.trashEmptyName
+    /// Tier-1 fullness probe: reads ONLY the user's home Trash. One `readdir` —
+    /// cheap, and prompt-free: `~/.Trash` is in the Full-Disk-Access class, which
+    /// fails with EPERM rather than showing a consent prompt. Per-volume and
+    /// network `.Trashes` are deliberately NOT probed: those are in the
+    /// Files & Folders class, where a first attempt can trigger a spontaneous
+    /// consent prompt (and a hung share could block the caller). Call off the main
+    /// thread. `.unknown` here means "couldn't tell" — almost always TCC — and the
+    /// resolver escalates to Finder Automation instead of giving up.
+    static func probeTrashFullness() -> TrashState {
+        switch trashDirectoryState(TrashLocations.userTrashURL()) {
+        case .full: return .full
+        case .empty, .missing: return .empty
+        case .unreadable: return .unknown
         }
     }
 
     /// Whether the user's Trash is empty. Missing candidate folders are empty; any
-    /// readable candidate containing a real entry makes the Trash full.
-    static func isTrashEmpty() -> Bool {
-        trashState() != .full
-    }
-
+    /// readable candidate containing a real entry makes the Trash full. Kept for the
+    /// probe's unit tests; the dock tile uses `probeTrashFullness` (home Trash only).
     static func isTrashEmpty(at trashURLs: [URL]) -> Bool {
         trashState(at: trashURLs) != .full
-    }
-
-    private static func trashState() -> TrashState {
-        trashState(at: TrashLocations.candidateTrashURLs())
     }
 
     private static func trashState(at trashURLs: [URL]) -> TrashState {

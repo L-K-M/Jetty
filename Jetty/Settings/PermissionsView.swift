@@ -10,6 +10,7 @@ struct PermissionsView: View {
     @ObservedObject var preferences: Preferences
     @State private var accessibilityTrusted = AccessibilityAuthorizer.isTrusted
     @State private var screenRecordingGranted = CGPreflightScreenCaptureAccess()
+    @State private var finderAutomationGranted = FinderAutomation.permissionStatus() == .granted
 
     var body: some View {
         Form {
@@ -17,6 +18,18 @@ struct PermissionsView: View {
                 Label("The dock, launching, indicators, positioning, the clock, and the Jetty Menu need no permissions.",
                       systemImage: "checkmark.seal")
                     .foregroundStyle(.green)
+            }
+
+            Section("Finder Automation — for the live Trash can") {
+                statusRow(granted: finderAutomationGranted)
+                Text("Finder owns the Trash's contents, and macOS doesn't let apps enumerate it without Full Disk Access. With this consent Jetty can ask Finder how many items are in the Trash and keep the dock's can truthful. Without it, the can always shows empty.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Request…") {
+                        FinderAutomation.requestAccess { _ in refresh() }
+                    }
+                    Button("Open Settings") { FinderAutomation.openAutomationSettings() }
+                }
             }
 
             Section("Window previews") {
@@ -75,6 +88,7 @@ struct PermissionsView: View {
     private func refresh() {
         accessibilityTrusted = AccessibilityAuthorizer.isTrusted
         screenRecordingGranted = CGPreflightScreenCaptureAccess()
+        finderAutomationGranted = FinderAutomation.permissionStatus() == .granted
     }
 
     private func openScreenRecordingSettings() {

@@ -185,26 +185,31 @@ final class DockModelTests: XCTestCase {
         XCTAssertFalse(DockModel.isTrashEmpty(at: [folder]))
     }
 
-    func testUnknownTrashStateDoesNotClaimTrashIsFull() {
-        XCTAssertEqual(DockModel.trashImageName(for: .empty), NSImage.trashEmptyName)
-        XCTAssertEqual(DockModel.trashImageName(for: .unknown), NSImage.trashEmptyName)
-        XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
+    func testTrashTileAlwaysHasAnIcon() {
+        // Whatever the resolved state, the tile must render a real trash can
+        // (CoreTypes artwork, or the SF Symbol fallback) — never nil, never a
+        // generic folder (TRASH.md).
+        let model = DockModel()
+        for state in [DockModel.TrashState.empty, .full, .unknown] {
+            model.setTrashState(state)
+            model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
+                          running: [], showRunningApps: false)
+            let tile = model.tiles.first { $0.kind == .trash }
+            XCTAssertNotNil(tile?.icon, "state \(state)")
+        }
     }
 
-    func testTrashTileUsesWorkspaceIconWithoutProbingTheFilesystem() {
-        // The tile's icon comes from the workspace (Finder maintains its empty/full
-        // appearance) — never nil, never dependent on the legacy named images that
-        // don't resolve on macOS 26, and independent of the TCC-gated contents probe
-        // that reports .unknown without Full Disk Access.
-        let model = DockModel()
-        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
-                      running: [], showRunningApps: false)
-        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
-
-        // Invalidation must be safe and the icon must survive a rebuild.
-        model.invalidateTrashIcon()
-        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
-                      running: [], showRunningApps: false)
-        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
+    func testTrashResolverPlan() {
+        // A definitive probe always wins (Full Disk Access present).
+        XCTAssertEqual(TrashStateResolver.plan(probe: .full, finderAutomationGranted: false),
+                       .useProbe(.full))
+        XCTAssertEqual(TrashStateResolver.plan(probe: .empty, finderAutomationGranted: true),
+                       .useProbe(.empty))
+        // A denied probe escalates to Finder only when Automation is consented —
+        // never a passive consent prompt.
+        XCTAssertEqual(TrashStateResolver.plan(probe: .unknown, finderAutomationGranted: true),
+                       .askFinder)
+        XCTAssertEqual(TrashStateResolver.plan(probe: .unknown, finderAutomationGranted: false),
+                       .indeterminate)
     }
 }

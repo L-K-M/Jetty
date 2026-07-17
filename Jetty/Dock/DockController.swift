@@ -73,6 +73,7 @@ final class DockController {
         rebuildModel()
         reconcilePanels()
         prefSig = preferenceSignatures()
+        refreshTrashState()   // initial resolution; the watcher keeps it live
 
         hoverMonitor.onMove = { [weak self] point in
             self?.panels.values.forEach { $0.handleMouseMoved(to: point) }
@@ -226,12 +227,63 @@ final class DockController {
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.hasTrashItem else { return }
                 self.trashWork = nil
-                self.model.invalidateTrashIcon()
-                self.rebuildModel()
+                self.refreshTrashState()
             }
             self.trashWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
+    }
+
+    // MARK: Trash fullness resolution (see TRASH.md)
+
+    /// The state the model currently renders — kept here so we only rebuild when the
+    /// *resolved* state actually flips, not on every resolution pass.
+    private var resolvedTrashState: DockModel.TrashState = .unknown
+    private var trashResolveInFlight = false
+    /// Last resolution start — reveal-triggered resolutions are throttled so a
+    /// fidgety pointer can't spam Finder with AppleEvents.
+    private var lastTrashResolve: Date = .distantPast
+
+    /// Resolves the Trash's fullness through the tiered pipeline (probe → Finder
+    /// Automation → honest default), off the main thread, and republishes the model
+    /// only when the state actually changes. Cheap to call liberally: coalesced by
+    /// an in-flight flag and (for reveal-driven calls) a short throttle.
+    func refreshTrashState(throttle: Bool = false) {
+        guard started, hasTrashItem, !trashResolveInFlight else { return }
+        if throttle, Date().timeIntervalSince(lastTrashResolve) < 5 { return }
+        trashResolveInFlight = true
+        lastTrashResolve = Date()
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let probe = DockModel.probeTrashFullness()
+            let automation = FinderAutomation.permissionStatus()
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.started else { return }
+                self.trashResolveInFlight = false
+                switch TrashStateResolver.plan(probe: probe,
+                                               finderAutomationGranted: automation == .granted) {
+                case .useProbe(let state):
+                    self.applyResolvedTrashState(state)
+                case .askFinder:
+                    self.queryFinderTrashCount()
+                case .indeterminate:
+                    self.applyResolvedTrashState(.unknown)
+                }
+            }
+        }
+    }
+
+    private func queryFinderTrashCount() {
+        FinderAutomation.trashItemCount { [weak self] count in
+            guard let self, self.started else { return }
+            self.applyResolvedTrashState(count.map { $0 > 0 ? .full : .empty } ?? .unknown)
+        }
+    }
+
+    private func applyResolvedTrashState(_ state: DockModel.TrashState) {
+        guard state != resolvedTrashState, started, hasTrashItem else { return }
+        resolvedTrashState = state
+        model.setTrashState(state)
+        rebuildModel()
     }
 
     private func configureResponsivenessMonitoring() {
@@ -259,8 +311,7 @@ final class DockController {
     private func refreshTrashMonitoring() {
         guard started, hasTrashItem else { return }
         trashMonitor.refresh()
-        model.invalidateTrashIcon()
-        rebuildModel()
+        refreshTrashState()
     }
 
     /// Runs the shared system sampler only while a panel actually shows a CPU/battery
@@ -317,6 +368,9 @@ final class DockController {
                 let panel = DockPanelController(displayUUID: uuid, screen: screen, anchor: anchor,
                                                 model: model, preferences: preferences)
                 panel.onDropToPin = { [weak self] urls in self?.pinDroppedURLs(urls) }
+                // The Trash can must never be staler than the user's last look at
+                // the dock (throttled inside) — TRASH.md.
+                panel.onReveal = { [weak self] in self?.refreshTrashState(throttle: true) }
                 panels[uuid] = panel
                 panel.showInitial()
                 // The pointer may already be resting in the new panel's reveal zone
@@ -633,8 +687,9 @@ final class DockController {
             }
         case .trash:
             if AppLauncher.moveToTrash(urls) > 0 {
-                model.invalidateTrashIcon()
-                rebuildModel()
+                // Our own action changed the Trash — resolve immediately rather
+                // than waiting on the vnode watch.
+                refreshTrashState()
             }
         default:
             // Dropped on a non-app tile → pin the files to the dock, skipping any

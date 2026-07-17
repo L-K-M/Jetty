@@ -82,7 +82,7 @@ final class PreferencesTests: XCTestCase {
     }
 
     func testLegacyPresetLeavesWidgetAppearanceUnchanged() throws {
-        let legacy = Data(#"{ "material": "solid", "tintHex": "#112233" }"#.utf8)
+        let legacy = Data(##"{ "material": "solid", "tintHex": "#112233" }"##.utf8)
         let preset = try XCTUnwrap(AppearancePreset.decode(from: legacy))
         let prefs = Preferences(defaults: freshDefaults())
         prefs.clockFace = .memphis

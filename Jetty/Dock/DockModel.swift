@@ -56,8 +56,10 @@ final class DockModel: ObservableObject {
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
-    /// Cached Trash icon. The workspace already reflects empty vs. full, so this only
-    /// needs re-reading when the Trash actually changes (`invalidateTrashIcon`).
+    /// Cached Trash icon, rendered for the last observed empty/full state. Cleared by
+    /// `invalidateTrashIcon()` when the Trash actually changes, so the state probe re-runs
+    /// and the can flips; a plain rebuild (app launch/quit/activation) is a cache hit and
+    /// never touches the filesystem.
     private var cachedTrashIcon: NSImage?
 
     // Interaction callbacks, wired by the DockController.
@@ -231,21 +233,130 @@ final class DockModel: ObservableObject {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     }
 
-    // MARK: Trash icon (workspace-maintained — IDEA-5)
+    // MARK: Trash icon (state-gated, filesystem- and FDA-light — IDEA-5)
 
-    /// The Trash tile's icon, taken from the workspace's icon for the user's Trash
-    /// folder. Finder/IconServices keeps that icon in the correct empty/full state —
-    /// no filesystem enumeration and no Full Disk Access required. (Two failure
-    /// modes killed the old approaches: enumerating `~/.Trash` is TCC-gated, so the
-    /// `readdir` probe reported `.unknown` — which renders EMPTY — for anyone without
-    /// FDA; and the legacy named images don't resolve on macOS 26, as worked around
-    /// in d5d671e.) The probe below stays as pure, unit-tested vocabulary for tests
-    /// and future dynamic values; it no longer gates the icon.
+    /// The Trash tile's icon: a real empty/full trash can, chosen by the pure `readdir`
+    /// state probe. `NSWorkspace.icon(forFile:)` was tried (git history) but to
+    /// IconServices `~/.Trash` is an ordinary directory — the trash-can artwork is private
+    /// Finder/Dock chrome it never exposes — so on macOS 26 it returned a generic folder
+    /// and was state-blind besides. The rendered image is cached; the probe runs only on a
+    /// cache miss, i.e. after `invalidateTrashIcon()` (which `TrashMonitor` fires on a real
+    /// Trash change), so the per-rebuild filesystem scan #46 removed stays gone. `.unknown`
+    /// (e.g. a protected volume `.Trashes`) renders EMPTY — never a false "full".
     private func trashTileIcon() -> NSImage {
         if let cachedTrashIcon { return cachedTrashIcon }
-        let icon = NSWorkspace.shared.icon(forFile: TrashLocations.userTrashURL().path)
+        let icon = Self.trashCanIcon(full: Self.trashState() == .full)
         cachedTrashIcon = icon
         return icon
+    }
+
+    /// A real empty/full macOS trash-can image, resolved through a fallback chain so the
+    /// tile always shows a recognisable can. Pure; reads only system icon resources (no
+    /// Full Disk Access). Rungs, best-first:
+    ///  1. `CoreTypes.bundle` `.icns` by absolute path — the photorealistic system can.
+    ///  2. Legacy AppKit named images (opportunistic; often absent on recent macOS).
+    ///  3. An SF Symbol baked into a NON-template, tinted bitmap — `DockTileView` draws
+    ///     `tile.icon` untinted, so a raw template symbol would render as a black
+    ///     silhouette; baking gives it a visible colour.
+    ///  4. A never-nil blank as a last resort, so the tile is never empty.
+    static func trashCanIcon(full: Bool) -> NSImage {
+        let side: CGFloat = 128
+
+        // Rung 1 — CoreTypes `.icns` by path (photorealistic, no FDA). Both states must
+        // resolve from this rung together, so the tile can never pair a photorealistic
+        // empty can with a symbol full can (or vice versa) when only one file is present.
+        let base = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/"
+        if let fullIcon = loadedIcon(contentsOfFile: base + "FullTrashIcon.icns"),
+           let emptyIcon = loadedIcon(contentsOfFile: base + "TrashIcon.icns") {
+            return full ? fullIcon : emptyIcon
+        }
+
+        // Rung 2 — legacy AppKit named images (both required, same consistency reason).
+        if let fullIcon = loadedIcon(named: NSImage.trashFullName),
+           let emptyIcon = loadedIcon(named: NSImage.trashEmptyName) {
+            return full ? fullIcon : emptyIcon
+        }
+
+        // Rung 3 — SF Symbol baked into a NON-template, tinted bitmap (always resolves).
+        let symbol = full ? "trash.fill" : "trash"
+        let cfg = NSImage.SymbolConfiguration(pointSize: side * 0.62, weight: .regular)
+        if let sym = NSImage(systemSymbolName: symbol, accessibilityDescription: "Trash")?
+            .withSymbolConfiguration(cfg) {
+            return bakeTemplate(sym, side: side, tint: .secondaryLabelColor)
+        }
+
+        // Rung 4 — never-nil last resort, so the tile is never empty.
+        return NSImage(size: NSSize(width: side, height: side))
+    }
+
+    /// A non-template, non-blank icon loaded from a `CoreTypes.bundle` `.icns` path, or nil.
+    private static func loadedIcon(contentsOfFile path: String) -> NSImage? {
+        guard let img = NSImage(contentsOfFile: path), img.isValid, !isBlank(img) else { return nil }
+        img.isTemplate = false
+        return img
+    }
+
+    /// A non-template, non-blank *copy* of a named AppKit image (copied so the shared named
+    /// instance isn't mutated), or nil.
+    private static func loadedIcon(named name: NSImage.Name) -> NSImage? {
+        guard let img = NSImage(named: name), img.isValid, !isBlank(img) else { return nil }
+        let copy = (img.copy() as? NSImage) ?? img
+        copy.isTemplate = false
+        return copy
+    }
+
+    /// Rasterise a template/symbol image into an opaque, tinted, non-template bitmap so the
+    /// dock (which draws `tile.icon` untinted) shows a coloured glyph, not a black one.
+    /// Uses an offscreen bitmap context (no window server needed, unlike `lockFocus`).
+    ///
+    /// The tint is snapshot at bake time, so on a Light/Dark switch this glyph keeps its old
+    /// colour until the next `invalidateTrashIcon()`. That's acceptable: this rung is only
+    /// reached when the photorealistic `.icns` (which is appearance-independent) is
+    /// unavailable — an unexpected last resort, not the normal path.
+    private static func bakeTemplate(_ image: NSImage, side: CGFloat, tint: NSColor) -> NSImage {
+        let pixels = Int(side)
+        let out = NSImage(size: NSSize(width: side, height: side))
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 4 * pixels, bitsPerPixel: 32),
+              let ctx = NSGraphicsContext(bitmapImageRep: rep) else {
+            out.isTemplate = false
+            return out
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = ctx
+        let rect = NSRect(x: 0, y: 0, width: side, height: side).insetBy(dx: side * 0.16, dy: side * 0.16)
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        tint.setFill()
+        rect.fill(using: .sourceAtop)   // tint the drawn silhouette
+        ctx.flushGraphics()
+        NSGraphicsContext.restoreGraphicsState()
+        out.addRepresentation(rep)
+        out.isTemplate = false
+        return out
+    }
+
+    /// True if `image` rasterises to (almost) fully transparent — guards against a source
+    /// that returns a non-nil but empty image, so the fallback chain keeps going.
+    private static func isBlank(_ image: NSImage) -> Bool {
+        let side = 32
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 4 * side, bitsPerPixel: 32) else { return true }
+        // ^ can't allocate the scratch rep to measure — fail safe toward "blank" so the
+        //   fallback chain keeps looking rather than committing to an unmeasurable image.
+        NSGraphicsContext.saveGraphicsState()
+        if let ctx = NSGraphicsContext(bitmapImageRep: rep) {
+            NSGraphicsContext.current = ctx
+            image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            ctx.flushGraphics()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = rep.bitmapData else { return true }   // can't read pixels — fail safe toward "blank"
+        for i in stride(from: 3, to: side * side * 4, by: 4) where data[i] > 8 { return false }
+        return true
     }
 
     /// Image-name mapping for the probe's states. Kept for tests and any future UI

@@ -191,20 +191,27 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
     }
 
-    func testTrashTileUsesWorkspaceIconWithoutProbingTheFilesystem() {
-        // The tile's icon comes from the workspace (Finder maintains its empty/full
-        // appearance) — never nil, never dependent on the legacy named images that
-        // don't resolve on macOS 26, and independent of the TCC-gated contents probe
-        // that reports .unknown without Full Disk Access.
+    func testTrashTileHasIconAndSurvivesInvalidation() {
+        // The trash tile's icon is state-gated (`DockModel.trashCanIcon`) — never nil, and
+        // it survives an invalidate + rebuild (the live empty↔full flip path).
         let model = DockModel()
         model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
                       running: [], showRunningApps: false)
         XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
 
-        // Invalidation must be safe and the icon must survive a rebuild.
         model.invalidateTrashIcon()
         model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
                       running: [], showRunningApps: false)
         XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
+    }
+
+    func testTrashCanIconResolvesAndFullDiffersFromEmpty() {
+        // The pure icon seam always yields a real, non-nil image for both states, and the
+        // full can is visually distinct from the empty one (so the tile can actually flip).
+        let full = DockModel.trashCanIcon(full: true)
+        let empty = DockModel.trashCanIcon(full: false)
+        XCTAssertNotNil(full.tiffRepresentation)
+        XCTAssertNotNil(empty.tiffRepresentation)
+        XCTAssertNotEqual(full.tiffRepresentation, empty.tiffRepresentation)
     }
 }

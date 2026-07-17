@@ -370,6 +370,12 @@ final class DockPanelController {
                 zoom: CGFloat(preferences.clockFaceZoom),
                 magnification: magFactor))
         }
+        // Hover labels float ~0.75 × icon toward screen center (DockTileView); budget
+        // room for them or the clipped container shaves — and with magnification off,
+        // entirely hides — the label (BUG: clipped labels).
+        if preferences.showLabels {
+            across = max(across, DockLayout.labelHeadroom(iconSize: icon))
+        }
         guard along > 0 || across > 0 else { return base }
         return anchor.edge.isHorizontal
             ? CGSize(width: base.width + along, height: base.height + across)

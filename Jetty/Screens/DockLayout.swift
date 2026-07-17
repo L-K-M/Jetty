@@ -114,6 +114,15 @@ enum DockLayout {
         max(0, iconSize * (zoom + 0.04) * max(magnification, 1) - (iconSize + padding))
     }
 
+    /// Across-axis window headroom so a hover label floating toward screen center
+    /// stays inside the panel: `DockTileView` offsets the capsule `0.75 × iconSize`
+    /// out from the tile — keep in sync — and the capsule itself needs ~16pt.
+    /// Without this the clipped container shaves the label at high magnification
+    /// and hides it entirely when magnification is off. Pure, unit-tested.
+    static func labelHeadroom(iconSize: CGFloat) -> CGFloat {
+        iconSize * 0.75 + 16
+    }
+
     // MARK: Revealed frame
 
     /// The frame of the fully-revealed dock for `anchor`, sized `contentSize`, within

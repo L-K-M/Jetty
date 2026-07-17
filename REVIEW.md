@@ -1,11 +1,12 @@
 # Jetty Review
 
-Updated 2026-07-11 against `main @ ea14a4b`.
+Updated 2026-07-17 against `main @ c0ccfa7`, folding in the k3 review session
+(`k3.md` — findings B1–B30, P1–P10, V1–V8, U1–U12 and PRs #46–#54).
 
 This is the active code-review backlog for Jetty. It consolidates the unresolved work
-from the former `ANALYSIS.md`, `fable-is-awesome.md`, `sol.md`, and earlier versions of
-this document. Completed findings and review-session history have been removed; Git
-history and merged pull requests preserve that detail.
+from the former `ANALYSIS.md`, `fable-is-awesome.md`, `sol.md`, `k3.md`, and earlier
+versions of this document. Completed findings and review-session history have been
+removed; Git history and merged pull requests preserve that detail.
 
 The current review was static because the review host has no Xcode or macOS GUI session.
 PRs #32-33 and #35-45 were re-reviewed against `main` on 2026-07-11 and merged; #32 was
@@ -41,6 +42,15 @@ column is work the PR deliberately does not cover.
 | PR | Implemented scope | Residual work |
 |---|---|---|
 | [#34](https://github.com/L-K-M/Jetty/pull/34) | Exact display reverse mapping, collision-resolved entries, in-session key reservation, live Settings updates | Blocked on rework: monotonic key reservation drifts a reconnected display's base UUID to `#2`, `#3`, … (new `CGDirectDisplayID` + new `NSScreen` miss both reverse maps while the UUID stays reserved), orphaning persisted per-display settings. The reverse-mapping and DisplaysView halves are sound and worth resubmitting; see the PR review comment. |
+| [#46](https://github.com/L-K-M/Jetty/pull/46) | Trash tile icon from the workspace's system-maintained empty/full icon (no TCC-gated enumeration, no fragile named images); per-rebuild Trash filesystem scan removed; `invalidateTrashIcon` actually invalidates | Live-flip verification on device; background Empty Trash/move outcomes (H2) |
+| [#47](https://github.com/L-K-M/Jetty/pull/47) | Edge-aware hover labels (all four edges) + `DockLayout.labelHeadroom` so labels aren't clipped with magnification off | Device check on four edges; unified geometry (H3) |
+| [#48](https://github.com/L-K-M/Jetty/pull/48) | Dock stays revealed while window-peek/folder-stack popovers are open (`onOpenChange` hold) | Hover corridor; panel-recreate hold seam; child-panel drag lifetimes (U2) |
+| [#49](https://github.com/L-K-M/Jetty/pull/49) | Magnification tracks across the whole panel (no headroom snap-off); overflow glow-dot lead fixed | Body-granularity perf (P1); overflow headroom trimming |
+| [#50](https://github.com/L-K-M/Jetty/pull/50) | Menu: no per-keystroke ICU re-sort or UserDefaults recents reads; cached currency formatter; minimal scroll; toggle re-centers on active display; focus re-assert per show; significant-digit formatting for huge results | Async row icons, double app scan, hover-scroll selection (P4); web-search engine choice |
+| [#51](https://github.com/L-K-M/Jetty/pull/51) | Power-command confirmation can't render behind the menu; update alerts above `.popUpMenu`; AppleScript execution off the main thread | Result visibility, denied-Automation recovery, background-check focus coordination (H6) |
+| [#52](https://github.com/L-K-M/Jetty/pull/52) | Weather 10 s timeout + coordinate validation + neutral missing-code glyph; world-clock +1d/−1d badge and invalid-zone fallback; Pomodoro "Done" state; VPN/tunnel interface exclusion; timer tolerances | City input/geocoding, data-source age (U5); sampler cadence/context (H4) |
+| [#53](https://github.com/L-K-M/Jetty/pull/53) | Window Peek: 0.5 s AX messaging timeout, conditional AX title fetch, single window enumeration per open, detached refresh task | Minimized windows, capture cadence/size, permission-aware controls (H9) |
+| [#54](https://github.com/L-K-M/Jetty/pull/54) | Folder-stack Escape monitor removed; Settings deminiaturizes; Restore System Dock disabled when inapplicable; toggle-hide latch; under-pointer reveal seeding | Hotkey registration failure UI (U1) |
 
 ## Critical
 
@@ -107,20 +117,24 @@ does not depend on a valid captured preference snapshot.
 **Paths:** `Jetty/Apps/TrashLocations.swift`, `TrashMonitor.swift`, `AppLauncher.swift`,
 `Jetty/Dock/DockController.swift`, `DockModel.swift`
 
-The watcher now handles known lifecycle seams and the state probe is bounded, but volume
-discovery and probing still run synchronously during model rebuilds. File moves and Empty
-Trash also block the main thread and collapse results into a count or Console log.
+**Resolved by PR #46:** the tile icon no longer comes from the TCC-gated `readdir`
+probe (which reported `.unknown` → stuck-empty can for anyone without Full Disk
+Access); it uses `NSWorkspace.icon(forFile:)` on the user's Trash, whose empty/full
+state Finder/IconServices maintains permission-free, cached and invalidated by the
+watcher. The per-rebuild synchronous scan of every mounted volume (a hung network
+share could beach-ball every app activation) is gone.
 
-Required end state:
+Remaining:
 
-- Run discovery, state reads, and moves on one serialized utility worker.
-- Cache `empty/full/unknown` and publish only state changes on the main actor.
-- Never rescan Trash because an unrelated running-app model changed.
-- Return moved URLs and per-item errors.
-- Distinguish accepted, complete success, partial failure, and total failure. PR #32's
-  pulse is accepted-action feedback, not success feedback.
+- Run volume discovery/state reads (still in `TrashMonitor.arm` per parent event)
+  and file moves/Empty Trash on one serialized utility worker; moves currently loop
+  `FileManager.trashItem` synchronously on the main thread with log-only failures.
+- Return moved URLs and per-item errors; distinguish accepted, complete success,
+  partial failure, and total failure. PR #32's pulse is accepted-action feedback,
+  not success feedback.
 - Explain denied Finder Automation and restore prior focus on success, cancel, or error.
-- Publish state for the accessibility work tracked in H7.
+- Publish state for the accessibility work tracked in H7 (e.g. "N items" when the
+  probe is readable; the icon itself no longer carries state information).
 
 Add dependency-injected watcher, volume, probe, partial-move, permission, and
 event-to-scan-count tests. Device-test home and external Trash, vnode replacement, mount/unmount,
@@ -134,8 +148,11 @@ sleep/wake, metadata-only folders, unreadable paths, and large contents.
 The visual strip, panel frame, scaled tiles, glow, drag targets, hover labels, scroll
 offset, and child-panel anchors are derived independently. Consequences include
 transparent headroom intercepting input, a high-level edge sensor creating dead strips,
-overlapping magnified neighbors, clipped end tiles, wrong-edge labels, wide vertical
-widgets escaping glass, invisible drag-out, and misplaced overflow anchors.
+overlapping magnified neighbors, clipped end tiles, wide vertical
+widgets escaping glass, invisible drag-out, and misplaced overflow anchors. (Wrong-edge
+and clipped hover labels were fixed by PR #47, the magnification headroom snap-off and
+overflow glow-dot lead by PR #49; the overflow-state popover-anchor desync and the
+`inset > 0` strip-frame stretch found by k3 remain.)
 
 Build one immutable geometry snapshot containing visible glass, presentation tile
 frames, cumulative neighbor displacement, overflow offset, headroom, and hit regions.
@@ -177,9 +194,14 @@ PR #39 fixes that narrow failure mode, with two deliberate trade-offs to revisit
 failed rotation now aborts the primary write too (log-and-continue would keep new edits
 at the cost of a stale backup), and orphaned `.dock.json.bak.tmp-*` siblings are never
 swept if the process dies mid-rotation. Remaining work is to snapshot and write on one
-serial I/O queue, keep a synchronous termination flush, and expose whether primary,
+serial I/O queue (today `saveNow` does read-decode-copy-encode-write on the main queue,
+per slider tick), keep a synchronous termination flush, and expose whether primary,
 backup, or defaults loaded. Show persistent save errors, clearly disable future-version
-read-only mutations, and offer backup export and restore when recovery occurred.
+read-only mutations, and offer backup export and restore when recovery occurred. The
+"lossy" decode only protects element-level failures — a wrong-shaped *container*
+(`items` as a dictionary, `version` as a string) still throws the whole load away into
+a silent fresh-document fallback with no recovery notice (k3 B30): decode each field
+with `try?` + default.
 
 ### H6. Make external actions asynchronous, visible, truthful, and focus-safe
 
@@ -188,9 +210,12 @@ read-only mutations, and offer backup export and restore when recovery occurred.
 `Jetty/Updates/UpdateChecker.swift`, `Jetty/Settings/AboutView.swift`,
 `Jetty/Settings/MenuView.swift`, `Jetty/Settings/PermissionsView.swift`
 
-AppleEvents and destructive actions run synchronously, denied Automation is logged after
-the initiating UI disappears, and automatic update checks can activate a modal alert
-over another app. Extract and reuse Jetty Menu's existing prior-app capture and Finder
+AppleEvents and destructive actions were synchronous and denied Automation was logged
+after the initiating UI disappeared; PR #51 moved AppleScript execution off the main
+thread and made the destructive confirmation and update alerts render above the
+`.popUpMenu` menu panel. Still open: automatic update checks can activate a modal alert
+over another app, AppleEvent *results* are invisible, and denied Automation has no
+recovery path. Extract and reuse Jetty Menu's existing prior-app capture and Finder
 fallback for Dock alerts and updater UI. Execute AppleEvents on one serial worker
 returning `Result`, keep or reopen visible status, show proactive Automation status and
 recovery in Permissions, and restore focus for every outcome. Verify whether restart,
@@ -243,12 +268,15 @@ when hardware is genuinely indistinguishable.
 **Paths:** `Jetty/Windows/AppWindows.swift`, `WindowPeek.swift`,
 `WindowPeekController.swift`
 
-PR #36 removes duplicate initial listing and cancels obsolete capture generations.
-Remaining work:
+PR #36 removes duplicate initial listing and cancels obsolete capture generations;
+PR #53 bounds AX messaging (0.5 s), fetches AX titles only when needed, hands the
+hover-time listing to the model, and detaches the refresh task. Remaining work:
 
-- Refresh topology more slowly or from events.
+- Refresh topology more slowly or from events; the 1 s re-capture loop still runs
+  while the popover is up.
 - Capture only thumbnails visible in the popover viewport, near displayed pixel size.
-- Merge AX windows so minimized windows appear and can be restored.
+- Merge AX windows so minimized windows appear and can be restored (k3 B27:
+  minimized-only apps currently show "No open windows" with no un-minimize path).
 - Hide or disable minimize controls without Accessibility and explain recovery.
 - Remove nested button targets and inspect AX operation results.
 - Surface AX trust, private-symbol availability, exact-match failure, and operation
@@ -304,18 +332,22 @@ lifecycle belongs to U4.
 
 Make enumeration and icon work cancellable during traversal, metadata, sort, and load.
 Return explicit error and truncated states instead of conflating unreadable with empty;
-show Couldn't Read and Showing First 128. Dismiss Escape without depending on Jetty being
-frontmost.
+show Couldn't Read and Showing First 128. (The broken Escape monitor — which could only
+steal Escape from the Jetty Menu/Settings, never dismiss the stack — was removed by
+PR #54; if Escape dismissal is wanted, it needs a key-capable panel design.)
 
 ### P4. Remove duplicate Jetty Menu work
 
 **Paths:** `Jetty/Menu/AppIndex.swift`, `AppSearch.swift`, `JettyMenuModel.swift`,
 `RecentAppsStore.swift`
 
-Avoid the initial double app scan, cancel/coalesce reloads, cache directory snapshots
-and bundle metadata, query recents only for an empty query, publish one menu state, and
-resolve icons asynchronously. Cache empty-query ordering rather than performing ICU
-sorting repeatedly. Ignore hover selection caused only by rows scrolling under a
+PR #50 removed the per-keystroke ICU re-sort of the whole index (the empty query now
+reuses AppIndex's own sorted order), the per-keystroke UserDefaults recents reads
+(snapshotted per show), and the per-keystroke `NumberFormatter`. Remaining: avoid the
+initial double app scan, cancel/coalesce reloads, cache directory snapshots
+and bundle metadata, publish one menu state, and resolve row icons asynchronously
+(first paint still hits `NSWorkspace.icon(forFile:)` synchronously, into an unbounded
+cache). Ignore hover selection caused only by rows scrolling under a
 stationary pointer, and restore key/search focus after a cancelled destructive alert.
 
 ### P5. Make bookmark and launch actions consistent
@@ -338,7 +370,10 @@ nonintrusive success or error feedback.
 `Jetty/Hotkeys/CarbonHotkey.swift`, `Jetty/Model/Preferences.swift`
 
 Suspend both Jetty hotkeys while either recorder is active, reject duplicate bindings,
-and show Carbon or OS-owned registration failures inline. Represent every
+and show Carbon or OS-owned registration failures inline (k3 B17: today `register`
+returns false and Settings still shows the shortcut as set). The recorder also swallows
+⌘Q/⌘W/⌘, and Tab while recording, letting users register over the app's own menu
+equivalents (k3 B25). Represent every
 `SMAppService` status, provide Login Items recovery, unregister pending requests when
 toggled off, and avoid unexplained Boolean snapback.
 
@@ -348,11 +383,18 @@ toggled off, and avoid unexplained Boolean snapback.
 `DockView.swift`, `Jetty/Stacks/FolderStackController.swift`,
 `Jetty/Windows/WindowPeekController.swift`, `Jetty/Menu/JettyMenuView.swift`
 
-Keep the dock revealed while a stack, peek, alert, or drag interaction is active. Add a
-hover corridor between dock and child panel. Render drag-out as an
+PR #48 keeps the dock revealed while a stack/peek popover is open. Remaining: keep it
+revealed while an alert or drag interaction is active, and add a hover corridor between
+dock and child panel. Render drag-out as an
 unclipped outward-only ghost with a Remove cue and Undo. Device-test reorder versus
 overflow scrolling and use long-press or explicit move actions if gestures conflict. A
 subtle glass stem or glow can visually tether an open child panel to its source tile.
+
+Two k3 findings belong to this lifetime story: the edge drag-reveal sensor answers
+`.copy` to any file drag immediately, so a drag aimed at the bottom edge of a maximized
+*other* app's window gets consumed and pinned (accept only after a ~300–500 ms dwell —
+k3 B21); and dropping files onto a **folder tile** pins them to the dock where Dock
+muscle memory expects move/copy into the folder (decide the semantics — k3 U5).
 
 ### U3. Honor display accessibility settings and visual contrast
 
@@ -419,14 +461,17 @@ aliases. Detect the default browser instead of assuming Safari.
 | Carbon hotkeys | Replace per-instance event handlers and `passUnretained` lifetime assumptions with one app-wide handler. |
 | Update scheduling | Add ETag/`If-None-Match`, jitter, backoff, and GitHub rate-limit awareness. |
 | Running apps | Observe runtime activation-policy changes and remove the full-scan bundle fallback. |
-| Caches | Consolidate duplicate LRU implementations and add explicit invalidation. |
+| Caches | Consolidate duplicate LRU implementations and add explicit invalidation. `TileAccent` is keyed by tile id only — stale after a custom-icon change; key by `iconCacheKey` and bound it (k3 B22). |
 | World Clock | Canonicalize aliases such as `US/Eastern` to a representative city, add day/night state, and provide a grouped searchable picker. |
-| Clock and monitor polish | Cache static dial furniture, add analog date and world-clock faces, blink the LCD colon, split network traces, add tested peak hold/scope sweep, align Color Time, and animate gauge needles/over-rev treatment. |
-| Pomodoro | Inject the clock and sleep/wake notification source for tests, reuse the existing defaults injection, and add a completion notification. |
+| Clock and monitor polish | Cache static dial furniture, add analog date and world-clock faces, blink the LCD colon, split network traces, add tested peak hold/scope sweep, align Color Time, and animate gauge needles/over-rev treatment. LED segments cramp at small tile sizes — scale segment count with height (k3 V6). |
+| Pomodoro | Inject the clock and sleep/wake notification source for tests, reuse the existing defaults injection, and add a completion notification (completion is sound-only today — k3 U8). |
 | Vertical layout | Give separators a compact along-axis extent and define inward clock growth. |
-| Dead code | Remove or reconnect `DockLayout.hiddenFrame`/`edgeReveal` and dead divergent `AppLauncher` helpers. |
+| Dead code | Remove or reconnect `DockLayout.hiddenFrame`/`edgeReveal` and dead divergent `AppLauncher` helpers; `DockPanelController.toggle()` is also unused (k3). |
 | Poof | Correct the comment that promises sound or deliberately add one. |
 | Folder stack | Add per-stack Name/Date/Kind sorting, Quick Look, and URL drag-out. |
+| Widget visuals | Weather glyph `.multicolor` ignores the tint modifier (dead code — use `.hierarchical`, k3 V4); now-playing glyph uses raw tint (invisible on dark glass — reuse the monitor's white-lift; static `pause.fill` reads as a button, k3 V5). |
+| Single-instance guard | A simultaneous double-launch can terminate *both* instances (each sees the other as older); prefer the oldest `launchDate` or a claim-based guard (k3 B26). |
+| Responsiveness monitor | The "Not Responding" badge carries over by bare pid, so a relaunched process reusing the pid inherits it for up to ~30 s; key state by pid + launchDate (k3 B28). |
 
 ## Product gaps
 
@@ -463,7 +508,11 @@ Highest-value ideas and dependent follow-ons:
 
 - A display-topology editor with disconnected-display management.
 - Restrained Trash wobble or gulp only after confirmed success, Empty Trash poof, and an
-  on-demand-only count/size X-ray.
+  on-demand-only count/size X-ray (PR #46 makes the can truthful, unblocking this).
+- Now-playing upgrade: album-art thumbnail, animated equalizer bars while playing, and
+  a Play/Pause context action via `MRMediaRemoteSendCommand`; carry the source player's
+  identity so the tile opens the right app (H10).
+- Sweep-second-hand option for the analog clock faces (`TimelineView(.animation)`).
 - Option-hover expansion for battery time-to-full/empty, weather feels-like/high/low,
   Pomodoro controls, and media artwork.
 - Pomodoro menu-bar progress and multi-city world-clock day/night personalities.

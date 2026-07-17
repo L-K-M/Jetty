@@ -223,11 +223,14 @@ enum ExpressionEvaluator {
     /// up to 10 fractional digits with trailing zeros trimmed. A non-zero value
     /// too small for that fixed fraction budget falls back to significant-digit
     /// (scientific) notation — `2^-40` shows `9.094947018e-13`, never a
-    /// confidently wrong `0` (FAB-B8).
+    /// confidently wrong `0` (FAB-B8). Huge magnitudes switch to significant
+    /// digits too — `2^700` would otherwise print ~200 meaningless binary64
+    /// digits.
     static func format(_ value: Double) -> String {
         if value == value.rounded(), abs(value) < 1e15 {
             return String(Int64(value))
         }
+        if abs(value) >= 1e15 { return scientificString(value, significantDigits: 10) }
         var s = String(format: "%.10f", value)
         while s.contains("."), s.hasSuffix("0") { s.removeLast() }
         if s.hasSuffix(".") { s.removeLast() }

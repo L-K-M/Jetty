@@ -4,8 +4,8 @@ import SwiftUI
 /// Presents a folder-stack popover near a clicked folder tile: a borderless,
 /// non-activating panel floating over content (matching the dock's overlay model).
 /// Contents load off the main thread; subfolders drill in; a file opens normally.
-/// Dismisses on Escape, on a click anywhere outside it, or when another tile is
-/// opened. See MF-2 / PLAN.md §6.
+/// Dismisses when the pointer leaves both the tile and the popover, on a click
+/// anywhere outside it, or when another tile is opened. See MF-2 / PLAN.md §6.
 final class FolderStackController {
 
     private let preferences: Preferences
@@ -13,7 +13,6 @@ final class FolderStackController {
     private var model: FolderStackModel?
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var keyMonitor: Any?
     private(set) var isOpen = false
     private var rootFolder: URL?
 
@@ -87,7 +86,6 @@ final class FolderStackController {
         model = nil
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor = nil }
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         panel?.orderOut(nil)
         panel = nil
         onOpenChange?(false)
@@ -137,10 +135,9 @@ final class FolderStackController {
             if !panel.frame.contains(NSEvent.mouseLocation) { self.close() }
             return event
         }
-        // Escape dismisses while Jetty has focus; harmless otherwise.
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { self?.close(); return nil }
-            return event
-        }
+        // No Escape monitor: this borderless, non-activating panel can never become
+        // key, so a local keyDown monitor could never fire *for* the stack — it only
+        // fired while the Jetty Menu or a Settings field was key, swallowing an
+        // Escape meant for them. Hover-leave and outside-click already dismiss.
     }
 }

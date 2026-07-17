@@ -49,7 +49,7 @@ struct WorldClockWidgetView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // 12-hour + seconds must not wrap/clip (F-L7)
-                Text(zoneLabel)
+                Text(zoneLabel(at: context.date))
                     .font(.system(size: max(8, height * 0.18), weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -62,9 +62,15 @@ struct WorldClockWidgetView: View {
     }
 
     /// A compact label: the city portion of the identifier (e.g. "Tokyo" from
-    /// "Asia/Tokyo"), with underscores spaced out.
-    private var zoneLabel: String {
+    /// "Asia/Tokyo"), with underscores spaced out — plus a +1d/−1d badge when the
+    /// remote zone is on a different calendar day, so "9:24 Tokyo" can't silently
+    /// mean tomorrow.
+    private func zoneLabel(at date: Date) -> String {
         let city = timeZone.identifier.split(separator: "/").last.map(String.init) ?? timeZone.identifier
-        return city.replacingOccurrences(of: "_", with: " ")
+        var label = city.replacingOccurrences(of: "_", with: " ")
+        if let offset = ClockFormatter.dayOffset(for: date, remoteTimeZone: timeZone) {
+            label += offset > 0 ? " +\(offset)d" : " \(offset)d"
+        }
+        return label
     }
 }

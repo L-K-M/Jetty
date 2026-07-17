@@ -24,6 +24,9 @@ struct GeneralView: View {
                     preferences.manageSystemDock = false
                     systemDock.restoreSystemDock()
                 }
+                // Dead click otherwise: restore only does something while Jetty is
+                // actually managing (hiding) the system Dock.
+                .disabled(!systemDock.isManaging)
             }
 
             Section("Position") {

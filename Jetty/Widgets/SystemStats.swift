@@ -91,10 +91,22 @@ enum SystemStats {
 
     // MARK: Network
 
-    /// Cumulative bytes received/sent across all *active, non-loopback* interfaces, read
-    /// from the link-layer counters via `getifaddrs`. Permission-free. These are running
-    /// totals since boot — `LiveSystemStats` differences them into a per-second rate.
-    /// Returns `(0, 0)` if the query fails.
+    /// Whether an interface's byte counters should count toward the throughput total.
+    /// VPN/tunnel overlays (`utun`, `ipsec`, `ppp`) carry the *same* payload as the
+    /// physical interface beneath them — summing both shows ~2× real throughput on a
+    /// VPN — and `awdl`/`llw`/`anpi` (AirDrop, iPhone link, Apple noise) aren't the
+    /// user's network. Pure, unit-tested.
+    static func isCountedInterface(_ name: String) -> Bool {
+        let virtualPrefixes = ["utun", "ipsec", "ppp", "awdl", "llw", "anpi",
+                               "gif", "stf", "bridge", "vmenet", "vboxnet",
+                               "vlan", "tap", "vmnet"]
+        return !virtualPrefixes.contains(where: { name.hasPrefix($0) })
+    }
+
+    /// Cumulative bytes received/sent across all *active, non-loopback, physical*
+    /// interfaces, read from the link-layer counters via `getifaddrs`. Permission-free.
+    /// These are running totals since boot — `LiveSystemStats` differences them into a
+    /// per-second rate. Returns `(0, 0)` if the query fails.
     static func networkBytes() -> (received: UInt64, sent: UInt64) {
         var received: UInt64 = 0
         var sent: UInt64 = 0
@@ -109,6 +121,7 @@ enum SystemStats {
             guard (flags & UInt32(IFF_UP)) != 0, (flags & UInt32(IFF_LOOPBACK)) == 0,
                   let addr = current.pointee.ifa_addr,
                   addr.pointee.sa_family == UInt8(AF_LINK),
+                  isCountedInterface(String(cString: current.pointee.ifa_name)),
                   let raw = current.pointee.ifa_data else { continue }
             let data = raw.assumingMemoryBound(to: if_data.self).pointee
             received += UInt64(data.ifi_ibytes)

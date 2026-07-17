@@ -16,6 +16,9 @@ final class PomodoroTimer: ObservableObject {
 
     @Published private(set) var remaining: TimeInterval
     @Published private(set) var isRunning = false
+    /// True after a session completes, until the next start/reset — the tile shows a
+    /// distinct "Done" state instead of sitting at a dimmed 0:00 looking stalled.
+    @Published private(set) var isCompleted = false
 
     private var duration: TimeInterval
     private var timer: Timer?
@@ -51,6 +54,7 @@ final class PomodoroTimer: ObservableObject {
         // duration, or after a completed session — but preserve a paused mid-session
         // (its `remaining` is below `duration`), so the new length isn't ignored (F-M7).
         if remaining <= 0 || (!isRunning && endDate == nil && remaining == duration) { reload() }
+        isCompleted = false
         isRunning = true
         endDate = Date().addingTimeInterval(remaining)
         startTicking()
@@ -67,6 +71,7 @@ final class PomodoroTimer: ObservableObject {
     }
 
     func reset() {
+        isCompleted = false
         pause()
         reload()
         save()
@@ -81,6 +86,7 @@ final class PomodoroTimer: ObservableObject {
     private func startTicking() {
         timer?.invalidate()
         let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        t.tolerance = 0.1   // let the kernel coalesce wake-ups; display-only cadence
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }
@@ -88,6 +94,7 @@ final class PomodoroTimer: ObservableObject {
     private func tick() {
         updateRemaining()
         if remaining <= 0 {
+            isCompleted = true
             pause()
             NSSound(named: "Glass")?.play()
         }
@@ -166,8 +173,11 @@ final class PomodoroTimer: ObservableObject {
                 endDate = end
                 isRunning = true
                 startTicking()
+            } else {
+                // It elapsed while we were gone: stay stopped at 0 (no sound replay),
+                // but keep the completed presentation so the tile doesn't look stalled.
+                isCompleted = true
             }
-            // If it elapsed while we were gone, stay stopped at 0 — don't replay the sound.
         } else if defaults.object(forKey: Key.remaining) != nil {
             remaining = defaults.double(forKey: Key.remaining)   // preserve a paused/idle value
         }

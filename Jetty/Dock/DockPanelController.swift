@@ -189,7 +189,17 @@ final class DockPanelController {
 
     /// Force-hide regardless of the auto-hide setting — lets the global toggle-all
     /// hotkey hide even a pinned, always-shown dock (M34).
-    func hideForToggle() { hideIgnoringAutoHide() }
+    func hideForToggle() {
+        // A deliberate hide must not be instantly undone by a pointer that happens to
+        // be resting in the reveal zone (the system Dock's ⌥⌘D behavior): suppress
+        // edge reveal until the pointer has left the zone at least once.
+        suppressEdgeReveal = true
+        hideIgnoringAutoHide()
+    }
+
+    /// Latched by `hideForToggle`; cleared by `handleMouseMoved` once the pointer is
+    /// outside the reveal zone / dock frame.
+    private var suppressEdgeReveal = false
 
     private func hideIgnoringAutoHide(animated: Bool = true) {
         revealWork?.cancel(); revealWork = nil
@@ -206,6 +216,16 @@ final class DockPanelController {
             return
         }
         guard preferences.autoHide, preferences.revealTrigger.allowsEdgeHover else { return }
+        if suppressEdgeReveal {
+            // Stay hidden while the pointer lingers in the reveal zone or over the
+            // (hidden) dock frame; re-arm edge reveal once it has clearly left.
+            let stillInZone = pointerInRevealZone(point) || pointerAtHardEdge(point)
+                || NSMouseInRect(point, revealedFrame().insetBy(dx: -CGFloat(preferences.hideDistance),
+                                                                dy: -CGFloat(preferences.hideDistance)), false)
+                || pointerCrossedDockEdge(point, band: max(36, CGFloat(preferences.hideDistance)))
+            guard !stillInZone else { return }
+            suppressEdgeReveal = false
+        }
         guard NSMouseInRect(point, screen.frame, false) else {
             // The pointer is off this screen. A dock on a display stacked directly against
             // another (e.g. this screen sits ABOVE another) lives on an *internal seam*:

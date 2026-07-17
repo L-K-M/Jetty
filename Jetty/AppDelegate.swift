@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?
+    private var restoreDockItem: NSMenuItem?
 
     /// True once this instance actually started (passed the single-instance guard).
     /// A terminating *duplicate* must not tear down — `controller` is `lazy`, so the
@@ -169,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let restore = NSMenuItem(title: "Restore System Dock", action: #selector(restoreSystemDock), keyEquivalent: "")
         restore.target = self
         menu.addItem(restore)
+        restoreDockItem = restore
 
         menu.addItem(.separator())
 
@@ -188,6 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         preferences.refreshLaunchAtLoginStatus()
         launchAtLoginItem?.state = preferences.launchAtLogin ? .on : .off
+        // Restore only does something while Jetty is actually managing (hiding) the
+        // system Dock — otherwise it's a dead click that silently no-ops.
+        restoreDockItem?.isEnabled = systemDock.isManaging
     }
 
     // MARK: Actions

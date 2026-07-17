@@ -319,6 +319,11 @@ final class DockController {
                 panel.onDropToPin = { [weak self] urls in self?.pinDroppedURLs(urls) }
                 panels[uuid] = panel
                 panel.showInitial()
+                // The pointer may already be resting in the new panel's reveal zone
+                // (hot-plug, or a settings change that recreated panels): the edge
+                // monitor only fires on *movement*, so seed the current position or
+                // the dock would stay hidden until the pointer twitches.
+                panel.handleMouseMoved(to: NSEvent.mouseLocation)
             }
         }
         updateLiveStats()

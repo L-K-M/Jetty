@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?
+    private var restoreDockItem: NSMenuItem?
 
     /// True once this instance actually started (passed the single-instance guard).
     /// A terminating *duplicate* must not tear down — `controller` is `lazy`, so the
@@ -147,6 +148,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.delegate = self
+        // Manage item enablement ourselves: with auto-enabling on, AppKit re-validates
+        // every item after `menuNeedsUpdate` and force-enables any whose target responds
+        // to its action — which would clobber the `restoreDockItem` gate below. Every
+        // item here has a valid target, so none needs auto-enabling to stay clickable.
+        menu.autoenablesItems = false
 
         let toggle = NSMenuItem(title: "Toggle Dock", action: #selector(toggleDock), keyEquivalent: "")
         toggle.target = self
@@ -169,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let restore = NSMenuItem(title: "Restore System Dock", action: #selector(restoreSystemDock), keyEquivalent: "")
         restore.target = self
         menu.addItem(restore)
+        restoreDockItem = restore
 
         menu.addItem(.separator())
 
@@ -188,6 +195,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         preferences.refreshLaunchAtLoginStatus()
         launchAtLoginItem?.state = preferences.launchAtLogin ? .on : .off
+        // Restore only does something while Jetty is actually managing (hiding) the
+        // system Dock — otherwise it's a dead click that silently no-ops.
+        restoreDockItem?.isEnabled = systemDock.isManaging
     }
 
     // MARK: Actions

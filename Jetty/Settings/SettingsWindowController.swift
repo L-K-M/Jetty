@@ -53,6 +53,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         NSApp.setActivationPolicy(.regular)
         if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+        // Ordering a miniaturized window front doesn't deminiaturize it — "Jetty
+        // Settings…" would appear to do nothing while the window sits in the Dock.
+        if window?.isMiniaturized == true { window?.deminiaturize(nil) }
         window?.makeKeyAndOrderFront(nil)
     }
 

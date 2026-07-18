@@ -18,6 +18,7 @@ final class TrashIconTests: XCTestCase {
         for style in TrashIconStyle.allCases {
             for isFull in [true, false] {
                 let icon = TrashIconProvider.icon(isFull: isFull, style: style)
+                XCTAssertTrue(icon.isValid, "\(style.rawValue) full=\(isFull) is not a valid image")
                 XCTAssertGreaterThan(icon.size.width, 0, "\(style.rawValue) full=\(isFull)")
                 XCTAssertGreaterThan(icon.size.height, 0, "\(style.rawValue) full=\(isFull)")
             }

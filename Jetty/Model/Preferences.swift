@@ -302,7 +302,7 @@ final class Preferences: ObservableObject {
             clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace
         }
         clockFaceZoom = Self.clamp(double(Key.clockFaceZoom, d.clockFaceZoom), 1.0, 2.5)
-        trashIconStyle = defaults.string(forKey: Key.trashIconStyle).flatMap { TrashIconStyle(rawValue: $0) } ?? d.trashIconStyle
+        trashIconStyle = TrashIconStyle(rawValue: string(Key.trashIconStyle, d.trashIconStyle.rawValue)) ?? d.trashIconStyle
         systemMonitorStyle = SystemMonitorStyle(rawValue: string(Key.systemMonitorStyle, d.systemMonitorStyle.rawValue)) ?? d.systemMonitorStyle
         systemMonitorShowNetwork = bool(Key.systemMonitorShowNetwork, d.systemMonitorShowNetwork)
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)

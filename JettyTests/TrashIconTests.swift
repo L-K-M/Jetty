@@ -15,6 +15,7 @@ final class TrashIconTests: XCTestCase {
     func testEveryStyleAndStateResolvesToARealImage() {
         // The provider must never hand the dock a blank/zero-size image — a missing or
         // invalid style asset falls back to the system can.
+        XCTAssertFalse(TrashIconStyle.allCases.isEmpty)
         for style in TrashIconStyle.allCases {
             for isFull in [true, false] {
                 let icon = TrashIconProvider.icon(isFull: isFull, style: style)

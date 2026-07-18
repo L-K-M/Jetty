@@ -26,10 +26,20 @@ enum AppleScriptRunner {
     /// only ever logged). A fresh `NSAppleScript` is created and consumed entirely
     /// inside the work item, so no instance is shared across threads.
     static func runAsync(_ source: String) {
+        run(source) { _, _ in }
+    }
+
+    /// Like `runAsync`, but delivers the reply descriptor (nil on error, which is
+    /// also passed through so callers can distinguish "denied" from "failed") to
+    /// `completion` on the **main** queue. Same serial queue, same safety rules —
+    /// the completion hop is the only difference.
+    static func run(_ source: String,
+                    completion: @escaping (NSAppleEventDescriptor?, NSDictionary?) -> Void) {
         queue.async {
             var error: NSDictionary?
-            NSAppleScript(source: source)?.executeAndReturnError(&error)
+            let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
             if let error { NSLog("Jetty: AppleScript failed: \(error)") }
+            DispatchQueue.main.async { completion(result, error) }
         }
     }
 

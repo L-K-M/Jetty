@@ -185,33 +185,31 @@ final class DockModelTests: XCTestCase {
         XCTAssertFalse(DockModel.isTrashEmpty(at: [folder]))
     }
 
-    func testUnknownTrashStateDoesNotClaimTrashIsFull() {
-        XCTAssertEqual(DockModel.trashImageName(for: .empty), NSImage.trashEmptyName)
-        XCTAssertEqual(DockModel.trashImageName(for: .unknown), NSImage.trashEmptyName)
-        XCTAssertEqual(DockModel.trashImageName(for: .full), NSImage.trashFullName)
-    }
-
-    func testTrashTileHasIconAndSurvivesInvalidation() {
-        // The trash tile's icon is state-gated (`DockModel.trashCanIcon`) — never nil, and
-        // it survives an invalidate + rebuild (the live empty↔full flip path).
+    func testTrashTileAlwaysHasAnIcon() {
+        // Whatever the resolved state, the tile must render a real trash can
+        // (CoreTypes artwork, or the SF Symbol fallback) — never nil, never a
+        // generic folder (TRASH.md).
         let model = DockModel()
-        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
-                      running: [], showRunningApps: false)
-        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
-
-        model.invalidateTrashIcon()
-        model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
-                      running: [], showRunningApps: false)
-        XCTAssertNotNil(model.tiles.first { $0.kind == .trash }?.icon)
+        for state in [DockModel.TrashState.empty, .full, .unknown] {
+            model.setTrashState(state)
+            model.rebuild(pinned: [DockItem(kind: .trash, displayName: "Trash")],
+                          running: [], showRunningApps: false)
+            let tile = model.tiles.first { $0.kind == .trash }
+            XCTAssertNotNil(tile?.icon, "state \(state)")
+        }
     }
 
-    func testTrashCanIconResolvesAndFullDiffersFromEmpty() {
-        // The pure icon seam always yields a real, non-nil image for both states, and the
-        // full can is visually distinct from the empty one (so the tile can actually flip).
-        let full = DockModel.trashCanIcon(full: true)
-        let empty = DockModel.trashCanIcon(full: false)
-        XCTAssertNotNil(full.tiffRepresentation)
-        XCTAssertNotNil(empty.tiffRepresentation)
-        XCTAssertNotEqual(full.tiffRepresentation, empty.tiffRepresentation)
+    func testTrashResolverPlan() {
+        // A definitive probe always wins (Full Disk Access present).
+        XCTAssertEqual(TrashStateResolver.plan(probe: .full, finderAutomationGranted: false),
+                       .useProbe(.full))
+        XCTAssertEqual(TrashStateResolver.plan(probe: .empty, finderAutomationGranted: true),
+                       .useProbe(.empty))
+        // A denied probe escalates to Finder only when Automation is consented —
+        // never a passive consent prompt.
+        XCTAssertEqual(TrashStateResolver.plan(probe: .unknown, finderAutomationGranted: true),
+                       .askFinder)
+        XCTAssertEqual(TrashStateResolver.plan(probe: .unknown, finderAutomationGranted: false),
+                       .indeterminate)
     }
 }

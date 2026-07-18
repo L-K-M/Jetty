@@ -101,6 +101,13 @@ final class DockModel: ObservableObject {
     /// when it changed.
     func setTrashState(_ state: TrashState) { trashState = state }
 
+    /// The user's chosen Trash tile style (`.default` = the system can), pushed by
+    /// the controller from Preferences before each rebuild.
+    private(set) var trashIconStyle: TrashIconStyle = .default
+
+    /// Updates the Trash tile style; the controller calls `rebuild` afterwards.
+    func setTrashIconStyle(_ style: TrashIconStyle) { trashIconStyle = style }
+
     /// Rebuilds `slots`/`tiles` from the current pinned items + running apps and
     /// resolves icons (cached, bounded — BUG-8).
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
@@ -114,7 +121,7 @@ final class DockModel: ObservableObject {
                               // Policy: `.unknown` renders empty — the Trash is empty
                               // most of the time, and a false full cried wolf
                               // constantly in the old code (41d4b62).
-                              t.icon = TrashIconProvider.icon(isFull: trashState == .full)
+                              t.icon = TrashIconProvider.icon(isFull: trashState == .full, style: trashIconStyle)
                           } else {
                               t.icon = icon(for: tile, now: now)
                           }

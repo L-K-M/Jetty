@@ -26,6 +26,18 @@ final class TrashIconTests: XCTestCase {
         }
     }
 
+    func testBundledStyleAssetsResolveInTheAppCatalog() {
+        // The test target is hosted in the app (TEST_HOST), so NSImage(named:) resolves
+        // against the app's asset catalog. Each non-default style's empty/full names must
+        // resolve — otherwise a typo or a missing/misconfigured imageset would silently
+        // fall back to the system can with no test failure (only `.default` is asset-less).
+        for style in TrashIconStyle.allCases {
+            guard let names = style.assetNames else { continue }
+            XCTAssertNotNil(NSImage(named: names.empty), "missing asset \(names.empty) for \(style.rawValue)")
+            XCTAssertNotNil(NSImage(named: names.full), "missing asset \(names.full) for \(style.rawValue)")
+        }
+    }
+
     func testStyleRawValueRoundTrips() {
         for style in TrashIconStyle.allCases {
             XCTAssertEqual(TrashIconStyle(rawValue: style.rawValue), style)

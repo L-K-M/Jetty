@@ -199,7 +199,7 @@ final class DockController {
         return (
             reconcile: [p.edge.rawValue, p.alignment.rawValue, String(p.offset),
                         String(p.inset)].joined(separator: "|"),
-            model: String(p.showRunningApps),
+            model: [String(p.showRunningApps), p.trashIconStyle.rawValue].joined(separator: "|"),
             layout: [String(p.iconSize), String(p.tileSpacing), String(p.magnificationEnabled),
                      String(p.magnification), String(p.autoHide), p.revealTrigger.rawValue,
                      // The face style/zoom change the panel's clock headroom
@@ -214,6 +214,7 @@ final class DockController {
     private func rebuildModel() {
         guard started else { return }
         updateTrashMonitoring()
+        model.setTrashIconStyle(preferences.trashIconStyle)
         model.rebuild(pinned: store.items, running: runningApps.apps,
                       showRunningApps: preferences.showRunningApps)
         relayoutPanels()

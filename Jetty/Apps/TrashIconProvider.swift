@@ -10,10 +10,16 @@ import AppKit
 /// moves them, each state falls back independently to the SF Symbol pair.
 enum TrashIconProvider {
 
-    /// The Trash-can image for the given fullness. Never nil (SF Symbols are
-    /// always available); prefers the genuine system artwork.
-    static func icon(isFull: Bool) -> NSImage {
-        isFull ? fullIcon : emptyIcon
+    /// The Trash-can image for the given fullness and user-chosen style. Never nil
+    /// (SF Symbols are always available). A non-default style loads its bundled
+    /// empty/full artwork from the asset catalog; if that asset is missing or
+    /// invalid, it falls back to the genuine system can — so it can never render blank.
+    static func icon(isFull: Bool, style: TrashIconStyle) -> NSImage {
+        if let assets = style.assetNames,
+           let image = NSImage(named: isFull ? assets.full : assets.empty), image.isValid {
+            return image
+        }
+        return isFull ? fullIcon : emptyIcon
     }
 
     private static let emptyIcon: NSImage = load("TrashIcon") ?? symbol("trash", description: "Empty Trash")

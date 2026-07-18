@@ -58,6 +58,8 @@ final class Preferences: ObservableObject {
         static let decorationSize = 12.0
         static let crtEnabled = false
         static let crtIntensity = 0.5
+        // Trash tile
+        static let trashIconStyle = TrashIconStyle.default
         // Clock widget
         static let clockShowDate = true
         static let clockShowSeconds = false
@@ -123,6 +125,7 @@ final class Preferences: ObservableObject {
         static let clockShowWeekday = "clockShowWeekday"
         static let clockFace = "clockFace"
         static let clockFaceZoom = "clockFaceZoom"
+        static let trashIconStyle = "trashIconStyle"
         /// Legacy pre-face-styles key, read only to migrate old installs.
         static let legacyClockAnalog = "clockAnalog"
         static let systemMonitorStyle = "systemMonitorStyle"
@@ -195,6 +198,7 @@ final class Preferences: ObservableObject {
     @Published var clockShowWeekday: Bool { didSet { defaults.set(clockShowWeekday, forKey: Key.clockShowWeekday) } }
     @Published var clockFace: ClockFaceStyle { didSet { defaults.set(clockFace.rawValue, forKey: Key.clockFace) } }
     @Published var clockFaceZoom: Double { didSet { defaults.set(clockFaceZoom, forKey: Key.clockFaceZoom) } }
+    @Published var trashIconStyle: TrashIconStyle { didSet { defaults.set(trashIconStyle.rawValue, forKey: Key.trashIconStyle) } }
     @Published var systemMonitorStyle: SystemMonitorStyle { didSet { defaults.set(systemMonitorStyle.rawValue, forKey: Key.systemMonitorStyle) } }
     @Published var systemMonitorShowNetwork: Bool { didSet { defaults.set(systemMonitorShowNetwork, forKey: Key.systemMonitorShowNetwork) } }
     @Published var jettyMenuSymbol: String { didSet { defaults.set(jettyMenuSymbol, forKey: Key.jettyMenuSymbol) } }
@@ -298,6 +302,7 @@ final class Preferences: ObservableObject {
             clockFace = bool(Key.legacyClockAnalog, false) ? .classic : d.clockFace
         }
         clockFaceZoom = Self.clamp(double(Key.clockFaceZoom, d.clockFaceZoom), 1.0, 2.5)
+        trashIconStyle = TrashIconStyle(rawValue: string(Key.trashIconStyle, d.trashIconStyle.rawValue)) ?? d.trashIconStyle
         systemMonitorStyle = SystemMonitorStyle(rawValue: string(Key.systemMonitorStyle, d.systemMonitorStyle.rawValue)) ?? d.systemMonitorStyle
         systemMonitorShowNetwork = bool(Key.systemMonitorShowNetwork, d.systemMonitorShowNetwork)
         jettyMenuSymbol = string(Key.jettyMenuSymbol, d.jettyMenuSymbol)

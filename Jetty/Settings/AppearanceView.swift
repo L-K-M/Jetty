@@ -81,6 +81,12 @@ struct AppearanceView: View {
                 }
             }
 
+            Section("Trash") {
+                Picker("Icon style", selection: $preferences.trashIconStyle) {
+                    ForEach(TrashIconStyle.allCases) { Text($0.displayName).tag($0) }
+                }
+            }
+
             Section("Presets") {
                 ForEach(AppearancePreset.builtIns) { preset in
                     HStack {

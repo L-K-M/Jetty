@@ -8,6 +8,7 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
     case `default`
     case seven
     case eight
+    case star
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         case .default: return "Default (System)"
         case .seven: return "Seven"
         case .eight: return "Eight"
+        case .star: return "Star"
         }
     }
 
@@ -27,6 +29,7 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         case .default: return nil
         case .seven: return ("TrashSevenEmpty", "TrashSevenFull")
         case .eight: return ("TrashEightEmpty", "TrashEightFull")
+        case .star: return ("TrashStarEmpty", "TrashStarFull")
         }
     }
 }

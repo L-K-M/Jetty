@@ -7,6 +7,7 @@ import Foundation
 enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
     case `default`
     case seven
+    case eight
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .default: return "Default (System)"
         case .seven: return "Seven"
+        case .eight: return "Eight"
         }
     }
 
@@ -24,6 +26,7 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .default: return nil
         case .seven: return ("TrashSevenEmpty", "TrashSevenFull")
+        case .eight: return ("TrashEightEmpty", "TrashEightFull")
         }
     }
 }

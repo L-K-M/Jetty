@@ -834,10 +834,16 @@ final class DockController {
     /// Reveals `url` in Finder; if the target was moved/trashed since resolution,
     /// reveals its parent folder instead of failing silently.
     private func revealInFinder(_ url: URL) {
-        let target = FileManager.default.fileExists(atPath: url.path)
-            ? url : url.deletingLastPathComponent()
-        guard FileManager.default.fileExists(atPath: target.path) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([target])
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            return
+        }
+        // Target is gone — open its parent folder so the user can see what's
+        // still there (activateFileViewerSelecting would select the parent
+        // inside its own parent instead of showing its contents).
+        let parent = url.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: parent.path) else { return }
+        NSWorkspace.shared.open(parent)
     }
 
     private func runningApplication(for tile: DockTile) -> NSRunningApplication? {

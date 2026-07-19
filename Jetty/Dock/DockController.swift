@@ -815,9 +815,10 @@ final class DockController {
     private func showInFinderURL(for tile: DockTile) -> URL? {
         switch tile.kind {
         case .application:
-            return liveURL(for: tile) ?? tile.bundleIdentifier.flatMap {
+            let url = liveURL(for: tile) ?? tile.bundleIdentifier.flatMap {
                 NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
             }
+            return url?.isFileURL == true ? url : nil
         case .file, .folder, .url:
             let url = liveURL(for: tile)
             return url?.isFileURL == true ? url : nil

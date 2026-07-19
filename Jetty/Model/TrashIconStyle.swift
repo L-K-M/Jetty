@@ -12,6 +12,12 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
     case white
     case dark
     case cheetah
+    case haiku
+    case tango
+    case pixel
+    case amiga
+    case atari
+    case geos
 
     var id: String { rawValue }
 
@@ -25,6 +31,12 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         case .white: return "White"
         case .dark: return "Dark"
         case .cheetah: return "Cheetah"
+        case .haiku: return "Haiku"
+        case .tango: return "Tango"
+        case .pixel: return "Pixel"
+        case .amiga: return "Amiga"
+        case .atari: return "Atari"
+        case .geos: return "GEOS"
         }
     }
 
@@ -39,6 +51,12 @@ enum TrashIconStyle: String, CaseIterable, Identifiable, Codable {
         case .white: return ("TrashWhiteEmpty", "TrashWhiteFull")
         case .dark: return ("TrashDarkEmpty", "TrashDarkFull")
         case .cheetah: return ("TrashCheetahEmpty", "TrashCheetahFull")
+        case .haiku: return ("TrashHaikuEmpty", "TrashHaikuFull")
+        case .tango: return ("TrashTangoEmpty", "TrashTangoFull")
+        case .pixel: return ("TrashPixelEmpty", "TrashPixelFull")
+        case .amiga: return ("TrashAmigaEmpty", "TrashAmigaFull")
+        case .atari: return ("TrashAtariEmpty", "TrashAtariFull")
+        case .geos: return ("TrashGeosEmpty", "TrashGeosFull")
         }
     }
 }

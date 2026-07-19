@@ -101,7 +101,10 @@ struct DockTileView: View {
             .scaleEffect(isPrimaryPressed && !reduceMotion ? 0.94 : 1,
                          anchor: scaleAnchor)
             .brightness(isPrimaryPressed ? -0.10 : 0)
-            .overlay { pressedHighlight }
+            // Behind the icon, not over it: an overlay darkened the icon and drew
+            // the stroke across its edges (the system Dock's pressed look sits
+            // *under* the icon). The `brightness` dim above keeps the feedback.
+            .background { pressedHighlight }
             .overlay(alignment: .topTrailing) { unresponsiveBadge }
             .overlay(alignment: indicatorAlignment) { indicator }
             .overlay(alignment: labelAlignment) { label }

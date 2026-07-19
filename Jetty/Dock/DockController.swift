@@ -836,6 +836,7 @@ final class DockController {
     private func revealInFinder(_ url: URL) {
         let target = FileManager.default.fileExists(atPath: url.path)
             ? url : url.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: target.path) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([target])
     }
 

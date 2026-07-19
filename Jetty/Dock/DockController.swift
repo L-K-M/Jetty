@@ -607,7 +607,7 @@ final class DockController {
         let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command)
             ?? NSEvent.modifierFlags.contains(.command)
         if commandDown, let url = showInFinderURL(for: tile) {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            revealInFinder(url)
             return
         }
         switch tile.kind {
@@ -761,8 +761,8 @@ final class DockController {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
             if let appURL {
-                actions.append(DockContextAction(title: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([appURL])
+                actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
+                    self?.revealInFinder(appURL)
                 })
             }
         case .file, .folder, .url:
@@ -771,8 +771,8 @@ final class DockController {
                 actions.append(DockContextAction(title: "Show Contents") { [weak self] in self?.presentFolderStack(for: tile) })
             }
             if let url = tile.url, url.isFileURL {
-                actions.append(DockContextAction(title: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
+                    self?.revealInFinder(url)
                 })
             }
             if let itemID = tile.itemID {
@@ -829,6 +829,14 @@ final class DockController {
         default:
             return nil
         }
+    }
+
+    /// Reveals `url` in Finder; if the target was moved/trashed since resolution,
+    /// reveals its parent folder instead of failing silently.
+    private func revealInFinder(_ url: URL) {
+        let target = FileManager.default.fileExists(atPath: url.path)
+            ? url : url.deletingLastPathComponent()
+        NSWorkspace.shared.activateFileViewerSelecting([target])
     }
 
     private func runningApplication(for tile: DockTile) -> NSRunningApplication? {

@@ -601,6 +601,11 @@ final class DockController {
         // A click dismisses any hover-opened folder stack. A folder opens in Finder like
         // a file — its contents are previewed on hover instead of on click.
         folderStack.close()
+        // Cmd-click is the "Show in Finder" shortcut, like the system Dock.
+        if NSEvent.modifierFlags.contains(.command), let url = showInFinderURL(for: tile) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            return
+        }
         switch tile.kind {
         case .application:
             openApplication(tile)
@@ -802,6 +807,23 @@ final class DockController {
             break
         }
         return actions
+    }
+
+    /// The on-disk target a Cmd-click reveals in Finder — the same URL the context
+    /// menu's "Show in Finder" action uses, so both paths stay in sync (apps resolve
+    /// through the live/bookmark URL like launching does).
+    private func showInFinderURL(for tile: DockTile) -> URL? {
+        switch tile.kind {
+        case .application:
+            return liveURL(for: tile) ?? tile.bundleIdentifier.flatMap {
+                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+            }
+        case .file, .folder, .url:
+            let url = liveURL(for: tile)
+            return url?.isFileURL == true ? url : nil
+        default:
+            return nil
+        }
     }
 
     private func runningApplication(for tile: DockTile) -> NSRunningApplication? {

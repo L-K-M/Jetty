@@ -601,8 +601,12 @@ final class DockController {
         // A click dismisses any hover-opened folder stack. A folder opens in Finder like
         // a file — its contents are previewed on hover instead of on click.
         folderStack.close()
-        // Cmd-click is the "Show in Finder" shortcut, like the system Dock.
-        if NSEvent.modifierFlags.contains(.command), let url = showInFinderURL(for: tile) {
+        // Cmd-click is the "Show in Finder" shortcut, like the system Dock. Prefer
+        // the click event's own flags over polling the hardware state, so a quick
+        // Cmd-tap still counts even if the key is released before this runs.
+        let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command)
+            ?? NSEvent.modifierFlags.contains(.command)
+        if commandDown, let url = showInFinderURL(for: tile) {
             NSWorkspace.shared.activateFileViewerSelecting([url])
             return
         }

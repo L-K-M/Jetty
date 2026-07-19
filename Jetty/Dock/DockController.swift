@@ -759,9 +759,9 @@ final class DockController {
             } else if appURL != nil {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
-            // Offer the item whenever Cmd-click could resolve a URL — including the
-            // bundle-identifier fallback — so both entry points stay symmetric.
-            if appURL != nil || tile.bundleIdentifier != nil {
+            // Offer the item exactly when Cmd-click could resolve a URL, so both
+            // entry points stay symmetric.
+            if showInFinderURL(for: tile) != nil {
                 // Resolve at click time (bookmark/live URL), like Cmd-click does.
                 actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
                     if let url = self?.showInFinderURL(for: tile) {
@@ -774,7 +774,7 @@ final class DockController {
             if tile.kind == .folder {
                 actions.append(DockContextAction(title: "Show Contents") { [weak self] in self?.presentFolderStack(for: tile) })
             }
-            if tile.url?.isFileURL == true || liveURL(for: tile)?.isFileURL == true {
+            if showInFinderURL(for: tile) != nil {
                 actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
                     if let url = self?.showInFinderURL(for: tile) {
                         self?.revealInFinder(url)

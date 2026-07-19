@@ -759,7 +759,9 @@ final class DockController {
             } else if appURL != nil {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
-            if appURL != nil {
+            // Offer the item whenever Cmd-click could resolve a URL — including the
+            // bundle-identifier fallback — so both entry points stay symmetric.
+            if appURL != nil || tile.bundleIdentifier != nil {
                 // Resolve at click time (bookmark/live URL), like Cmd-click does.
                 actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
                     if let url = self?.showInFinderURL(for: tile) {
@@ -828,7 +830,7 @@ final class DockController {
                 NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
             }
         case .file, .folder, .url:
-            let url = liveURL(for: tile)
+            let url = liveURL(for: tile) ?? tile.url
             return url?.isFileURL == true ? url : nil
         default:
             return nil
@@ -847,7 +849,8 @@ final class DockController {
         // inside its own parent instead of showing its contents).
         let parent = url.deletingLastPathComponent()
         guard FileManager.default.fileExists(atPath: parent.path) else { return }
-        NSWorkspace.shared.open(parent)
+        NSWorkspace.shared.open(parent, configuration: NSWorkspace.OpenConfiguration(),
+                                completionHandler: nil)
     }
 
     private func runningApplication(for tile: DockTile) -> NSRunningApplication? {

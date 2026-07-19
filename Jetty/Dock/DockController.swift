@@ -604,8 +604,7 @@ final class DockController {
         // Cmd-click is the "Show in Finder" shortcut, like the system Dock. Prefer
         // the click event's own flags over polling the hardware state, so a quick
         // Cmd-tap still counts even if the key is released before this runs.
-        let commandDown = NSApp.currentEvent?.modifierFlags.contains(.command)
-            ?? NSEvent.modifierFlags.contains(.command)
+        let commandDown = (NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags).contains(.command)
         if commandDown, let url = showInFinderURL(for: tile) {
             revealInFinder(url)
             return
@@ -760,9 +759,12 @@ final class DockController {
             } else if appURL != nil {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
-            if let appURL {
+            if appURL != nil {
+                // Resolve at click time (bookmark/live URL), like Cmd-click does.
                 actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
-                    self?.revealInFinder(appURL)
+                    if let url = self?.showInFinderURL(for: tile) {
+                        self?.revealInFinder(url)
+                    }
                 })
             }
         case .file, .folder, .url:
@@ -770,9 +772,11 @@ final class DockController {
             if tile.kind == .folder {
                 actions.append(DockContextAction(title: "Show Contents") { [weak self] in self?.presentFolderStack(for: tile) })
             }
-            if let url = tile.url, url.isFileURL {
+            if tile.url?.isFileURL == true || liveURL(for: tile)?.isFileURL == true {
                 actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
-                    self?.revealInFinder(url)
+                    if let url = self?.showInFinderURL(for: tile) {
+                        self?.revealInFinder(url)
+                    }
                 })
             }
             if let itemID = tile.itemID {

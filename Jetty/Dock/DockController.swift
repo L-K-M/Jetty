@@ -601,6 +601,14 @@ final class DockController {
         // A click dismisses any hover-opened folder stack. A folder opens in Finder like
         // a file — its contents are previewed on hover instead of on click.
         folderStack.close()
+        // Cmd-click is the "Show in Finder" shortcut, like the system Dock. Prefer
+        // the click event's own flags over polling the hardware state, so a quick
+        // Cmd-tap still counts even if the key is released before this runs.
+        let commandDown = (NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags).contains(.command)
+        if commandDown, let url = showInFinderURL(for: tile) {
+            revealInFinder(url)
+            return
+        }
         switch tile.kind {
         case .application:
             openApplication(tile)
@@ -751,9 +759,14 @@ final class DockController {
             } else if appURL != nil {
                 actions.append(DockContextAction(title: "Keep in Dock") { [weak self] in self?.pin(tile) })
             }
-            if let appURL {
-                actions.append(DockContextAction(title: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([appURL])
+            // Offer the item exactly when Cmd-click could resolve a URL, so both
+            // entry points stay symmetric.
+            if showInFinderURL(for: tile) != nil {
+                // Resolve at click time (bookmark/live URL), like Cmd-click does.
+                actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
+                    if let url = self?.showInFinderURL(for: tile) {
+                        self?.revealInFinder(url)
+                    }
                 })
             }
         case .file, .folder, .url:
@@ -761,9 +774,11 @@ final class DockController {
             if tile.kind == .folder {
                 actions.append(DockContextAction(title: "Show Contents") { [weak self] in self?.presentFolderStack(for: tile) })
             }
-            if let url = tile.url, url.isFileURL {
-                actions.append(DockContextAction(title: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+            if showInFinderURL(for: tile) != nil {
+                actions.append(DockContextAction(title: "Show in Finder") { [weak self] in
+                    if let url = self?.showInFinderURL(for: tile) {
+                        self?.revealInFinder(url)
+                    }
                 })
             }
             if let itemID = tile.itemID {
@@ -802,6 +817,40 @@ final class DockController {
             break
         }
         return actions
+    }
+
+    /// The on-disk target a Cmd-click reveals in Finder — the same URL the context
+    /// menu's "Show in Finder" action uses, so both paths stay in sync (apps resolve
+    /// through the live/bookmark URL like launching does).
+    private func showInFinderURL(for tile: DockTile) -> URL? {
+        switch tile.kind {
+        case .application:
+            if let url = liveURL(for: tile), url.isFileURL { return url }
+            return tile.bundleIdentifier.flatMap {
+                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+            }
+        case .file, .folder, .url:
+            let url = liveURL(for: tile) ?? tile.url
+            return url?.isFileURL == true ? url : nil
+        default:
+            return nil
+        }
+    }
+
+    /// Reveals `url` in Finder; if the target was moved/trashed since resolution,
+    /// reveals its parent folder instead of failing silently.
+    private func revealInFinder(_ url: URL) {
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            return
+        }
+        // Target is gone — open its parent folder so the user can see what's
+        // still there (activateFileViewerSelecting would select the parent
+        // inside its own parent instead of showing its contents).
+        let parent = url.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: parent.path) else { return }
+        NSWorkspace.shared.open(parent, configuration: NSWorkspace.OpenConfiguration(),
+                                completionHandler: nil)
     }
 
     private func runningApplication(for tile: DockTile) -> NSRunningApplication? {

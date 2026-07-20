@@ -36,14 +36,15 @@ tests on macOS CI.
 
 ## Pending pull requests
 
-These implementations are not on `main` and therefore remain unresolved. The residual
-column is work the PR deliberately does not cover. (k3 PRs #46–#54 have since been
-merged or superseded; only #58 remains open.)
-
-| PR | Implemented scope | Residual work |
-|---|---|---|
-| [#34](https://github.com/L-K-M/Jetty/pull/34) | Exact display reverse mapping, collision-resolved entries, in-session key reservation, live Settings updates | Blocked on rework: monotonic key reservation drifts a reconnected display's base UUID to `#2`, `#3`, … (new `CGDirectDisplayID` + new `NSScreen` miss both reverse maps while the UUID stays reserved), orphaning persisted per-display settings. The reverse-mapping and DisplaysView halves are sound and worth resubmitting; see the PR review comment. |
-| [#58](https://github.com/L-K-M/Jetty/pull/58) | Trash tile rebuilt: real CoreTypes can artwork, tiered exact state (home probe → preflighted Finder Automation → honest default), Permissions consent row, timeliness triggers; research in TRASH.md | Device verification; background Empty Trash/move outcomes (H2); per-volume Trash beyond the home directory |
+None — every previously tracked PR has landed. k3 PRs #46–#49, #51, and #53 merged
+as-is; #50, #52, and #54 were re-landed corrected via
+[#56](https://github.com/L-K-M/Jetty/pull/56). #34's display reverse mapping and
+DisplaysView freshness also landed via #56, with the reserved-key guard fixed so a
+reconnecting display reclaims its own base UUID instead of drifting to `#2`, `#3`, ….
+#58's Trash rebuild landed via [#59](https://github.com/L-K-M/Jetty/pull/59) (icon
+styles extended by #60–#62). Residual work from #58 — device verification, background
+Empty Trash/move outcomes, and per-volume Trash beyond the home directory — is tracked
+under H2.
 
 ## Critical
 
@@ -110,7 +111,7 @@ does not depend on a valid captured preference snapshot.
 **Paths:** `Jetty/Apps/TrashLocations.swift`, `TrashMonitor.swift`, `AppLauncher.swift`,
 `Jetty/Dock/DockController.swift`, `DockModel.swift`
 
-**Resolved by PR #58 (pending) / researched in TRASH.md:** two root causes were at
+**Resolved by PR #58 (landed via #59) / researched in TRASH.md:** two root causes were at
 play — the legacy named Trash images don't resolve on macOS 26, and enumerating
 `~/.Trash` requires Full Disk Access (TCC), so the probe reported `.unknown` →
 stuck-empty can. PR #46's workspace-icon detour rendered a generic *folder* and was
@@ -251,8 +252,8 @@ actions; PR #32 adds default tile activation and hides separators. Dynamic value
 **Paths:** `Jetty/Screens/DisplayRegistry.swift`, `Jetty/Settings/DisplaysView.swift`,
 `Jetty/Store/DockStore.swift`
 
-Current collision keys do not reverse-map reliably; PR #34 fixes that in-session mapping
-and Settings freshness. Durable placement for duplicate or UUID-less hardware across
+In-session reverse mapping and Settings freshness are fixed (PR #34, landed corrected
+via #56). Durable placement for duplicate or UUID-less hardware across
 relaunch still needs investigation of public stable discriminators such as available
 vendor, product, or serial characteristics. Expose already-preserved disconnected
 display records in Settings with a Forget action, and document session-only fallback
@@ -503,7 +504,7 @@ Highest-value ideas and dependent follow-ons:
 
 - A display-topology editor with disconnected-display management.
 - Restrained Trash wobble or gulp only after confirmed success, Empty Trash poof, and an
-  on-demand-only count/size X-ray (PR #58 makes the can truthful, unblocking this;
+  on-demand-only count/size X-ray (PR #58, landed via #59, makes the can truthful, unblocking this;
   the Finder-Automation count is already available for it).
 - Now-playing upgrade: album-art thumbnail, animated equalizer bars while playing, and
   a Play/Pause context action via `MRMediaRemoteSendCommand`; carry the source player's

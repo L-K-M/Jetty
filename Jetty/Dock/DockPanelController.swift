@@ -331,7 +331,7 @@ final class DockPanelController {
         // Screen → window coords (the borderless panel's content view starts at the
         // window origin). While hidden the content is slid off and clipped, so this
         // correctly hit-tests nil.
-        let local = panel.convertPoint(point, from: nil)
+        let local = panel.convertPoint(fromScreen: point)
         return panel.contentView?.hitTest(local) != nil
     }
 

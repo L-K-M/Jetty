@@ -226,8 +226,7 @@ final class DockPanelController {
             // Stay hidden while the pointer lingers in the reveal zone or over the
             // (hidden) dock frame; re-arm edge reveal once it has clearly left.
             let stillInZone = pointerInRevealZone(point) || pointerAtHardEdge(point)
-                || NSMouseInRect(point, revealedFrame().insetBy(dx: -CGFloat(preferences.hideDistance),
-                                                                dy: -CGFloat(preferences.hideDistance)), false)
+                || pointerInKeepArea(point)
                 || pointerCrossedDockEdge(point, band: max(36, CGFloat(preferences.hideDistance)))
             guard !stillInZone else { return }
             suppressEdgeReveal = false
@@ -268,14 +267,10 @@ final class DockPanelController {
             // Hide once the pointer moves more than the configured hide distance from
             // the revealed dock. The keep-revealed region also spans any inset gap to
             // the physical edge, where the hard-edge reveal would instantly re-fire.
-            let keep = DockLayout.keepRevealedFrame(revealed: revealedFrame(),
-                                                    screenFrame: screen.frame,
-                                                    edge: anchor.edge,
-                                                    slop: CGFloat(preferences.hideDistance))
-            if !NSMouseInRect(point, keep, false) {
-                scheduleHide()
-            } else {
+            if pointerInKeepArea(point) {
                 hideWork?.cancel(); hideWork = nil
+            } else {
+                scheduleHide()
             }
         } else if pointerInRevealZone(point) {
             // Slamming the pointer to the physical screen edge over the dock is
@@ -309,6 +304,28 @@ final class DockPanelController {
         let work = DispatchWorkItem { [weak self] in self?.hideWork = nil; self?.hide() }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + preferences.hideDelayMs / 1000.0, execute: work)
+    }
+
+    /// The region that keeps a revealed dock up: the **visible glass strip**
+    /// (`revealedDockStripFrame`) grown by the configured hide distance, bridged
+    /// across any inset gap to the physical screen edge. Measuring from
+    /// `revealedFrame()` instead added the panel's transparent headroom (hover
+    /// magnification, a zoomed clock face, floating labels) to every hide, so the
+    /// pointer had to travel hide-distance *plus* that headroom before the dock
+    /// would hide (BUG: hide distance ignored).
+    private func keepRevealedRegion() -> CGRect {
+        DockLayout.keepRevealedFrame(revealed: revealedDockStripFrame,
+                                     screenFrame: screen.frame,
+                                     edge: anchor.edge,
+                                     slop: CGFloat(preferences.hideDistance))
+    }
+
+    /// `keepRevealedRegion` plus the panel frame itself: hovering a magnified tile
+    /// can put the pointer past the resting strip + hide distance while it is still
+    /// unambiguously over the dock (the headroom exists for exactly that content).
+    private func pointerInKeepArea(_ point: NSPoint) -> Bool {
+        NSMouseInRect(point, keepRevealedRegion(), false)
+            || NSMouseInRect(point, revealedFrame(), false)
     }
 
     /// The thin band along the dock's edge (and over its along-extent) that triggers

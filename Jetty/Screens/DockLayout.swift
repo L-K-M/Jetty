@@ -245,6 +245,77 @@ enum DockLayout {
         }
     }
 
+    // MARK: Pointer over content (keep-revealed hit test)
+
+    /// Whether a panel-local point is over actually-rendered dock content: the
+    /// strip-anchored tiles at their **current** hover-magnified extents. This keeps a
+    /// revealed dock up while the pointer rides a magnified icon into the panel's
+    /// transparent headroom — and lets it hide when the pointer sits in *empty*
+    /// headroom. A view hit-test cannot answer this: `NSView.hitTest` is frame-based
+    /// (transparency-blind, so the plain container/slide views report a hit anywhere in
+    /// the panel bounds), and the SwiftUI host is deliberately hit-testable across the
+    /// whole panel (`DockView`'s full-panel `contentShape` keeps magnification tracking
+    /// through the headroom). Pure, unit-tested.
+    ///
+    /// - `point`: panel-local, AppKit orientation (origin bottom-left, y up).
+    /// - `panelSize`: the revealed panel's size (the SwiftUI side's `geo.size`).
+    /// - `magnification`: hover peak scale (`Preferences.effectiveMagnification`).
+    /// - `clockZoom`: the clock face zoom where it applies (`effectiveClockZoom`).
+    /// - `slop`: the hide-distance preference — grows each tile's envelope, matching
+    ///   `keepRevealedFrame`'s growth of the strip.
+    static func pointerOverDockContent(point: CGPoint, panelSize: CGSize, edge: DockEdge,
+                                       tiles kinds: [DockItemKind], iconSize: CGFloat,
+                                       spacing: CGFloat, padding: CGFloat,
+                                       magnification: CGFloat, clockWidthFactor: CGFloat,
+                                       clockZoom: CGFloat, slop: CGFloat) -> Bool {
+        guard !kinds.isEmpty else { return false }
+        // Along runs in slot-stack order (vertical docks lay out from the top);
+        // across measures out from the dock's screen edge.
+        let along: CGFloat, across: CGFloat
+        switch edge {
+        case .bottom: along = point.x;                    across = point.y
+        case .top:    along = point.x;                    across = panelSize.height - point.y
+        case .left:   along = panelSize.height - point.y; across = point.x
+        case .right:  along = panelSize.height - point.y; across = panelSize.width - point.x
+        }
+        let panelAlong = edge.isHorizontal ? panelSize.width : panelSize.height
+        let content = contentSize(tiles: kinds, iconSize: iconSize, spacing: spacing,
+                                  padding: padding, edge: edge, clockWidthFactor: clockWidthFactor)
+        let contentAlong = edge.isHorizontal ? content.width : content.height
+        // Overflow-scroll state: magnification is suspended and the (scrolled) packed
+        // tiles never leave the resting strip, which the caller's strip region covers.
+        guard contentAlong <= panelAlong + 1 else { return false }
+
+        // The slot stack's leading offset inside the (centered) panel, and the
+        // pointer's position in stack space — mirrors `DockView.stackLocalAlong`.
+        let stackLead = (panelAlong - contentAlong) / 2 + padding
+        let hoverAlong = along - stackLead
+        let influence = (iconSize + spacing) * 2.2   // keep in sync with DockView.scale
+
+        var cursor: CGFloat = 0
+        for kind in kinds {
+            let extent = tileExtent(kind: kind, baseSize: iconSize, edge: edge,
+                                    clockWidthFactor: clockWidthFactor)
+            let center = cursor + extent.along / 2
+            cursor += extent.along + spacing
+            let s = MagnificationCurve.scale(distance: hoverAlong - center,
+                                             influence: influence, maxScale: magnification)
+            // Tiles scale about the edge anchor (`DockTileView.scaleAnchor`): along
+            // grows half per side about the resting center, across grows away from
+            // the edge. A zoomed clock face fills up to `iconSize × (zoom + 0.04)`
+            // across (`clockZoomHeadroom` — keep in sync), likewise magnified.
+            var tileAcross = extent.across * s
+            if kind == .clock, edge.isHorizontal {
+                tileAcross = max(tileAcross, iconSize * (clockZoom + 0.04) * s)
+            }
+            if abs(hoverAlong - center) <= extent.along * s / 2 + slop,
+               across <= tileAcross + slop {
+                return true
+            }
+        }
+        return false
+    }
+
     // MARK: Drag-to-reorder (slot-based)
 
     /// The along-axis extent of a slot whose tiles have these `kinds`, laid out with

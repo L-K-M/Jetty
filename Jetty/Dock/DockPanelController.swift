@@ -320,12 +320,20 @@ final class DockPanelController {
                                      slop: CGFloat(preferences.hideDistance))
     }
 
-    /// `keepRevealedRegion` plus the panel frame itself: hovering a magnified tile
-    /// can put the pointer past the resting strip + hide distance while it is still
-    /// unambiguously over the dock (the headroom exists for exactly that content).
+    /// `keepRevealedRegion` plus any pointer genuinely over dock content: hovering a
+    /// magnified tile reaches into the panel's transparent headroom, past the resting
+    /// strip + hide distance. Hit-test the view hierarchy rather than the panel's
+    /// bounding box — the box alone would treat empty headroom as "on the dock" and
+    /// re-inflate every hide by that headroom (the bug this fixes).
     private func pointerInKeepArea(_ point: NSPoint) -> Bool {
-        NSMouseInRect(point, keepRevealedRegion(), false)
-            || NSMouseInRect(point, revealedFrame(), false)
+        if NSMouseInRect(point, keepRevealedRegion(), false) { return true }
+        guard NSMouseInRect(point, revealedFrame(), false) else { return false }
+        // Borderless panel: window frame == content rect, so screen → view coords is
+        // a plain translation (and while hidden the content is slid off and clipped,
+        // so this correctly hit-tests nil).
+        let local = NSPoint(x: point.x - panel.frame.origin.x,
+                            y: point.y - panel.frame.origin.y)
+        return panel.contentView?.hitTest(local) != nil
     }
 
     /// The thin band along the dock's edge (and over its along-extent) that triggers

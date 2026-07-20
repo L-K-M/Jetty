@@ -322,17 +322,34 @@ final class DockPanelController {
 
     /// `keepRevealedRegion` plus any pointer genuinely over dock content: hovering a
     /// magnified tile reaches into the panel's transparent headroom, past the resting
-    /// strip + hide distance. Hit-test the view hierarchy rather than the panel's
-    /// bounding box — the box alone would treat empty headroom as "on the dock" and
-    /// re-inflate every hide by that headroom (the bug this fixes).
+    /// strip + hide distance. Decided geometrically (`DockLayout.pointerOverDockContent`)
+    /// because a view hit-test cannot tell content from empty headroom here:
+    /// `NSView.hitTest` is frame-based (transparency-blind), so the plain
+    /// container/slide views report a hit anywhere in the panel bounds — and the
+    /// SwiftUI host is deliberately hit-testable across the whole panel besides (its
+    /// full-panel `contentShape` keeps magnification tracking through the headroom).
+    /// The old hit-test therefore kept the dock up anywhere in the panel's bounding
+    /// box, re-inflating every hide by the transparent headroom (BUG: hide distance
+    /// ignored, again).
     private func pointerInKeepArea(_ point: NSPoint) -> Bool {
         if NSMouseInRect(point, keepRevealedRegion(), false) { return true }
         guard NSMouseInRect(point, revealedFrame(), false) else { return false }
-        // Screen → window coords (the borderless panel's content view starts at the
-        // window origin). While hidden the content is slid off and clipped, so this
-        // correctly hit-tests nil.
+        // Screen → window coords == panel-local (borderless panel parked at the
+        // revealed frame; the content view starts at the window origin).
         let local = panel.convertPoint(fromScreen: point)
-        return panel.contentView?.hitTest(local) != nil
+        return DockLayout.pointerOverDockContent(
+            point: local,
+            panelSize: revealedFrame().size,
+            edge: anchor.edge,
+            tiles: model.tiles.map(\.kind),
+            iconSize: CGFloat(preferences.iconSize),
+            spacing: CGFloat(preferences.tileSpacing),
+            padding: DockView.padding,
+            magnification: preferences.effectiveMagnification,
+            clockWidthFactor: DockLayout.clockTileWidthFactor(
+                zoom: CGFloat(preferences.effectiveClockZoom), face: preferences.clockFace),
+            clockZoom: CGFloat(preferences.effectiveClockZoom),
+            slop: CGFloat(preferences.hideDistance))
     }
 
     /// The thin band along the dock's edge (and over its along-extent) that triggers

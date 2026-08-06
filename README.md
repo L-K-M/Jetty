@@ -19,7 +19,10 @@ launcher).
   **alignment** (leading / center / trailing) × a fine offset and an edge inset, **per
   display**.
 - **Live info tiles** — date/time, weather, and more.
-- **Make it yours** — rename a pinned item or give it a custom icon, optional retro
+- **Make it yours** — rename a pinned item or give it a custom icon (and with
+  **[Pict](https://github.com/L-K-M/Pict)** installed, change an *app's* icon
+  everywhere — the same icon then shows in [Zap](https://github.com/L-K-M/Zap) and
+  [Top Drawer](https://github.com/L-K-M/TopDrawer) too), optional retro
   flourishes (corner decorations + CRT scanlines), and **customizable global
   shortcuts** (General ▸ Shortcuts).
 - **The Jetty Menu** — a launcher and **command bar**: instant

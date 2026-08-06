@@ -124,6 +124,23 @@ Mirrors `PLAN.md §11`:
   geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
   `NowPlayingService.parse`, and `SemanticVersion`.
 
+## Dependencies
+
+Exactly one: [`PictKit`](https://github.com/L-K-M/Pict), a first-party SwiftPM
+package holding the shared icon store and resolution ladder that Zap, Top Drawer
+and the Pict editor also use. Jetty **reads** it and writes nothing to it — all
+editing lives in Pict, which needs no permissions and can be sandboxed.
+
+Icon precedence in `DockModel.icon(for:)`, top rung first:
+
+1. the item's own `customIconPath` — existing behaviour, still wins
+2. the shared store — an icon set in Pict, Zap or Top Drawer
+3. the bundle's own un-masked artwork
+4. `NSWorkspace.icon(forFile:)`
+
+Rung 1 staying on top is what makes this invisible on upgrade, and it is also a
+feature: two tiles pointing at one app are allowed to differ.
+
 ## Critical Constraints
 
 - **No scary permissions for the core dock.** Apps/launch/icons use `NSWorkspace`;

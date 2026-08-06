@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Darwin
+import PictKit
 
 /// One rendered dock tile: the merge of a pinned item and/or a running app.
 struct DockTile: Identifiable {
@@ -56,6 +57,22 @@ final class DockModel: ObservableObject {
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
     private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+
+    init() {
+        // An icon set in Pict (or Zap, or Top Drawer) has to reach the dock without
+        // a relaunch. The 5-minute TTL would get there eventually, which is not the
+        // same as arriving — so the store's own watcher drops the cache instead.
+        JettyIcons.shared.onStoreChanged = { [weak self] in
+            self?.invalidateIcons()
+        }
+    }
+
+    /// Drops every cached icon and redraws. Cheap: the tiles themselves are
+    /// untouched, so this is a re-resolve rather than a rebuild.
+    func invalidateIcons() {
+        iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+        objectWillChange.send()
+    }
 
     // Interaction callbacks, wired by the DockController.
     var onOpenTile: ((DockTile) -> Void)?
@@ -221,7 +238,10 @@ final class DockModel: ObservableObject {
         }
         let cacheKey = tile.iconCacheKey
         if let cached = iconCache.value(for: cacheKey, now: now) { return cached }
-        // A user-chosen icon overrides the default for any kind (MF-7).
+        // A user-chosen icon overrides the default for any kind (MF-7). This stays
+        // the top rung: a per-item choice is more specific than a shared one and was
+        // made more deliberately, and two tiles pointing at one app are allowed to
+        // differ. So nobody's existing icons change when the shared store arrives.
         if let path = tile.customIconPath, let custom = NSImage(contentsOfFile: path) {
             iconCache.insert(custom, for: cacheKey, now: now)
             return custom
@@ -230,10 +250,16 @@ final class DockModel: ObservableObject {
         switch tile.kind {
         case .application, .file, .folder, .url:
             if let url = tile.url ?? appURL(forBundleID: tile.bundleIdentifier) {
-                image = NSWorkspace.shared.icon(forFile: url.path)
+                // Rungs 2 and 3, from PictKit: an icon the user set in Pict (or Zap,
+                // or Top Drawer), then the bundle's own un-masked artwork. A miss
+                // returns nil and warms in the background, so this stays a
+                // dictionary lookup on a path that rebuilds the whole dock.
+                image = JettyIcons.shared.icon(for: target(for: tile, url: url))
+                    ?? NSWorkspace.shared.icon(forFile: url.path)
             } else if let bundleID = tile.bundleIdentifier,
                       let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                image = NSWorkspace.shared.icon(forFile: url.path)
+                image = JettyIcons.shared.icon(for: target(for: tile, url: url))
+                    ?? NSWorkspace.shared.icon(forFile: url.path)
             }
         case .trash:
             image = nil
@@ -243,6 +269,23 @@ final class DockModel: ObservableObject {
         }
         if let image { iconCache.insert(image, for: cacheKey, now: now) }
         return image
+    }
+
+    /// How the shared store knows this tile.
+    ///
+    /// An application is a `.application` target so it gets the two-rung lookup —
+    /// bundle path first, identifier second — which is what keeps
+    /// site-specific-browser wrappers, all reporting one identifier, told apart.
+    /// Everything else is keyed by what it is on disk.
+    private func target(for tile: DockTile, url: URL) -> IconTarget {
+        switch tile.kind {
+        case .application:
+            return .application(bundleURL: url, bundleIdentifier: tile.bundleIdentifier)
+        case .url:
+            return .link(url)
+        default:
+            return .file(url)
+        }
     }
 
     private func appURL(forBundleID bundleID: String?) -> URL? {

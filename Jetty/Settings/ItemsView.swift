@@ -194,7 +194,14 @@ struct ItemsView: View {
     /// site-specific-browser wrappers apart. Must agree with `DockModel.target(for:url:)`
     /// or Settings would offer to change an icon the dock then wouldn't read.
     private func sharedIconTarget(_ item: DockItem) -> IconTarget? {
-        guard let url = item.url else { return nil }
+        // `item.url ?? …forApplication(withBundleIdentifier:)`, matching
+        // `DockModel.icon(for:)`. A pinned app is identified by its bundle
+        // identifier — `DockItem.identity` is `"app:\(bundleIdentifier)"` — so its
+        // persisted URL is genuinely optional, and bailing on nil here left the dock
+        // drawing a Pict-sourced icon that Settings offered no way to change.
+        guard let url = item.url ?? item.bundleIdentifier.flatMap({
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+        }) else { return nil }
         switch effectiveKind(item) {
         case .application:
             return .application(bundleURL: url, bundleIdentifier: item.bundleIdentifier)

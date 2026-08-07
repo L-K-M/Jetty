@@ -56,7 +56,13 @@ final class DockModel: ObservableObject {
     /// tile overlays only; it must not rebuild or relayout the dock.
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
-    private var iconCache = Self.makeIconCache()
+    /// `DockModel.`, not `Self.`, and it has to stay that way: a stored property
+    /// initializer runs before there is a `self`, so `Self` is the covariant dynamic
+    /// type there and the compiler rejects it outright — "covariant 'Self' type
+    /// cannot be referenced from a stored property initializer". `final` does not
+    /// help. The `Self.` in `invalidateIcons()` below is fine because that one has a
+    /// `self` to be relative to.
+    private var iconCache = DockModel.makeIconCache()
 
     /// One definition of the cache's shape. It is built in two places — here and on
     /// invalidation — and two literals drift.
@@ -67,12 +73,14 @@ final class DockModel: ObservableObject {
     init() {
         // An icon set in Pict (or Zap, or Top Drawer) has to reach the dock without
         // a relaunch. The 5-minute TTL would get there eventually, which is not the
-        // same as arriving — so the store's own watcher drops the cache instead.
-        // Already on the main queue: `IconStoreWatcher` hops there before calling
-        // back (its `deliver()`), because FSEvents delivers on its own utility
-        // queue. Wrapping this in `DispatchQueue.main.async` would only delay the
-        // invalidation by a runloop turn.
-        JettyIcons.shared.onStoreChanged = { [weak self] in
+        // same as arriving — so this drops the cache instead.
+        //
+        // Already on the main queue from either side that fires it: `IconStoreWatcher`
+        // hops there before calling back (its `deliver()`), because FSEvents delivers
+        // on its own utility queue, and `IconResolver.onIconsResolved` is documented
+        // to arrive on main too. Wrapping this in `DispatchQueue.main.async` would
+        // only delay the invalidation by a runloop turn.
+        JettyIcons.shared.onIconsInvalidated = { [weak self] in
             self?.invalidateIcons()
         }
     }

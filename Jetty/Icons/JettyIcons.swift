@@ -23,9 +23,13 @@ final class JettyIcons {
     /// static resolution helpers that draw a slot.
     let resolver: IconResolver
 
-    /// Called when another app changes the store, so the dock can drop its icon
-    /// cache. Set by `DockModel`, which owns that cache.
-    var onStoreChanged: (() -> Void)?
+    /// Called when the dock's cached icons have stopped being the right ones, so it
+    /// can drop them and redraw. Set by `DockModel`, which owns that cache.
+    ///
+    /// Fires for two reasons, which is why it is named for the effect rather than
+    /// the cause: another app wrote to the store, or a re-render finished and there
+    /// is now artwork to read that there wasn't a moment ago.
+    var onIconsInvalidated: (() -> Void)?
 
     private var watcher: IconStoreWatcher?
     private var screenObserver: NSObjectProtocol?
@@ -41,6 +45,13 @@ final class JettyIcons {
                                      store: store)
         watch()
         watchScreens()
+
+        // The other half of the store watcher. Invalidating empties the resolver's
+        // cache and re-warms in the background, so the dock redrawing *at* that
+        // moment reads a miss, falls back to the squircle-masked system icon, and
+        // caches that for five minutes — starting from the instant the user picked a
+        // new icon. This is the callback that says the artwork is actually readable.
+        resolver.onIconsResolved = { [weak self] in self?.onIconsInvalidated?() }
     }
 
     deinit {
@@ -59,6 +70,13 @@ final class JettyIcons {
     /// Plugging in a sharper display makes every cached icon too soft for it, and
     /// nothing else here would notice. `update(_:)` compares before acting, so an
     /// irrelevant display change costs a comparison.
+    ///
+    /// No `onIconsInvalidated?()` here, deliberately. `update(_:)` invalidates when
+    /// the options differ, and the dock is told once the re-render at the new scale
+    /// has landed — via `onIconsResolved`, wired in `init`. Flushing the dock's cache
+    /// from this closure instead would drop it while the resolver was still empty,
+    /// so every tile would re-cache the system icon it fell back to and the sharper
+    /// display would be exactly as soft as before, for five minutes.
     private func watchScreens() {
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -76,8 +94,12 @@ final class JettyIcons {
 
     private func watch() {
         watcher = IconStoreWatcher(store: store) { [weak self] in
+            // Both, and in this order. `invalidate()` schedules the re-render;
+            // the hook drops the dock's cache now, which matters for an icon the
+            // user *removed* — that resolves to the system icon, lands no artwork,
+            // and so would never reach `onIconsResolved` to be corrected later.
             self?.resolver.invalidate()
-            self?.onStoreChanged?()
+            self?.onIconsInvalidated?()
         }
         watcher?.start()
     }

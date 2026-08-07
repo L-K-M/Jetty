@@ -56,12 +56,22 @@ final class DockModel: ObservableObject {
     /// tile overlays only; it must not rebuild or relayout the dock.
     @Published private(set) var unresponsivePIDs = Set<pid_t>()
 
-    private var iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+    private var iconCache = Self.makeIconCache()
+
+    /// One definition of the cache's shape. It is built in two places — here and on
+    /// invalidation — and two literals drift.
+    private static func makeIconCache() -> LRUImageCacheByKey {
+        LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+    }
 
     init() {
         // An icon set in Pict (or Zap, or Top Drawer) has to reach the dock without
         // a relaunch. The 5-minute TTL would get there eventually, which is not the
         // same as arriving — so the store's own watcher drops the cache instead.
+        // Already on the main queue: `IconStoreWatcher` hops there before calling
+        // back (its `deliver()`), because FSEvents delivers on its own utility
+        // queue. Wrapping this in `DispatchQueue.main.async` would only delay the
+        // invalidation by a runloop turn.
         JettyIcons.shared.onStoreChanged = { [weak self] in
             self?.invalidateIcons()
         }
@@ -70,7 +80,7 @@ final class DockModel: ObservableObject {
     /// Drops every cached icon and redraws. Cheap: the tiles themselves are
     /// untouched, so this is a re-resolve rather than a rebuild.
     func invalidateIcons() {
-        iconCache = LRUImageCacheByKey(capacity: 256, maxAge: 5 * 60)
+        iconCache = Self.makeIconCache()
         objectWillChange.send()
     }
 

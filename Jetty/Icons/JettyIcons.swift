@@ -12,12 +12,15 @@ import PictKit
 /// Deliberately small. Jetty has no icon-size slider, no bleed setting and no
 /// search UI, so there is nothing here but the options a dock wants, a watcher, and
 /// a way to ask whether Pict is around.
-@MainActor
 final class JettyIcons {
 
     static let shared = JettyIcons()
 
     let store: IconStore
+    /// Thread-safe by construction — `IconResolver` guards its cache with a lock and
+    /// does its work on its own queue — so this type carries no actor isolation and
+    /// `icon(for:)` is callable from wherever an icon is needed, including the
+    /// static resolution helpers that draw a slot.
     let resolver: IconResolver
 
     /// Called when another app changes the store, so the dock can drop its icon
@@ -60,10 +63,8 @@ final class JettyIcons {
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.resolver.update(.plain(pointSize: Self.tilePointSize,
-                                             scale: Self.backingScale()))
-            }
+            self?.resolver.update(.plain(pointSize: Self.tilePointSize,
+                                         scale: Self.backingScale()))
         }
     }
 

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import PictKit
 
 /// Manage the dock's pinned items: reorder, remove, and add apps / files / folders /
 /// links and the built-in tiles (separator, clock, Trash, Jetty Menu). Running apps
@@ -81,6 +82,23 @@ struct ItemsView: View {
                 }
                 if supportsCustomIcon(item) && item.customIconPath != nil {
                     Button("Clear Custom Icon") { store.setCustomIconPath(nil, id: item.id) }
+                }
+                // Two verbs, named for their scope. "Set Custom Icon…" above changes
+                // *this tile*; this changes *the app*, everywhere — Zap's switcher
+                // and Top Drawer's drawers included. A change with reach the user
+                // didn't ask for is the failure mode worth designing against, and
+                // the fix is that the reach is written on the button.
+                if let target = sharedIconTarget(item) {
+                    Divider()
+                    if PictURL.installedAppURL() != nil {
+                        Button("Change \(item.displayName)'s Icon Everywhere…") {
+                            PictURL.open(selecting: target)
+                        }
+                    } else {
+                        Button("Get Pict to Change Icons Everywhere…") {
+                            if let url = PictURL.homepage { NSWorkspace.shared.open(url) }
+                        }
+                    }
                 }
             }
             if item.kind == .folder {
@@ -165,6 +183,35 @@ struct ItemsView: View {
 
     private func supportsCustomIcon(_ item: DockItem) -> Bool {
         effectiveKind(item).supportsCustomIcon
+    }
+
+    /// How the shared store would know this item, or `nil` for the tiles that are
+    /// not a thing on disk — separators, the clock, the running-apps strip, the
+    /// Trash. Those have nothing for another app to agree with.
+    ///
+    /// An application becomes an `.application` target so it gets the two-rung
+    /// lookup, bundle path before identifier, which is what keeps
+    /// site-specific-browser wrappers apart. Must agree with `DockModel.target(for:url:)`
+    /// or Settings would offer to change an icon the dock then wouldn't read.
+    private func sharedIconTarget(_ item: DockItem) -> IconTarget? {
+        // `item.url ?? …forApplication(withBundleIdentifier:)`, matching
+        // `DockModel.icon(for:)`. A pinned app is identified by its bundle
+        // identifier — `DockItem.identity` is `"app:\(bundleIdentifier)"` — so its
+        // persisted URL is genuinely optional, and bailing on nil here left the dock
+        // drawing a Pict-sourced icon that Settings offered no way to change.
+        guard let url = item.url ?? item.bundleIdentifier.flatMap({
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+        }) else { return nil }
+        switch effectiveKind(item) {
+        case .application:
+            return .application(bundleURL: url, bundleIdentifier: item.bundleIdentifier)
+        case .url:
+            return .link(url)
+        case .file, .folder:
+            return .file(url)
+        default:
+            return nil
+        }
     }
 
     /// Older documents may persist the user's Trash as an ordinary folder URL. Match

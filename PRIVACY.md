@@ -4,9 +4,10 @@ Effective August 16, 2026
 
 Jetty does not operate an account or analytics service, and it does not sell personal
 data. It contains no advertising, telemetry, or tracking. Everything Jetty stores stays
-on the Mac: the dock layout and pinned items live in Jetty's Application Support
-folder, and preferences — position, shortcuts, renamed items, custom icons — live in
-Jetty's application preferences. None of it is uploaded anywhere.
+on the Mac: the dock layout and pinned items — including renamed items and custom
+icons — live in Jetty's Application Support folder, and preferences such as position
+and shortcuts live in Jetty's application preferences. None of it is uploaded
+anywhere.
 
 Jetty makes network requests in exactly three cases, each with a fixed purpose:
 
@@ -29,10 +30,12 @@ the source IP address. The Jetty Menu's web-search command opens the default bro
 with the typed query — that request is made by the browser, under its own privacy
 policy, and only when the user invokes it.
 
-Permissions map one-to-one to optional features: **Automation** (System Events /
-Finder) powers the power commands and the Dark Mode toggle; **Accessibility** enables
-click-to-raise / minimize in the opt-in hover window previews plus Not Responding
-badges; **Screen Recording** enables live window thumbnails there. The now-playing tile
+Permissions map to optional features: **Automation** (System Events / Finder) powers
+the power commands, the Dark Mode toggle, and — once granted — the passive Trash-count
+query behind the Trash tile's fullness state; **Accessibility** enables
+click-to-raise / minimize in the hover window previews (the permission-free
+window-names mode is on by default; the grant itself is optional) plus Not Responding
+badges; **Screen Recording** enables the opt-in live window thumbnails there. The now-playing tile
 reads the current track locally via the system's MediaRemote framework and never
 transmits it. The core dock needs no permissions at all.
 

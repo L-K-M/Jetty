@@ -41,14 +41,15 @@ xcuserdata/
 ## Xcode project — keep shared schemes, ignore user schemes
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
-*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+# Track Package.resolved (reproducible release builds), ignore other swiftpm state
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 *.xcworkspace/xcuserdata/
 
 # Swift Package Manager
 .build/
 .swiftpm/
 Packages/
-Package.resolved
 
 # CocoaPods / Carthage (not used)
 Pods/

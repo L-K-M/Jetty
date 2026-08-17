@@ -40,4 +40,5 @@ reads the current track locally via the system's MediaRemote framework and never
 transmits it. The core dock needs no permissions at all.
 
 Removing Jetty and its application data removes the stored dock layout and preferences.
-Questions or security reports can be submitted through the project's GitHub repository.
+Questions can be asked through the project's GitHub repository; please report security
+vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).

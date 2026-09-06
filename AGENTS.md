@@ -27,6 +27,8 @@ unit/currency conversion, and power commands). It is the third app in the L-K-M 
 **Zap** (app switcher) and **MacDring** (edge-tab launcher) and reuses their house
 style. See `PLAN.md` for the full design and the feasibility analysis; `REVIEW.md`
 for the current status and open backlog; `README.md` for the user view.
+Jetty is macOS-only today; the Ubuntu/Linux port research and its work plan live in
+`docs/linux-port.md` and `docs/linux-port-plan.md`.
 
 ## The one load-bearing design decision
 

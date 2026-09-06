@@ -80,10 +80,22 @@ watcher and against sharing `IconStoreWatcher`.
 **Branch** `claude/jp-01-linux-ci` · **Size** M · **Why**: `linux-port.md` §Build
 
 - Add a root `Package.swift` (swift-tools 5.9): library target **named `Jetty`** at
-  `path: "Jetty"` with `exclude: ["Resources", "MediaRemote", "Jetty.entitlements"]`
-  and a curated `sources:` list; test target **`JettyTests`** at `path: "JettyTests"`
-  with a curated list, so the existing `@testable import Jetty` files compile
+  `path: "Jetty"` and test target **`JettyTests`** at `path: "JettyTests"`, each with
+  a curated `sources:` list, so the existing `@testable import Jetty` files compile
   unmodified.
+- **Both targets need an `exclude:` list, not just the library one** — the gate below
+  is per-target, and a test target with 24 unlisted files fails it just as loudly.
+  Built and measured against the tree as it stands: **57 entries** on `Jetty`
+  (`Resources`, `MediaRemote`, `Jetty.entitlements`, `AppDelegate.swift`,
+  `JettyApp.swift`, the ten wholly-macOS directories — `Apps`, `Common`, `Hotkeys`,
+  `Icons`, `Settings`, `Stacks`, `Store`, `SystemDock`, `Windows` — and 43 individual
+  files in the six directories the curated set only half-claims: `Dock` 10, `Menu` 9,
+  `Model` 5, `Screens` 1, `Updates` 1, `Widgets` 17), and **24 entries** on
+  `JettyTests`. Know the ongoing cost before signing up for it: a new macOS file in
+  one of those six mixed directories now fails Linux CI until it is either ported or
+  excluded. That is the gate doing its job — the decision is forced rather than
+  skipped — but it is a decision on *every* new file there, and the list only shrinks
+  as Part 2 moves things into the curated set.
 - Seed `sources:` with this exact set of **24 files**. It is not a guess: it was
   built and its tests run on Swift 6.3.3 / Ubuntu 24.04 while this plan was being
   written — **116 tests across 9 suites, 0 failures**.
@@ -153,6 +165,9 @@ watcher and against sharing `IconStoreWatcher`.
   compiler, so `-Xswiftc` cannot promote it. Verified — a package with one unlisted
   file builds and exits 0 under `-Xswiftc -warnings-as-errors` while printing
   `found 1 file(s) which are unhandled`. No separate file-diff check is needed.
+  The whole arrangement — both `exclude:` lists, the corrected guards, an empty
+  unhandled list and 116 green tests — was assembled and run before this plan
+  merged, so JP-01 is transcription, not discovery.
 
 ### JP-02 · Jetty · Combine compatibility shim
 **Branch** `claude/jp-02-observation-compat` · **Size** S

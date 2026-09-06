@@ -987,11 +987,17 @@ CI action that builds gtk4-layer-shell from source on noble.*
   strategy by tier** — the macOS in-place semantics do not survive a `.deb`. A
   packaged `jettyd` runs unprivileged out of `/usr/bin`: it cannot write there, and
   if it somehow did it would desynchronise dpkg's database, fail `debsums`, and be
-  silently reverted by the next `apt upgrade`. So: an AppImage (user-writable) keeps
-  the `.bak` rotation, corrupt-quarantine and newer-version-refusal semantics exactly
-  — they are tested and load-bearing — while a `.deb` install runs the same version
-  comparison and asset-integrity checks and then **hands the downloaded `.deb` to the
-  package system** rather than installing it itself.
+  silently reverted by the next `apt upgrade`. So **for this port, which ships only a
+  `.deb`** (the AppImage is a follow-up issue, not scope — see "Done means done"), the
+  install path runs the same version comparison and asset-integrity checks and then
+  **hands the downloaded `.deb` to the package system** rather than installing it
+  itself: concretely PackageKit's `InstallFiles`, where polkit prompts for the
+  privileged step and `jettyd` never elevates. Verify a release-key signature over the
+  artifact before the hand-off and surface a failure in the UI — a local `.deb`
+  install bypasses apt's repository signing, so that check is the only thing between a
+  tampered download and a root-level install. When the AppImage tier does land it
+  keeps the `.bak` rotation, corrupt-quarantine and newer-version-refusal semantics
+  exactly; they are tested and load-bearing, and must not be reimplemented loosely.
 - Update `README.md`, `AGENTS.md` (a Linux section mirroring the macOS one) and
   `PLAN.md`; document the tier matrix honestly, including that stock GNOME needs the
   extension and that `hideDistance` is macOS-only.

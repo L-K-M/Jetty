@@ -67,7 +67,7 @@ than ported — see [Correction 12](#verification-appendix).
 Portability buckets over 15,254 lines of app code (tests excluded), from a
 file-by-file read:
 
-| Bucket | Meaning | LOC | % |
+| Bucket | Meaning | LOC | % (rounded) |
 |---|---|---:|---:|
 | **P1** | Pure logic; compiles on Linux today (modulo `CoreGraphics` → `Foundation` for CG value types) | 2,425 | 16% |
 | **P2** | Foundation-only; needs a named check or small migration (Combine, a corelibs hole, a formatter difference) | 1,808 | 12% |
@@ -133,7 +133,7 @@ behind a consent dialog, and still cannot place a surface. **[V]**
 | Pointer-at-edge reveal | ❌ | ✅ barriers | ✅ sliver | ✅ sliver | ⚠️ |
 | Click a tile without stealing focus | ❌ | ⚠️ manual | ✅ | ✅ | ✅ |
 | Click-to-activate/minimise a running app | ❌ | ✅ exact | ✅ | ✅ | ✅ |
-| Running-app dot | ⚠️ heuristics | ✅ exact | ✅ | ⚠️ mixed | ✅ |
+| Running-app dot | ⚠️ heuristics (exact for Jetty-launched) | ✅ exact | ✅ | ⚠️ mixed | ✅ |
 | Global hotkeys | ⚠️ portal 25.10+ | ✅ no dialog | ✅ | ⚠️ config | ✅ |
 | Window peek / live previews | ❌ | ✅ | ✅ | ⚠️ | ⚠️ |
 
@@ -241,7 +241,9 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
 - **Launching**: parse `Exec`, expand field codes, hand the argv to
   `systemd-run --user --quiet --scope --slice=app.slice --unit=app-jetty-<escaped-id>-<rand>.scope`
   — escaped, because unit names allow only `[a-zA-Z0-9:_.\-]` while desktop-file IDs
-  come from arbitrary filenames.
+  come from arbitrary filenames, and **truncated**, because those IDs are unbounded
+  while unit names cap at 255 bytes including the `.scope` suffix; a long Flatpak
+  export path overruns it and `systemd-run` refuses the launch.
   Boring, never invokes `sh`, keeps launched apps alive when the dock stops, and —
   because the scope name carries the app ID — makes the stock-GNOME running dot
   *exact* for everything Jetty itself launched. `--scope` rather than a transient
@@ -347,9 +349,13 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
   path-depends on the root package and PictKit — exactly Top Drawer's shape.
   **This is what neutralises the file-system-synchronized-group trap**: any new
   `.swift` file under `Jetty/` is auto-added to the Xcode target, so Linux-only code
-  must live outside `Jetty/` or carry a whole-file `#if os(Linux)`.
+  must live outside `Jetty/` or carry a whole-file `#if os(Linux)`. The mirror image
+  is the curated `sources:` list itself: a new *portable* file is not auto-added to
+  SwiftPM, so it silently drops out of the Linux build until someone lists it. That is
+  what the unhandled-file gate in the plan's JP-01 is for — treat the list as part of
+  the new-file checklist and let Linux CI fail on anything under `Jetty/` it omits.
 - **Combine**: take Top Drawer's merged `ObservationCompat` shim, not a migration.
-  Jetty's Combine surface is 96 `@Published` / 16 `ObservableObject` but only **6**
+  Jetty's Combine surface is 96 `@Published` / 15 `ObservableObject` but only **6**
   `.sink` chains; converting all 16 types would be a large macOS-visible diff for zero
   Linux benefit.
 - **`.deb`**: static-link the Swift runtime (`--static-swift-stdlib`) — do not bundle
@@ -504,7 +510,10 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     `gtk_drop_target_accept` is a plain non-empty intersection, so COPY-only *does*
     accept the drag; and declaring MOVE is the riskier choice, because a
     `gdk_drop_finish()` reporting MOVE tells the source to delete the original —
-    unrecoverable on the Trash tile. Jetty declares COPY only (JP-27).
+    unrecoverable on the Trash tile. Jetty declares COPY only (JP-27). The corollary
+    to state rather than discover: Jetty then does the trashing itself via GIO, so the
+    source is told COPY while its original disappears — the inverse surprise. Check
+    that Nautilus and browser download shelves refresh rather than showing a stale row.
 22. **REFUTED — `keyLabel` is a closed glyph set.** It has four branches, the last
     being `return "Key \(event.keyCode)"`: a raw Carbon keycode in a string.
     Confirmed by reading `HotkeyBinding.swift:56-79`. The translator needs three

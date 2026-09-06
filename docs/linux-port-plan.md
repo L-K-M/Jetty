@@ -161,8 +161,14 @@ watcher and against sharing `IconStoreWatcher`.
   file added later on the macOS side goes unnoticed. The cheap mitigation follows
   from the real mechanism: `exclude:` the macOS-only files and directories until the
   unhandled list is **empty**, then gate Linux CI on the build log itself —
-  `set -o pipefail && swift build 2>&1 | tee build.log &&
-  ! grep -q 'which are unhandled' build.log` — **`pipefail` is not optional**: a
+  `set -o pipefail && swift build --build-tests 2>&1 | tee build.log &&
+  ! grep -q 'which are unhandled' build.log` — **`--build-tests` is load-bearing**:
+  a plain `swift build` does not plan the test target, so it reports *nothing* for an
+  unlisted test file and the 24 `JettyTests` exclude entries would be decorative.
+  Measured: with one test file dropped from the list, plain `swift build` printed 0
+  unhandled warnings and `--build-tests` printed 1. The gate also greps SwiftPM's
+  exact diagnostic wording, so re-verify the pattern whenever the container digest is
+  rotated — **`pipefail` is not optional**: a
   pipeline's status is `tee`'s, so without it a *failing* build returns 0, prints no
   unhandled-file warning, and the gate reports green on a broken build. Verified both
   ways. GitHub Actions' default `bash -e` does not set it, so set it in the step —
@@ -210,7 +216,10 @@ watcher and against sharing `IconStoreWatcher`.
 
 *Each item is a **pure move** into `JettyCore` with its tests — a `sources:`
 addition, not a new target; see Part 0. Land them in order; each is small enough to
-review as a move.*
+review as a move. Where an item bundles a deliberate change beyond the move —
+JP-06's `NSImage` retype and generic cache, JP-09's rename, `scientificString` fold
+and `decide(_:)` extraction — land that as its own commit, per JP-09's rule, so the
+move half stays reviewable as a move.*
 
 ### JP-03 · Jetty · Geometry core: `DockLayout` + `MagnificationCurve`
 **Branch** `claude/jp-03-geometry-core` · **Size** S-M
@@ -248,7 +257,9 @@ review as a move.*
 - **Acceptance**: `CodableModelTests`, `StoreBackupTests`, `StoreVersionTests`,
   `ColorHexTests` green on both platforms.
 - **Pitfalls**: `BookmarkResolver` is Darwin-only — guard its two functions with
-  `#if os(macOS)` returning `nil` on Linux; every read path already falls back to
+  `#if os(macOS)` around the Darwin bodies **plus an `#else` branch returning `nil`**
+  — the guard alone deletes the functions on Linux and breaks every call site; every
+  read path already falls back to
   the sibling absolute path.
 
 ### JP-05 · Jetty · Preferences split
@@ -260,7 +271,10 @@ review as a move.*
   (iconSize 24…128, magnification 1…2.5, cornerRadius 0…40, tileSpacing 0…32,
   revealDelayMs 0…1000, …). `UserDefaults` conforms on macOS; Linux gets an
   XDG-backed implementation later.
-- **Acceptance**: `PreferencesTests` green unchanged on both platforms.
+- **Acceptance**: `PreferencesTests` green on both platforms with its assertions
+  unchanged — which means keeping `Preferences.Default` and `Preferences.Key`
+  reachable under those qualified names via `typealias` after the lift, or "unchanged"
+  is not achievable and the executor quietly edits tests instead.
 
 ### JP-06 · Jetty · Dock model + strip geometry
 **Branch** `claude/jp-06-dock-model` · **Size** M
@@ -326,9 +340,13 @@ review as a move.*
   icon name) with `appleScript` demoted to a macOS-only extension.
 - Refactor `activateSelection()` into a pure
   `decide(_ state: MenuState) -> MenuAction`.
-- Reword the `confirmationPrompt` strings that say "your Mac" — the one deliberate
-  behaviour change in Part 2, so land it as its own commit and leave the extraction
-  itself a pure move under Part 0's rule.
+- Two deliberate changes ride along here; land each as its own commit so the
+  extraction stays a pure move under Part 0's rule. (a) Reword the
+  `confirmationPrompt` strings that say "your Mac". (b) The `bundleID` → `identifier`
+  / `url` → `locator` rename above is an API change, not a move. It is safe on disk —
+  `AppSearch`'s result type is not `Codable`, so nothing persists those key names
+  (`RecentAppsStore.Entry` is a different type) — but check that again before landing
+  rather than assuming it.
 - **Acceptance**: `AppSearchTests`, `ExpressionEvaluatorTests`, `CommandBarTests`,
   `PowerCommandTests` green on both platforms. `MenuGlyphAndStoreTests` stays
   **macOS-only until JP-11**: it calls `JettyMenuGlyph` in ten places, and JP-01
@@ -381,7 +399,8 @@ review as a move.*
   to the existing `DesktopEntryRewriter`/`DesktopOverrideSync`. Three apps need it
   (Jetty's app index and command bar, Top Drawer's LP-19, the Pict editor), which
   clears PictKit's "more than one app needs it" bar.
-- Scan the union of `$XDG_DATA_HOME/applications`, `$XDG_DATA_DIRS/applications`,
+- Scan the union of `$XDG_DATA_HOME/applications` and the `applications/` subdirectory
+  of **every** `$XDG_DATA_DIRS` entry — it is a colon-separated list, not a path —
   `/var/lib/snapd/desktop/applications` and both Flatpak export dirs
   (`$XDG_DATA_HOME/flatpak/exports/share/applications` — derived, not the literal
   `~/.local/share/...`, or a relocated data home silently loses every user-installed
@@ -462,7 +481,10 @@ before any tier decision.*
   `/org/freedesktop/UPower/devices/DisplayDevice` (system bus), subscribed to
   `PropertiesChanged`, with a slow poll as safety net.
 - **Corrections from the adversarial pass, both load-bearing**: decide "no battery"
-  from **`Type`** (0 Unknown / 1 Line Power / 2 Battery / 3 Ups), *not* `IsPresent`;
+  from **`Type`**, where only `2` (Battery) means present — the enum runs to 12
+  (Monitor, Mouse, Keyboard … Gaming input), so anything else, including a value the
+  spec grows later, decodes to "no battery" rather than a parse error. *Not*
+  `IsPresent`;
   and do **not** map `!OnBattery` to macOS's `isPlugged` — they diverge on any
   machine exposing no line-power device (a fully-charged idle battery reports
   `State=4`, so `OnBattery=false` while actually on battery), which would mis-drive
@@ -491,13 +513,15 @@ before any tier decision.*
   walk. `isCountedInterface`'s exclusion list is Darwin-specific — rewrite it for
   Linux, and make it **type-aware rather than prefix-only**: drop interfaces whose
   `/sys/class/net/<if>/type` is `ARPHRD_LOOPBACK` (772) or `ARPHRD_NONE` (65534),
-  then apply a prefix list for the `ARPHRD_ETHER` virtuals a type check genuinely
-  cannot catch (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tap*`, `vnet*`,
-  `gretap*`, `erspan*`), plus belt-and-braces entries for tunnels the type filter
-  already drops
-  (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tun*`, `tap*`, `vnet*`, `wg*`,
-  `ppp*`, `zt*`, `tailscale*`, `sit*`, `ip6tnl*`, `ip_vti*`, `gre*`, `gretap*`,
-  `erspan*`). Note `gre*`/`gretap*`/`erspan*` and libvirt's `vnet*` have to be in
+  then apply **one** prefix list, grouped by why each entry is in it rather than by
+  two overlapping lists: `ARPHRD_ETHER` virtuals the type check cannot catch
+  (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tap*`, `vnet*`, `zt*`, `gretap*`,
+  `erspan*`); tunnel types it does **not** drop and which are therefore load-bearing
+  here (`gre*`, `sit*`, `ip6tnl*`, `ip_vti*`, `ppp*`); and belt-and-braces entries it
+  does already drop (`tun*`, `wg*`, `tailscale*`). Note the trade-off deliberately:
+  excluding `wg*`/`tun*` means an always-on-WireGuard host reads zero on the network
+  tile. That is macOS parity, not a bug — say so here so the report is triaged rather
+  than "fixed". Note `gre*`/`gretap*`/`erspan*` and libvirt's `vnet*` have to be in
   that list explicitly: the type filter only drops loopback and none, so `gre0`
   (`ARPHRD_IPGRE`) and the `ARPHRD_ETHER` virtuals survive it. An earlier draft named
   `gre0` as the motivating example and then omitted it from the list. A prefix-only
@@ -519,8 +543,10 @@ before any tier decision.*
 **Branch** `claude/jp-16-mpris` · **Size** M
 
 - Watch `org.mpris.MediaPlayer2.*` via `NameOwnerChanged`, proxy
-  `/org/mpris/MediaPlayer2`, read `PlaybackStatus` + `Metadata`, subscribe
-  `PropertiesChanged`. `xesam:artist` is an **array**.
+  `/org/mpris/MediaPlayer2`, subscribe `PropertiesChanged` **first**, then read
+  `PlaybackStatus` + `Metadata` and reconcile anything that arrived meanwhile — the
+  same lost-update ordering as `NameOwnerChanged` below, on the property side. JP-14's
+  UPower `GetAll` needs the identical treatment. `xesam:artist` is an **array**.
 - **`NameOwnerChanged` reports only transitions**, so install the match rule
   (`arg0namespace='org.mpris.MediaPlayer2'`) **first**, then take an
   `org.freedesktop.DBus.ListNames` snapshot and dedupe arrivals against it. Without
@@ -609,7 +635,12 @@ before any tier decision.*
   an unvalidated empty pass becomes "delete the contents of a directory an attacker
   chose". glib guards the write path; nothing guards ours but this check. Use
   `lstat`, never follow a symlinked directory, and fixture both the symlink and the
-  wrong-owner case.
+  wrong-owner case. **Validate through the descriptor, not the path**: `open` each can
+  `O_RDONLY|O_DIRECTORY|O_NOFOLLOW`, `fstat` *that fd* for the owner/sticky checks,
+  and count and empty with `unlinkat` on the same dirfd. Checking by path and then
+  deleting by path leaves the race the threat model already assumes — the attacker
+  swaps the validated directory for a symlink in between — so a path-based empty pass
+  still follows their link. Fixture the race, not just the static cases.
   Applying the per-volume forms to `/` instead would probe `/.Trash-$uid` and read
   empty right after the user trashed something. Count with one `readdir` of each
   `files/`; trash via `gio trash -- <path>` invoked with an **argv array, never a
@@ -671,7 +702,11 @@ before any tier decision.*
   app's parent and stays resident for its whole lifetime, forwarding signals. Await
   it and every launch pins a worker until the user quits the app; inherit its stdio
   and the app's GTK warnings land in the dock's journal, with a pipe that never EOFs.
-  `setsid`, stdio to `/dev/null` or the journal, no reap.
+  `setsid`, stdio to `/dev/null` or the journal — and reap *without blocking*: set
+  `SIGCHLD` to `SIG_IGN`, or install a handler looping `waitpid(-1, …, WNOHANG)`, or
+  double-fork so the scope is reparented to init. "Never wait" alone is the other
+  half of the waitpid contract and leaks a zombie per app quit, precisely because the
+  scope parent outlives the launch by the app's whole lifetime.
   **`--scope` is load-bearing, not a style choice**, and a later reviewer will try to
   "fix" it: a transient *service* is spawned by the user manager and gets the
   manager's environment, so a session that never imported `WAYLAND_DISPLAY` /
@@ -847,7 +882,12 @@ CI action that builds gtk4-layer-shell from source on noble.*
   JP-03's `layerShellPlacement` returns, so the two cannot drift apart, and assert
   the vertical offset in the headless-sway test rather than just the anchoring. A second, panel-local flip feeds
   `pointerOverDockContent`. **Two flip sites, no more.**
-- Assert `gtk_layer_is_supported()` at startup and fail with a clear message; ship
+- Assert `gtk_layer_is_supported()` **when the layer-shell tier is the active
+  backend** and fail with a clear message. Not unconditionally: Mutter implements no
+  `zwlr_layer_shell_v1` at all, so an unconditional assert kills `jetty-shell` at
+  startup on stock GNOME — the exact tier JP-31 needs a real window for, positioned
+  by the extension as a normal toplevel. The two requirements are otherwise
+  contradictory, and "Done means done" promises both. Ship
   the launcher with `LD_PRELOAD` set, because gtk4-layer-shell is a
   symbol-interposition shim that does nothing if libwayland loads first. (It does
   warn — the failure is loud, not silent.) **Then strip `LD_PRELOAD` from every child
@@ -909,8 +949,10 @@ CI action that builds gtk4-layer-shell from source on noble.*
 
 - A second 1–2 px layer surface per display; its `GtkEventControllerMotion` enter
   event is the reveal trigger, consuming JP-07's `DockRevealPolicy` unchanged.
-- **Correction, load-bearing**: put the sliver on **`OVERLAY`, not `TOP`** — on both
-  KWin and sway the TOP layer sits *below* an active fullscreen window, which would
+- **Correction, load-bearing**: put the sliver on **`OVERLAY`, not `TOP`**. The
+  protocol guarantees only `OVERLAY` above fullscreen; KWin places TOP *below* an
+  active fullscreen window, and sway's TOP-vs-fullscreen ordering is **[U]** pending a
+  check at the ship-target version. Either answer would
   silently kill reveal exactly where Jetty advertises it. Since ordering *within* a
   layer is undefined, unmap the sliver while revealed rather than relying on z-order.
 - Click-through while hidden via `gdk_surface_set_input_region` (gated by
@@ -1073,7 +1115,8 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - Dependencies resolve via `dpkg-shlibdeps`; add `libglib2.0-bin`,
   `dbus-user-session`, `hicolor-icon-theme`, `adwaita-icon-theme`,
   `shared-mime-info`, `desktop-file-utils`; `upower`, `xdg-desktop-portal-gnome |
-  xdg-desktop-portal-kde` and `xdg-utils` as Recommends; a file manager as Suggests.
+  xdg-desktop-portal-kde`, `packagekit` (JP-35's install hand-off) and `xdg-utils` as
+  Recommends; a file manager as Suggests.
 - **Acceptance**: the `.deb` installs and the dock runs on a clean Ubuntu 26.04 VM;
   built and lintian-clean in CI; attached to releases.
 
@@ -1088,8 +1131,12 @@ CI action that builds gtk4-layer-shell from source on noble.*
   `.deb`** (the AppImage is a follow-up issue, not scope — see "Done means done"), the
   install path runs the same version comparison and asset-integrity checks and then
   **hands the downloaded `.deb` to the package system** rather than installing it
-  itself: concretely PackageKit's `InstallFiles`, where polkit prompts for the
-  privileged step and `jettyd` never elevates. Verify a release-key signature over the
+  itself: PackageKit's `InstallFiles`, where polkit prompts for the privileged step
+  and `jettyd` never elevates — but **probe for `org.freedesktop.PackageKit` first and
+  fall back to `xdg-open` on the `.deb`**, because Ubuntu desktop images ship App
+  Center over snapd and may carry no PackageKit at all. Add `packagekit` to JP-34's
+  Recommends. Without the probe this is another "the call succeeds and nothing
+  happens" on exactly the population the `.deb` is for. Verify a release-key signature over the
   artifact before the hand-off and surface a failure in the UI — a local `.deb`
   install bypasses apt's repository signing, so that check is the only thing between a
   tampered download and a root-level install. When the AppImage tier does land it

@@ -244,7 +244,10 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
   desktop-ID guess in `DesktopOverrideSync.overrideFilename(forSystemPath:)`.
 - **Launching**: parse `Exec`, expand field codes, hand the argv to
   `systemd-run --user --quiet --scope --slice=app.slice --unit=app-jetty-<escaped-id>-<rand>.scope`
-  — escaped, because unit names allow only `[a-zA-Z0-9:_.\-]` while desktop-file IDs
+  — the `app-<launcher>-<id>-<random>.scope` shape is the systemd convention, not an
+  invention: GNOME's own launcher builds `app-gnome-<name>-<pid>.scope`
+  (`gnome-systemd.c`), so the `jetty` field belongs there and is what marks the scope
+  as ours. Escaped, because unit names allow only `[a-zA-Z0-9:_.\-]` while desktop-file IDs
   come from arbitrary filenames, and **truncated**, because those IDs are unbounded
   while unit names cap at 255 bytes including the `.scope` suffix; a long Flatpak
   export path overruns it and `systemd-run` refuses the launch. On overflow **hash
@@ -282,7 +285,7 @@ Weather needs none, since it already speaks plain HTTP:
 | Tile | macOS | Linux |
 |---|---|---|
 | Battery | `IOKit.ps` | UPower on the system bus (`/org/freedesktop/UPower/devices/DisplayDevice`), `/sys/class/power_supply` as explicit fallback |
-| CPU/RAM/network | `host_statistics64`, `getloadavg`, `AF_LINK` `getifaddrs` | `/proc/stat` (the tick counters `host_statistics64` supplies — load average is not utilisation), `/proc/loadavg` (`getloadavg` ports unchanged), `/proc/meminfo`, `/proc/net/dev` (cumulative; sample twice for a rate) |
+| CPU/RAM/network | `host_processor_info` (CPU ticks), `host_statistics64` (VM), `getloadavg`, `AF_LINK` `getifaddrs` | `/proc/stat` (the tick counters `host_processor_info` supplies — load average is not utilisation), `/proc/loadavg` (`getloadavg` ports unchanged), `/proc/meminfo`, `/proc/net/dev` (cumulative; sample twice for a rate) |
 | Now playing | private MediaRemote via `dlopen` | **MPRIS2** over the session bus — a published spec, no private API, and free `PlayPause`/`Next`/`Previous` |
 | Weather | HTTP (already) | same code + `FoundationNetworking`; no geolocation to replace — coordinates are already preferences |
 | Pomodoro sleep/wake | `NSWorkspace.willSleep`/`didWake` | logind `PrepareForSleep(b)`; use `CLOCK_BOOTTIME` for elapsed time |
@@ -312,8 +315,11 @@ it** — `$topdir/.Trash` sticky and not a symlink, `.Trash/$uid` and `.Trash-$u
 owned by the current user and not symlinks. The uid in the name protects nothing: on
 a world-writable topdir a hostile local user can pre-create `.Trash-<uid>` with
 `files/` symlinked anywhere, and an unvalidated empty pass then deletes whatever they
-pointed it at. glib guards the write path; only this check guards ours; count with
-one
+pointed it at. glib guards the write path; only this check guards ours — and it has
+to survive a race, so validate and empty through open directory descriptors
+(`openat` with `O_NOFOLLOW|O_DIRECTORY`, `fstat` the fd, `unlinkat` on that dirfd)
+rather than re-walking the path, or the swap simply happens between the check and the
+delete. Count with one
 `readdir`; empty by deleting `files/` + `info/` contents; open via
 `org.freedesktop.FileManager1.ShowFolders(["trash:///"])`). Keep `TrashLocations`'
 shape — candidates / existing / watchable, with per-volume dirs watched via their
@@ -335,8 +341,9 @@ silently routes a new watch's events to the old path.
 
 - **Hotkeys**: one `HotkeyBinder` protocol, four implementations, chosen by
   *probing* not by desktop name — extension keybinding (works on every GNOME
-  including 24.04, no dialog), GlobalShortcuts portal (KDE, and GNOME without the
-  extension), compositor config + a `jetty-cli` verb (sway), GSettings
+  including 24.04, no dialog), GlobalShortcuts portal (only where the backend
+  implements it — `xdg-desktop-portal-kde` does, `xdg-desktop-portal-gnome` does not,
+  which is why the expected GNOME error below is `UnknownMethod`), compositor config + a `jetty-cli` verb (sway), GSettings
   custom-keybindings (documented, never auto-written). On 24.04 the portal's
   expected error is `UnknownMethod` — probe by calling.
 - **Migration**: migrate off `keyLabel`, not `keyCode`. A pure
@@ -373,7 +380,9 @@ silently routes a new watch's events to the old path.
   `.swift` file under `Jetty/` is auto-added to the Xcode target, so Linux-only code
   must live outside `Jetty/` or carry a whole-file `#if os(Linux)`. The mirror image
   is the curated `sources:` list itself: a new *portable* file is not auto-added to
-  SwiftPM, so it silently drops out of the Linux build until someone lists it. That is
+  SwiftPM, so it drops out of the Linux build until someone lists it. Not silently —
+  SwiftPM names every unhandled file (correction 23) — but the warning is not a gate.
+  That is
   what the unhandled-file gate in the plan's JP-01 is for — treat the list as part of
   the new-file checklist and let Linux CI fail on anything under `Jetty/` it omits.
 - **Combine**: take Top Drawer's merged `ObservationCompat` shim, not a migration.
@@ -383,7 +392,8 @@ silently routes a new watch's events to the old path.
 - **`.deb`**: static-link the Swift runtime (`--static-swift-stdlib`) — do not bundle
   `.so`s and do not depend on Ubuntu's `swiftlang` (wrong version, wrong ABI story).
   Verified working, including HTTPS `URLSession`, at ~56 MB stripped. **[V]**
-- **CI**: `container: swift:6.3-noble`, plus Top Drawer's existing composite action
+- **CI**: `container: swift:6.3-noble` — pin the exact patch digest, and pin sway's
+  version too: corrections 24 and 25 both rest on those being fixed, plus Top Drawer's existing composite action
   that builds gtk4-layer-shell from source. More is testable than first assumed: the
   core and the daemon obviously, D-Bus under `dbus-run-session`, and — the
   adversarial pass's finding — **the layer-shell tier too**, because sway under

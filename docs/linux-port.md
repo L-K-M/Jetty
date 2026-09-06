@@ -120,8 +120,10 @@ This is unchanged from [Top Drawer's `02-desktop-constraints.md`](https://github
 and was **re-verified on 2026-09-05**: nothing has moved. A normal Wayland client
 cannot position windows at screen coordinates, stay above others, read the global
 pointer, enumerate windows, or grab global keys. `wlr-layer-shell` is the exception
-and **Mutter refuses it** — mutter#973 and gnome-shell#1141 remain closed. **[V]**
-`ext-layer-shell` has been a draft for six years; `xx-zones` has no implementations;
+and **Mutter refuses it** — mutter#973 and gnome-shell#1141 are both closed without
+the feature, i.e. declined rather than resolved. **[V]**
+`ext-layer-shell` is still not in `wayland-protocols` staging at all, its
+upstreaming open since ~2020; `xx-zones` has no implementations;
 the `InputCapture` portal can detect an edge crossing only by seizing all input
 behind a consent dialog, and still cannot place a surface. **[V]**
 
@@ -134,7 +136,7 @@ behind a consent dialog, and still cannot place a surface. **[V]**
 | Click a tile without stealing focus | ❌ | ⚠️ manual | ✅ | ✅ | ✅ |
 | Click-to-activate/minimise a running app | ❌ | ✅ exact | ✅ | ✅ | ✅ |
 | Running-app dot | ⚠️ heuristics (exact for Jetty-launched) | ✅ exact | ✅ | ⚠️ mixed | ✅ |
-| Global hotkeys | ⚠️ portal 25.10+ | ✅ no dialog | ✅ | ⚠️ config | ✅ |
+| Global hotkeys | ⚠️ GlobalShortcuts via `xdg-desktop-portal-gnome` 25.10+ | ✅ no dialog | ✅ | ⚠️ config | ✅ |
 | Window peek / live previews | ❌ | ✅ | ✅ | ⚠️ | ⚠️ |
 
 **Verdict for stock GNOME is binary: ship a GJS Shell extension, or ship nothing.**
@@ -160,7 +162,7 @@ Every row is `AGENTS.md`'s "Critical Constraints" section restated as protocol.
 | Don't reserve screen space | never touching `visibleFrame` (convention) | `set_exclusive_zone(0)` — enforced by the compositor |
 | Float over content, all Spaces, over fullscreen | `level = .popUpMenu` + `collectionBehavior` | `layer = OVERLAY` — layer surfaces are output-scoped, not workspace-scoped |
 | Panels must stay non-activating | `.nonactivatingPanel` + `becomesKeyOnlyIfNeeded` + `acceptsFirstMouse` override | `keyboard_interactivity = NONE` (keyboard focus only — see below) |
-| Jetty Menu's deliberate focus hand-off | briefly activates, hands back on close | its **own** layer surface at `ON_DEMAND`, dock stays `NONE` |
+| Jetty Menu's deliberate focus hand-off | briefly activates, hands back on close | its **own** layer surface with `keyboard_interactivity = ON_DEMAND` (a keyboard mode, not a layer); dock stays `NONE`. On-demand is optional in the protocol — verify per compositor, as with `NONE` |
 | Placement is edge × alignment × offset/inset, per display | `DockLayout.revealedFrame` against `visibleFrame` | `set_anchor` + `set_margin` + `set_monitor` |
 | Reveal on pointer at the screen edge | global mouse monitor + reveal-zone heuristics | a 1–2 px sliver surface; its `enter` event *is* the trigger |
 | Liquid Glass, honouring Reduce Transparency | `NSGlassEffectView` / `NSVisualEffectView` | translucent flat colour; optional KWin blur — see below |
@@ -178,7 +180,9 @@ Three caveats keep that table honest, all from the adversarial pass:
   waybar pushes it inward on wlroots. That is a faithful analogue of `visibleFrame`,
   which also excludes the menu bar and Dock; it is a **product decision** (usable
   edge vs physical edge), not a free win, and `-1` is the other choice rather than
-  simply wrong.
+  simply wrong. **Jetty ships `0`**, and the reason is not really a trade-off at all:
+  reserving nothing is `AGENTS.md`'s one load-bearing design decision. Recorded
+  in-place at `linux-port-plan.md` §JP-24 so no tier picks differently.
 - **There is no readback.** Unlike `visibleFrame`, a layer-shell client cannot query
   the resulting usable area, yet Jetty does arithmetic against a queryable rect.
 
@@ -243,7 +247,13 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
   — escaped, because unit names allow only `[a-zA-Z0-9:_.\-]` while desktop-file IDs
   come from arbitrary filenames, and **truncated**, because those IDs are unbounded
   while unit names cap at 255 bytes including the `.scope` suffix; a long Flatpak
-  export path overruns it and `systemd-run` refuses the launch.
+  export path overruns it and `systemd-run` refuses the launch. On overflow **hash
+  the tail** (`app-jetty-<prefix>-<hash>.scope`) rather than clipping mid-ID: GNOME
+  parses the app ID back out of the scope name, so a truncated ID is a *wrong* ID and
+  the dot silently misidentifies the app — and two long IDs sharing a prefix would
+  collide. Spawn that `systemd-run` **detached** (`setsid`, stdio to `/dev/null` or
+  the journal, never awaited): `--scope` is synchronous, so systemd-run stays in the
+  foreground as the app's parent for its whole lifetime.
   Boring, never invokes `sh`, keeps launched apps alive when the dock stops, and —
   because the scope name carries the app ID — makes the stock-GNOME running dot
   *exact* for everything Jetty itself launched. `--scope` rather than a transient
@@ -272,7 +282,7 @@ Weather needs none, since it already speaks plain HTTP:
 | Tile | macOS | Linux |
 |---|---|---|
 | Battery | `IOKit.ps` | UPower on the system bus (`/org/freedesktop/UPower/devices/DisplayDevice`), `/sys/class/power_supply` as explicit fallback |
-| CPU/RAM/network | `host_statistics64`, `getloadavg`, `AF_LINK` `getifaddrs` | `/proc/loadavg` (`getloadavg` ports unchanged), `/proc/meminfo`, `/proc/net/dev` |
+| CPU/RAM/network | `host_statistics64`, `getloadavg`, `AF_LINK` `getifaddrs` | `/proc/stat` (the tick counters `host_statistics64` supplies — load average is not utilisation), `/proc/loadavg` (`getloadavg` ports unchanged), `/proc/meminfo`, `/proc/net/dev` (cumulative; sample twice for a rate) |
 | Now playing | private MediaRemote via `dlopen` | **MPRIS2** over the session bus — a published spec, no private API, and free `PlayPause`/`Next`/`Previous` |
 | Weather | HTTP (already) | same code + `FoundationNetworking`; no geolocation to replace — coordinates are already preferences |
 | Pomodoro sleep/wake | `NSWorkspace.willSleep`/`didWake` | logind `PrepareForSleep(b)`; use `CLOCK_BOOTTIME` for elapsed time |
@@ -296,7 +306,14 @@ beginning with `-`, and the `--` stops GLib's option parser eating them (glib's
 `g_local_file_trash` correctly implements topdir detection, sticky-bit validation,
 `O_CREAT|O_EXCL` collision naming and relative-vs-absolute `Path` — do not
 reimplement it), and do everything else in pure Swift (discover trash dirs from
-`/proc/self/mountinfo` plus the spec's two per-volume forms; count with one
+`/proc/self/mountinfo` plus the spec's two per-volume forms, **rejecting any
+candidate that fails the spec's validity rules before reading, watching or emptying
+it** — `$topdir/.Trash` sticky and not a symlink, `.Trash/$uid` and `.Trash-$uid`
+owned by the current user and not symlinks. The uid in the name protects nothing: on
+a world-writable topdir a hostile local user can pre-create `.Trash-<uid>` with
+`files/` symlinked anywhere, and an unvalidated empty pass then deletes whatever they
+pointed it at. glib guards the write path; only this check guards ours; count with
+one
 `readdir`; empty by deleting `files/` + `info/` contents; open via
 `org.freedesktop.FileManager1.ShowFolders(["trash:///"])`). Keep `TrashLocations`'
 shape — candidates / existing / watchable, with per-volume dirs watched via their
@@ -310,7 +327,9 @@ For the watch, **copy** PictKit's inotify pattern into Jetty rather than reusing
 directory where `TrashMonitor` needs N with dynamic add/drop, and PictKit's public
 surface is a three-app compatibility commitment. Make one structural change while
 copying: **one inotify instance with a `[wd: path]` map**, not one per path
-(`max_user_instances` is 128).
+(`max_user_instances` is 128). Delete the map entry on `IN_IGNORED` before adding
+any new watch — inotify reuses freed watch-descriptor numbers, so a stale entry
+silently routes a new watch's events to the old path.
 
 ### Hotkeys, power, tray
 
@@ -335,7 +354,10 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
   in `PowerCommands.swift`.
 - **Tray**: `NSStatusItem` → StatusNotifierItem over D-Bus, hand-rolled (GTK4 removed
   `GtkStatusIcon`). Ubuntu enables the AppIndicator extension by default; on other
-  GNOME installs it must be present or the tray simply does not appear.
+  GNOME installs it must be present or the tray simply does not appear. Watch
+  `NameOwnerChanged` on `org.kde.StatusNotifierWatcher` and re-register on every
+  arrival — hosts restart (an extension toggle is enough), and a one-shot registrant
+  loses its icon until relaunch.
 
 ## Build, package, ship
 
@@ -371,7 +393,7 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
 
 ## SF Symbols
 
-Jetty references **~88 distinct SF Symbols** — 48 of them `JettyMenuGlyph`'s curated
+Jetty references **~88 distinct SF Symbols** — 48 of them on `JettyMenuGlyph`'s curated
 picker list, the rest spread across `systemName:` call sites and, importantly, six
 *symbol-vending functions*: `PowerCommand.systemSymbol`,
 `WeatherService.symbol(forCode:)`, `SystemStats.batterySymbol(percent:)`,
@@ -458,7 +480,8 @@ changed the plan and are folded into the text above.
     `stat` silently reads nothing. Read to EOF.
 11. **KWin already has a compositor-side auto-hide protocol for layer surfaces**
     (`installAutoHideScreenEdgeV1`), which the research missed and which is directly
-    relevant to Jetty's central behaviour. Worth a spike.
+    relevant to Jetty's central behaviour. Worth a spike — folded into **JP-26**,
+    which now prefers compositor-side screen edges where they exist.
 12. **`DisplayRegistry` gets harder, not deleted**, and **Restore System Dock is
     cross-tier**: `gnome-extensions disable ubuntu-dock@ubuntu.com` writes per-user
     GSettings and is GNOME-only, so the shipped promise needs a per-tier
@@ -505,7 +528,7 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     features (stacks, context menus, window peek) — spiked first in JP-28.
 20. **A GSource on libdispatch's main-queue eventfd must `eventfd_read()` it**, or
     the app spins at 100% CPU (JP-18).
-21. **REFUTED — the COPY|MOVE drop mandate.** The corpus requires drop targets to
+21. **REFUTED — the COPY|MOVE drop mandate.** The corpus *claimed* drop targets must
     declare `COPY|MOVE` because "Nautilus rejects COPY-only wholesale". GTK4's
     `gtk_drop_target_accept` is a plain non-empty intersection, so COPY-only *does*
     accept the drag; and declaring MOVE is the riskier choice, because a

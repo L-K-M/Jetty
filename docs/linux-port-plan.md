@@ -87,7 +87,7 @@ watcher and against sharing `IconStoreWatcher`.
   is per-target, and a test target with 24 unlisted files fails it just as loudly.
   Built and measured against the tree as it stands: **57 entries** on `Jetty`
   (`Resources`, `MediaRemote`, `Jetty.entitlements`, `AppDelegate.swift`,
-  `JettyApp.swift`, the ten wholly-macOS directories — `Apps`, `Common`, `Hotkeys`,
+  `JettyApp.swift`, the nine wholly-macOS directories — `Apps`, `Common`, `Hotkeys`,
   `Icons`, `Settings`, `Stacks`, `Store`, `SystemDock`, `Windows` — and 43 individual
   files in the six directories the curated set only half-claims: `Dock` 10, `Menu` 9,
   `Model` 5, `Screens` 1, `Updates` 1, `Widgets` 17), and **24 entries** on
@@ -142,7 +142,10 @@ watcher and against sharing `IconStoreWatcher`.
   - `JettyTests/DockLayoutGapTests.swift` needs `Preferences` → add it in **JP-02**,
     once the Observation shim lands.
 - Add `.github/workflows/linux-ci.yml`: `container: swift:6.3-noble` (pin by digest,
-  as Top Drawer does), `swift build && swift test`, on PRs and pushes to `main`.
+  as Top Drawer does), the log-gated build described under **Pitfalls** below
+  followed by `swift test`, on PRs and pushes to `main`. One build command, not two —
+  a bare `swift build` here would quietly bypass the unhandled-file gate that the
+  whole `exclude:` apparatus exists to arm.
 - **Acceptance**: Linux job green with the seeded suites running; macOS CI untouched
   and green; zero diff to macOS-compiled semantics (guards only); `.xcodeproj`
   untouched.
@@ -158,7 +161,11 @@ watcher and against sharing `IconStoreWatcher`.
   file added later on the macOS side goes unnoticed. The cheap mitigation follows
   from the real mechanism: `exclude:` the macOS-only files and directories until the
   unhandled list is **empty**, then gate Linux CI on the build log itself —
-  `swift build 2>&1 | tee build.log && ! grep -q 'which are unhandled' build.log` —
+  `set -o pipefail && swift build 2>&1 | tee build.log &&
+  ! grep -q 'which are unhandled' build.log` — **`pipefail` is not optional**: a
+  pipeline's status is `tee`'s, so without it a *failing* build returns 0, prints no
+  unhandled-file warning, and the gate reports green on a broken build. Verified both
+  ways. GitHub Actions' default `bash -e` does not set it, so set it in the step —
   so the next unlisted file fails instead of being scrolled past. Do **not** reach
   for `-Xswiftc -warnings-as-errors` here, which an earlier draft of this plan
   suggested: that warning is emitted by SwiftPM during target planning, never by the
@@ -174,6 +181,12 @@ watcher and against sharing `IconStoreWatcher`.
 
 - Copy Top Drawer's merged `ObservationCompat.swift` into `Jetty/Common/`, guarded
   so it is Linux-only and additive; macOS keeps real Combine.
+- **First split JP-01's `Common` directory exclude into per-file entries** (nine of
+  them; `Common/` holds ten files). JP-01 excludes the directory wholesale, and
+  `exclude:` beats `sources:` — a file listed in `sources:` whose parent directory is
+  excluded is **silently dropped, with no error**, which I confirmed by building it.
+  Skip this and the shim simply is not compiled on Linux, and `Preferences` fails
+  with a confusing missing-symbol error rather than anything pointing at the manifest.
 - Bring `Model/Preferences.swift`, `Widgets/WeatherService.swift` and the other
   `ObservableObject` types that are otherwise portable into the `sources:` list.
 - **Decline the full `@Observable` migration** and record why in the PR body:
@@ -313,9 +326,15 @@ review as a move.*
   icon name) with `appleScript` demoted to a macOS-only extension.
 - Refactor `activateSelection()` into a pure
   `decide(_ state: MenuState) -> MenuAction`.
-- Reword the `confirmationPrompt` strings that say "your Mac".
+- Reword the `confirmationPrompt` strings that say "your Mac" — the one deliberate
+  behaviour change in Part 2, so land it as its own commit and leave the extraction
+  itself a pure move under Part 0's rule.
 - **Acceptance**: `AppSearchTests`, `ExpressionEvaluatorTests`, `CommandBarTests`,
-  `PowerCommandTests`, `MenuGlyphAndStoreTests` green on both platforms.
+  `PowerCommandTests` green on both platforms. `MenuGlyphAndStoreTests` stays
+  **macOS-only until JP-11**: it calls `JettyMenuGlyph` in ten places, and JP-01
+  keeps that file off Linux precisely because it validates symbol names through
+  `NSImage(systemSymbolName:)`. JP-11's `IconName` is what makes the suite portable;
+  claiming it here would just teach the executor that acceptance lists are advisory.
 
 ### JP-10 · Jetty · Widget cores
 **Branch** `claude/jp-10-widget-cores` · **Size** M
@@ -364,8 +383,9 @@ review as a move.*
   clears PictKit's "more than one app needs it" bar.
 - Scan the union of `$XDG_DATA_HOME/applications`, `$XDG_DATA_DIRS/applications`,
   `/var/lib/snapd/desktop/applications` and both Flatpak export dirs
-  (`~/.local/share/flatpak/exports/share/applications`,
-  `/var/lib/flatpak/exports/share/applications`) — never
+  (`$XDG_DATA_HOME/flatpak/exports/share/applications` — derived, not the literal
+  `~/.local/share/...`, or a relocated data home silently loses every user-installed
+  Flatpak — and `/var/lib/flatpak/exports/share/applications`) — never
   trust `$XDG_DATA_DIRS` alone. Apply the XDG defaults (`$XDG_DATA_HOME` →
   `~/.local/share`, `$XDG_DATA_DIRS` → `/usr/local/share:/usr/share`) and pin the
   precedence order — `$XDG_DATA_HOME`, then `$XDG_DATA_DIRS` left to right, then
@@ -420,8 +440,11 @@ review as a move.*
   `Icon=` through the freedesktop Icon Theme spec (index.theme inheritance,
   size/scale matching, the mandatory `hicolor` fallback), returning a `PixelImage`.
 - SVG-only theme icons go through `rsvg-convert` using the corpus's verified
-  fresh-empty-temp-dir sandbox recipe (there is no `--base-uri` flag; the base is the
-  input file's directory).
+  fresh-empty-temp-dir sandbox recipe. (Probe the shipped `rsvg-convert --help` for
+  `-b`/`--base-uri` on each target release rather than assuming it absent — newer
+  librsvg has grown it. The empty-temp-dir copy stays the default either way, since it
+  also stops relative references resolving into the theme tree, which is what the
+  input file's own directory as base would allow.)
 - **Acceptance**: fixture-theme unit tests (inheritance, scale, symbolic fallback,
   a hostile SVG regression case); `IconResolverTests` still green.
 
@@ -468,9 +491,17 @@ before any tier decision.*
   walk. `isCountedInterface`'s exclusion list is Darwin-specific — rewrite it for
   Linux, and make it **type-aware rather than prefix-only**: drop interfaces whose
   `/sys/class/net/<if>/type` is `ARPHRD_LOOPBACK` (772) or `ARPHRD_NONE` (65534),
-  then apply a prefix list for the `ARPHRD_ETHER` virtuals a type check cannot catch
-  (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tun*`, `tap*`, `wg*`, `ppp*`,
-  `zt*`, `tailscale*`, `sit*`, `ip6tnl*`, `ip_vti*`). A prefix-only list both rots as
+  then apply a prefix list for the `ARPHRD_ETHER` virtuals a type check genuinely
+  cannot catch (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tap*`, `vnet*`,
+  `gretap*`, `erspan*`), plus belt-and-braces entries for tunnels the type filter
+  already drops
+  (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tun*`, `tap*`, `vnet*`, `wg*`,
+  `ppp*`, `zt*`, `tailscale*`, `sit*`, `ip6tnl*`, `ip_vti*`, `gre*`, `gretap*`,
+  `erspan*`). Note `gre*`/`gretap*`/`erspan*` and libvirt's `vnet*` have to be in
+  that list explicitly: the type filter only drops loopback and none, so `gre0`
+  (`ARPHRD_IPGRE`) and the `ARPHRD_ETHER` virtuals survive it. An earlier draft named
+  `gre0` as the motivating example and then omitted it from the list. A prefix-only
+  list both rots as
   new tools ship and misses the tunnel scaffolding (`sit0`, `ip6tnl0`, `gre0`) that
   is present by default on many distros.
 - **Corrections**: procfs files report `st_size == 0`, so any code that pre-sizes a
@@ -544,6 +575,13 @@ before any tier decision.*
   can both codegen. Claim the name by calling `org.freedesktop.DBus.RequestName`
   yourself — the library has no helper.
 - `linux/systemd/jettyd.service` (user unit), and the Linux CI job builds it.
+  **`After=` and `PartOf=graphical-session.target`, and refuse to start without
+  `WAYLAND_DISPLAY`/`DISPLAY`.** JP-20's launch argument is that a `--scope` inherits
+  `jettyd`'s environment — which is only worth anything if `jettyd`'s environment is
+  the session's. A user unit started before the session imported its variables holds
+  the manager's pre-session environment and hands that to every app it launches, with
+  no error anywhere. Assert it at startup rather than discovering it as "apps launch
+  but no window appears".
 - **Decide the run-loop story here, once, for both executables.** Nothing in a
   GLib main loop drains `DispatchQueue.main` or `RunLoop.main`, so Jetty's four
   `RunLoop.main.add(_:forMode: .common)` timers (`LiveSystemStats:76`,
@@ -565,7 +603,13 @@ before any tier decision.*
   `/proc/self/mountinfo`, the two per-volume forms (`$topdir/.Trash/$uid`, which
   requires the sticky bit and must not be a symlink, and `$topdir/.Trash-$uid`, which
   the spec requires to be an ordinary directory, not a symlink, owned by the user —
-  check that before counting into it and especially before *emptying* it).
+  check that before counting into it and especially before *emptying* it). This is a
+  security boundary, not bookkeeping: on a world-writable topdir any local user can
+  pre-create `.Trash-<uid>` bearing *your* uid with `files/` symlinked elsewhere, so
+  an unvalidated empty pass becomes "delete the contents of a directory an attacker
+  chose". glib guards the write path; nothing guards ours but this check. Use
+  `lstat`, never follow a symlinked directory, and fixture both the symlink and the
+  wrong-owner case.
   Applying the per-volume forms to `/` instead would probe `/.Trash-$uid` and read
   empty right after the user trashed something. Count with one `readdir` of each
   `files/`; trash via `gio trash -- <path>` invoked with an **argv array, never a
@@ -574,7 +618,10 @@ before any tier decision.*
   `org.freedesktop.FileManager1.ShowFolders(["trash:///"])`.
 - Copy PictKit's inotify pattern into `linux/` (whole-file Linux-only), with **one
   inotify instance and a `[wd: path]` map** rather than one instance per path
-  (`max_user_instances` is 128). Say in the PR body why this is a deliberate copy
+  (`max_user_instances` is 128). **Drop the map entry on `IN_IGNORED` before adding
+  any new watch** — inotify reuses freed watch descriptors, so a stale entry silently
+  routes a new watch's events to the old path, which with dynamic add/drop is a
+  when-not-if bug. Say in the PR body why this is a deliberate copy
   rather than a reuse of `IconStoreWatcher`. **Drop the `CInotify` import while
   copying**: the shim turns out to be unnecessary on Swift 6.3.3 — the adversarial
   pass compiled and ran `inotify_init1`/`inotify_add_watch`/`inotify_rm_watch` with
@@ -618,6 +665,13 @@ before any tier decision.*
   255 bytes and the gnome-desktop escape expands every non-`[A-Za-z0-9:_.]` byte to
   four characters, which a long Flatpak instance ID can overrun.
   `gio launch` only for `Terminal=true`; `gio open` for file/folder/URL tiles.
+  **Spawn `systemd-run` detached and never wait on it.** The same man-page paragraph
+  that gives us environment inheritance also says execution "is synchronous, and will
+  return only when the command finishes": in `--scope` mode systemd-run *is* the
+  app's parent and stays resident for its whole lifetime, forwarding signals. Await
+  it and every launch pins a worker until the user quits the app; inherit its stdio
+  and the app's GTK warnings land in the dock's journal, with a pipe that never EOFs.
+  `setsid`, stdio to `/dev/null` or the journal, no reap.
   **`--scope` is load-bearing, not a style choice**, and a later reviewer will try to
   "fix" it: a transient *service* is spawned by the user manager and gets the
   manager's environment, so a session that never imported `WAYLAND_DISPLAY` /
@@ -628,7 +682,11 @@ before any tier decision.*
   one of those variables needs an explicit `--setenv=`.
   Also honour `DBusActivatable=true` per spec — `org.freedesktop.Application.Activate`
   on the bus name matching the desktop-file ID — before falling back to `Exec`, or
-  single-instance apps get a second process instead of a hand-off.
+  single-instance apps get a second process instead of a hand-off. Cold start works
+  because D-Bus **auto-start is on by default** for method calls and the bus reads the
+  app's `.service` file: the requirement is therefore *not* to disable it (no
+  `NO_AUTO_START` flag), and to fall back to `Exec` only on a real activation error,
+  never on "the name is not owned yet".
 - Define `AppShell` with `runningApps`, `windows(of:)`, `activate`, `minimize`,
   `close` — **plus `hide`, `quit` and `forceQuit`**, which Jetty already ships
   (`Apps/AppLauncher.swift`, with `Apps/AppResponsivenessMonitor.swift` behind the
@@ -675,7 +733,11 @@ before any tier decision.*
   unreserved plus `/&=:@+$,` — so any path containing a semicolon, in the filename
   *or any parent directory*, hashes differently under Foundation's escaping and
   silently misses the cache for every file beneath it. Reimplement that character
-  set and unit-test it with a semicolon fixture.
+  set and unit-test it against **golden vectors captured from a real GIO run** — path
+  → escaped URI → MD5 → cache filename, generated once on a reference system and
+  hard-coded — including `;`, `~`, `!`, `'`, `(` and a semicolon in a *parent*
+  directory. Fixtures computed by the reimplementation would only prove it agrees
+  with itself, which is no test at all for a character-set bug.
 - Reveal-in-file-manager via `org.freedesktop.FileManager1.ShowItems`.
 - **Acceptance**: MIME→icon-name resolution tests; thumbnail-cache path tests.
 
@@ -740,7 +802,16 @@ before any tier decision.*
 
 - StatusNotifierItem + `com.canonical.dbusmenu`, hand-rolled over the Swift D-Bus
   library (GTK4 removed `GtkStatusIcon`; the ayatana packages are rejected — GTK3-only
-  or exporting a menu interface Ubuntu's extension does not implement).
+  or exporting a menu interface Ubuntu's extension does not implement). **Detect the
+  host before trusting registration**: GNOME Shell implements no SNI host, so
+  `org.kde.StatusNotifierWatcher` exists only where the AppIndicator extension is
+  installed — Ubuntu ships it, stock GNOME does not. Watch that name's ownership and
+  treat `RegisterStatusNotifierItem` failure as "no host", then degrade visibly in the
+  tray preference rather than registering into the void on exactly the stock-GNOME
+  population JP-20's degraded backend targets. Register on **every** arrival of that
+  name, not once: toggling the AppIndicator extension in Extensions Manager is an
+  ordinary thing users do, and a one-shot registrant loses its icon until relaunch.
+  Re-apply icon, tooltip, status and menu each time.
 - Launch at login: an XDG autostart `.desktop` in `~/.config/autostart/`, written at
   runtime by the toggle, not shipped by the package.
 - Single-instance via D-Bus name ownership (replacing the `NSRunningApplication`
@@ -761,16 +832,31 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - One anchored, undecorated window per display: `gtk_layer_init_for_window` **before
   realize**, `set_layer(OVERLAY)`, `set_anchor`, `set_margin`,
   `set_exclusive_zone(0)`, `set_keyboard_mode(NONE)`, `set_monitor`, namespace
-  `"jetty"`. Reads dock data from `jettyd`; logs pointer enter/leave and clicks.
+  `"jetty"`. The zero is deliberate and is not a "hello dock" placeholder to be
+  revisited later: reserving no space *is* `AGENTS.md`'s one load-bearing design
+  decision, so maximized windows running underneath the dock is the intended
+  behaviour, not a bug to fix by passing a height. Reads dock data from `jettyd`; logs pointer enter/leave and clicks.
 - **The single deliberate y-flip lives here**, in a new unit-tested
   `LinuxScreenSpace.swift`: feed `DockLayout` a per-output local y-up
-  `CGRect(0, 0, usable.width, usable.height)` and convert its output to
-  `marginTop = usableH − frame.maxY`. A second, panel-local flip feeds
+  `CGRect(0, 0, usable.width, usable.height)` and convert its output to a margin on
+  an edge the surface is **actually anchored to** — `zwlr_layer_surface_v1.set_margin`
+  says outright that "setting this value for edges you are not anchored to has no
+  effect", so `marginTop = usableH − frame.maxY` is correct only for a top-anchored
+  dock and a silent no-op for a bottom-anchored one, which needs
+  `marginBottom = frame.minY`. Derive the margin edge from the same `anchorEdges`
+  JP-03's `layerShellPlacement` returns, so the two cannot drift apart, and assert
+  the vertical offset in the headless-sway test rather than just the anchoring. A second, panel-local flip feeds
   `pointerOverDockContent`. **Two flip sites, no more.**
 - Assert `gtk_layer_is_supported()` at startup and fail with a clear message; ship
   the launcher with `LD_PRELOAD` set, because gtk4-layer-shell is a
   symbol-interposition shim that does nothing if libwayland loads first. (It does
-  warn — the failure is loud, not silent.)
+  warn — the failure is loud, not silent.) **Then strip `LD_PRELOAD` from every child
+  environment**, because Jetty is an app launcher and children inherit it: the shim
+  would otherwise be injected into every browser, terminal and game the dock starts,
+  where any gtk4-layer-shell/libwayland skew becomes a crash in software Jetty does
+  not own and cannot debug from a bug report. Unset it on the launch path, and keep it
+  out of the D-Bus activation environment so bus-activated apps don't inherit it
+  either. Test that a launched child's environment has no `LD_PRELOAD`.
 - **Stand up a headless compositor job here**, and let every later frontend item
   inherit it. The adversarial pass found that a GitHub runner ships no compositor
   *preinstalled* but is one apt install away: **sway under
@@ -782,9 +868,12 @@ CI action that builds gtk4-layer-shell from source on noble.*
   headless sway in CI; manual verification on real KDE/Sway sessions documented
   honestly in the PR (for the things headless cannot show — fullscreen stacking,
   fractional scaling).
-- **Pitfalls**: `set_exclusive_zone(0)` is right (never `-1`, which would put Jetty
-  under other panels; never positive, which would reserve space and break the app's
-  one load-bearing design decision). There is **no readback** of the resulting usable
+- **Pitfalls**: `set_exclusive_zone(0)` is right. Never `-1` — which is a *geometry*
+  setting, not a stacking one: per the protocol the surface "would not like to be
+  moved to accommodate for other surfaces", so it is extended to the raw output edge
+  and overlaps another panel's area rather than being placed under it. Never positive,
+  which reserves space and breaks the app's one load-bearing design decision. Zero is
+  the value that asks to be moved clear of other panels while reserving nothing. There is **no readback** of the resulting usable
   area — use a throwaway four-edge-anchored probe surface when a number is genuinely
   needed. Centre-plus-offset placement cannot be expressed by anchors alone.
 
@@ -827,7 +916,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - Click-through while hidden via `gdk_surface_set_input_region` (gated by
   `gdk_display_supports_input_shapes()`, and only after the `GdkSurface` exists);
   fall back to unmapping, which is preferable anyway — a permanently mapped
-  transparent overlay over a fullscreen game defeats direct scanout.
+  transparent overlay over a fullscreen game defeats direct scanout. Be honest that
+  this cuts both ways: the always-mapped reveal sliver is itself an `OVERLAY` surface
+  overlapping the fullscreen window, so it disables direct scanout on that output too.
+  Measure the cost like JP-25's frame time rather than discovering it in a bug report,
+  and prefer KWin's compositor-side screen edges where they exist.
 - **Retire `hideDistance` on Linux** and say so in the release notes: a client sees
   pointer events only over its own surfaces. Do not fake it by inflating the input
   region.
@@ -855,7 +948,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   intersection, so it buys nothing, while a `gdk_drop_finish()` that reports MOVE is
   exactly what tells the source to **delete the original** — a data-loss hazard on
   the Trash tile, which is the one target where a wrong action is unrecoverable.
-  Add a test asserting the finish action.
+  Add a test asserting the finish action — and re-read `make_action_unique` at the
+  GTK version of the **ship target** before relying on it, recording that version in
+  the PR next to the noble citation. This is implementation behaviour, not API
+  contract, and it is deciding a data-loss question on the Trash tile; noble ships
+  4.14.x while JP-34 accepts on 26.04.
 - Drop on the sliver reveals then pins (the `DragRevealSensorView` analogue); drop on
   a folder tile moves; drop on Trash calls `gio trash`; reorder within the strip
   reuses JP-06's `DockDragPolicy`.

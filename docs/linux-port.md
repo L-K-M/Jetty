@@ -27,8 +27,9 @@ and an inset, per display" is `set_anchor` + `set_margin` + `set_monitor`. Rough
 hard-edge and display-seam pointer heuristics — are **deleted rather than ported**,
 because a per-output sliver surface's pointer-enter event is authoritative where a
 global mouse monitor had to guess. About **45% of Jetty's app code and 95% of its
-test code** move to Linux, and the extraction that gets them there (a `JettyCore`
-SwiftPM package) leaves the Mac app better factored on its own terms. The catch is
+test code** move to Linux, and the extraction that gets them there (`JettyCore`, the
+portable subset the SwiftPM manifest compiles) leaves the Mac app better factored on
+its own terms. The catch is
 the same one Top Drawer hit and it is not a Jetty problem: **stock GNOME Wayland —
 Ubuntu's default desktop — will not let any client process be a dock**, so shipping
 to most Ubuntu users requires a GNOME Shell extension alongside the app, exactly as
@@ -42,7 +43,7 @@ single protected Dock process; there is a *desktop-environment-dependent* panel
 (Ubuntu's own dock is a Shell extension; KDE's is a Plasma panel; wlroots
 compositors usually have no panel at all). So the port is really three products:
 
-1. **`JettyCore`, the shared logic package** — the document model, the store, the
+1. **`JettyCore`, the shared logic subset** — the document model, the store, the
    layout math, the tile merge, the magnification curve, the command bar's
    evaluator/converter/search, the updater. Genuinely portable today, and
    extracting it is the "Step 1 that benefits macOS too" move the Top Drawer plan
@@ -71,8 +72,8 @@ file-by-file read:
 | **P1** | Pure logic; compiles on Linux today (modulo `CoreGraphics` → `Foundation` for CG value types) | 2,425 | 16% |
 | **P2** | Foundation-only; needs a named check or small migration (Combine, a corelibs hole, a formatter difference) | 1,808 | 12% |
 | **P3** | Platform service behind a seam — logic survives, backend swaps | 2,678 | 18% |
-| **P4** | UI needing a Linux frontend | 7,614 | 50% |
-| **P5** | macOS-only concept; delete or stub | 729 | 5% |
+| **P4** | UI needing a Linux frontend — including the code whose Linux replacement is a *different* mechanism, so the original is deleted rather than translated (the reveal heuristics below are the large case) | 7,614 | 50% |
+| **P5** | macOS-only concept with no Linux counterpart at all; delete or stub | 729 | 5% |
 
 **Shareable today: P1+P2+P3 = 6,911 LOC, ~45% of the app.** The `JettyCore`
 extraction moves most of it; the rest is seam implementations.
@@ -238,10 +239,17 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
   Drawer's LP-19, the Pict editor), and it retires the documented best-effort
   desktop-ID guess in `DesktopOverrideSync.overrideFilename(forSystemPath:)`.
 - **Launching**: parse `Exec`, expand field codes, hand the argv to
-  `systemd-run --user --quiet --scope --slice=app.slice --unit=app-jetty-<id>-<rand>.scope`.
+  `systemd-run --user --quiet --scope --slice=app.slice --unit=app-jetty-<escaped-id>-<rand>.scope`
+  — escaped, because unit names allow only `[a-zA-Z0-9:_.\-]` while desktop-file IDs
+  come from arbitrary filenames.
   Boring, never invokes `sh`, keeps launched apps alive when the dock stops, and —
   because the scope name carries the app ID — makes the stock-GNOME running dot
-  *exact* for everything Jetty itself launched.
+  *exact* for everything Jetty itself launched. `--scope` rather than a transient
+  service is also what keeps the launched app in *Jetty's* environment — a scope is
+  forked by `systemd-run` itself, a service by the user manager, which may never have
+  been given `WAYLAND_DISPLAY`. Entries with `DBusActivatable=true` go through
+  `org.freedesktop.Application.Activate` first, per spec, with `Exec` as the fallback,
+  or single-instance apps get a second process instead of a hand-off.
 - **Running state and activation**: an `AppShell` protocol with five verbs
   (`runningApps`, `windows(of:)`, `activate`, `minimize`, `close`), implemented four
   times — GNOME extension over private D-Bus (`Shell.AppSystem`/`WindowTracker`, the
@@ -330,7 +338,10 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
 ## Build, package, ship
 
 - **Layout**: a root `Package.swift` (swift-tools 5.9, matching `SWIFT_VERSION = 5.0`)
-  with a `Jetty` library target at path `Jetty` and a curated `sources:` list; macOS
+  with a `Jetty` library target at path `Jetty` and a curated `sources:` list — named
+  `Jetty`, not `JettyCore`, so the existing tests' `@testable import Jetty` compiles
+  unmodified under both build systems; "`JettyCore`" throughout this document means
+  the portable *subset* that list selects, not a second target; macOS
   keeps building through `Jetty.xcodeproj` and never resolves the manifest. Anything
   genuinely Linux-only lives in a second manifest at `linux/Package.swift` that
   path-depends on the root package and PictKit — exactly Top Drawer's shape.
@@ -395,8 +406,9 @@ onto a symbol's own layer hierarchy, so multi-tone symbols lose their tinting.
 ## Verification appendix
 
 Every load-bearing claim was handed to an adversarial agent instructed to *refute*
-it against primary sources. Two domains completed in the first pass; the corrections
-below changed the plan and are folded into the text above.
+it against primary sources, across eight domains in two passes. Corrections 1–12
+are the first pass's two domains, 13 onward the second pass's six. All of them
+changed the plan and are folded into the text above.
 
 1. **Overlay vs fullscreen — the reasoning was wrong and the corollary matters.**
    The protocol's "fullscreen surfaces are typically rendered at the top layer"
@@ -467,7 +479,10 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     `sender=org.gnome.Shell` (GDBus resolves the well-known name to its current
     unique owner) before trusting a payload that drives the running-apps model —
     otherwise a hostile or buggy app in the session can inject or suppress dock
-    entries. Test that a matching signal from a foreign unique name is ignored.
+    entries. Test that a matching signal from a foreign unique name is ignored — and
+    that signals still arrive after `org.gnome.Shell` changes owner, since a shell
+    restart that silently stops delivery is a worse failure than the injection this
+    guards against.
 16. **The SF Symbol count in this document was wrong** — ~88, not ~31 — and the
     undercount fell exactly on the pure-logic symbol-vending functions the port keeps
     verbatim. Corrected above.
@@ -497,14 +512,20 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     for F-keys — plus an honest needs-re-record path (JP-22).
 23. **REFUTED — SwiftPM silently ignores unlisted sources.** Reproduced here: it
     prints `warning: found 87 file(s) which are unhandled` and names every one. Loud,
-    but still not a gate — so `exclude:` until that list is empty and build with
-    `-Xswiftc -warnings-as-errors` (JP-01).
+    but still not a gate — so `exclude:` until that list is empty and grep the build
+    log for `which are unhandled`. Not `-Xswiftc -warnings-as-errors`, which an
+    earlier draft said: SwiftPM emits that warning during target planning, so no
+    compiler flag can promote it, and a package with an unlisted file builds and
+    exits 0 under it (JP-01).
 24. **CI can test the layer-shell tier, not just build it.** sway under
     `WLR_BACKENDS=headless WLR_RENDERER=pixman` runs in a bare container and
-    advertises `zwlr_layer_shell_v1` v4 (JP-24).
+    advertises `zwlr_layer_shell_v1` v4 — the advertised version tracks the wlroots
+    in the image, not headlessness, so pin the sway version in CI and the version
+    assertion stays meaningful (JP-24).
 25. **The `CInotify` shim is unnecessary** on Swift 6.3.3 — `import Glibc` alone
-    reaches `inotify_init1`/`add_watch`/`rm_watch`, and `inotify_event` is 16 bytes
-    (JP-19).
+    reaches `inotify_init1`/`add_watch`/`rm_watch`, and `inotify_event` is 16 bytes.
+    That is a fact about a toolchain, so it holds only while Linux CI pins the same
+    one — check the pin before deleting the shim (JP-19).
 26. **`Session.Lock()` is not unconditional**: gnome-shell returns early when
     `org.gnome.desktop.lockdown disable-lock-screen` is set — the same
     succeeds-but-does-nothing class `PowerCommands.swift:116-123` already documents

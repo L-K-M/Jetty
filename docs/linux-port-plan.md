@@ -39,6 +39,17 @@ Four deltas specific to Jetty:
   `scripts/build.sh` already do; confirm the shared `lkm-build` engine does too.
 - **Extraction PRs are pure moves.** No behaviour change, no reformatting; the
   existing tests move with the code and must pass unchanged on both platforms.
+- **`JettyCore` is a subset, not a second target.** The SwiftPM library target is
+  named **`Jetty`** at `path: "Jetty"`, and it has to be: the existing test files say
+  `@testable import Jetty`, and they are compiled by *both* the Xcode test target
+  (where the module is the app) and the SwiftPM one, so any other module name means
+  guarded imports in test files. `JettyCore` is this document's name for the
+  **portable subset** of that module — the curated `sources:` list JP-01 seeds.
+  So "move X into `JettyCore`" in Part 2 means *add X to that list* (splitting the
+  file first where only half of it is portable), never "create a `JettyCore` target"
+  and never "relocate the file on disk". Nothing here needs a second Xcode target or
+  a `project.pbxproj` edit: the file-system-synchronized group keeps compiling the
+  same files into the app either way.
 
 ### Prior art to copy, not reinvent
 
@@ -65,7 +76,7 @@ watcher and against sharing `IconStoreWatcher`.
 
 ## Part 1 — Foundations (CI first, so every later PR has a net)
 
-### JP-01 · Jetty · Root `Package.swift` + `JettyCore` seed + Linux CI
+### JP-01 · Jetty · Root `Package.swift` + the `JettyCore` subset + Linux CI
 **Branch** `claude/jp-01-linux-ci` · **Size** M · **Why**: `linux-port.md` §Build
 
 - Add a root `Package.swift` (swift-tools 5.9): library target **named `Jetty`** at
@@ -96,9 +107,11 @@ watcher and against sharing `IconStoreWatcher`.
     `DockLayoutTests`).
   - `#if canImport(FoundationNetworking)` in `GitHubReleaseClient`,
     `UpdateDownloader`, `UpdateVersionComparison`.
-  - `#if canImport(SwiftUI) … #else import Foundation #endif` on
-    `DecorationPosition` and `DecorationStyle` — they import SwiftUI only for
-    `Identifiable` — **plus** a `#if canImport(SwiftUI)` around
+  - **Delete** `import SwiftUI` from `DecorationPosition` outright: its only
+    SwiftUI-looking need is `Identifiable`, which has been standard library since
+    Swift 5.1, and the file type-checks on Linux with no import at all (verified).
+    `DecorationStyle` keeps the import but guarded, `#if canImport(SwiftUI)`,
+    **plus** a `#if canImport(SwiftUI)` around
     `DecorationStyle.colors` alone (`DecorationStyle.swift:45-47`), which maps the
     pure `hexes` array through SwiftUI's `Color`. `hexes` itself stays portable.
   - `#if canImport(AppKit)` around **`DockItem`'s three classifier factories**
@@ -132,9 +145,14 @@ watcher and against sharing `IconStoreWatcher`.
   warns about stands: an unlisted file is not compiled or tested on Linux, so a pure
   file added later on the macOS side goes unnoticed. The cheap mitigation follows
   from the real mechanism: `exclude:` the macOS-only files and directories until the
-  unhandled list is **empty**, then build with `-Xswiftc -warnings-as-errors` (or
-  grep the log for `unhandled`) so the next unlisted file fails Linux CI instead of
-  being scrolled past. No separate file-diff check is needed.
+  unhandled list is **empty**, then gate Linux CI on the build log itself —
+  `swift build 2>&1 | tee build.log && ! grep -q 'which are unhandled' build.log` —
+  so the next unlisted file fails instead of being scrolled past. Do **not** reach
+  for `-Xswiftc -warnings-as-errors` here, which an earlier draft of this plan
+  suggested: that warning is emitted by SwiftPM during target planning, never by the
+  compiler, so `-Xswiftc` cannot promote it. Verified — a package with one unlisted
+  file builds and exits 0 under `-Xswiftc -warnings-as-errors` while printing
+  `found 1 file(s) which are unhandled`. No separate file-diff check is needed.
 
 ### JP-02 · Jetty · Combine compatibility shim
 **Branch** `claude/jp-02-observation-compat` · **Size** S
@@ -144,7 +162,7 @@ watcher and against sharing `IconStoreWatcher`.
 - Bring `Model/Preferences.swift`, `Widgets/WeatherService.swift` and the other
   `ObservableObject` types that are otherwise portable into the `sources:` list.
 - **Decline the full `@Observable` migration** and record why in the PR body:
-  Jetty has 96 `@Published` / 16 `ObservableObject` but only **6** `.sink` chains
+  Jetty has 96 `@Published` / 15 `ObservableObject` but only **6** `.sink` chains
   (in `DockController`, `JettyMenuModel` and `PomodoroTimer`, plus
   `PermissionsView`'s `Timer.publish`); converting 15 types is a large macOS-visible
   diff for zero Linux benefit.
@@ -162,8 +180,9 @@ watcher and against sharing `IconStoreWatcher`.
 
 ## Part 2 — Core extraction (macOS-improving; validated by macOS CI)
 
-*Each item is a **pure move** into `JettyCore` with its tests. Land them in order;
-each is small enough to review as a move.*
+*Each item is a **pure move** into `JettyCore` with its tests — a `sources:`
+addition, not a new target; see Part 0. Land them in order; each is small enough to
+review as a move.*
 
 ### JP-03 · Jetty · Geometry core: `DockLayout` + `MagnificationCurve`
 **Branch** `claude/jp-03-geometry-core` · **Size** S-M
@@ -188,8 +207,9 @@ each is small enough to review as a move.*
 **Branch** `claude/jp-04-document-core` · **Size** M
 
 - Move `DockDocument` + the `Failable<T>` lenient-decode wrapper, `DockItem`'s
-  Codable half + `dedupKey` (separated from its three classifier factories),
-  `DockAnchor.clampOffset`/`clampInset`.
+  Codable half + `dedupKey` (separated from its three classifier factories).
+  `clampOffset`/`clampInset` are **not** listed here: they are static members of
+  `DockAnchor` in `Model/DockAnchor.swift`, which JP-03 already moves whole.
 - Generalise `DockStore`'s engine into `DocumentStore<T: Codable>`: load → decode →
   `.bak` fallback → newer-version read-only gate → debounced atomic save. **Preserve
   the semantics exactly** — they are tested and load-bearing, and a debounced
@@ -329,7 +349,8 @@ each is small enough to review as a move.*
   clears PictKit's "more than one app needs it" bar.
 - Scan the union of `$XDG_DATA_HOME/applications`, `$XDG_DATA_DIRS/applications`,
   `/var/lib/snapd/desktop/applications` and both Flatpak export dirs
-  (`~/.local/share/flatpak/exports/share`, `/var/lib/flatpak/exports/share`) — never
+  (`~/.local/share/flatpak/exports/share/applications`,
+  `/var/lib/flatpak/exports/share/applications`) — never
   trust `$XDG_DATA_DIRS` alone. Apply the XDG defaults (`$XDG_DATA_HOME` →
   `~/.local/share`, `$XDG_DATA_DIRS` → `/usr/local/share:/usr/share`) and pin the
   precedence order — `$XDG_DATA_HOME`, then `$XDG_DATA_DIRS` left to right, then
@@ -343,22 +364,33 @@ each is small enough to review as a move.*
   merges them — and since this index also replaces `DesktopOverrideSync`'s ID guess,
   a different derivation would stop existing override files matching.
 - Give each filtering key defined semantics rather than "honour": `Hidden=true` →
-  drop the entry entirely (the spec's "treat as if it did not exist");
+  drop the entry — but **after** desktop-file-ID resolution, not at parse time. The
+  spec's "treat as if it did not exist" is what makes a `Hidden=true` file in
+  `$XDG_DATA_HOME/applications` the standard way to *uninstall* a vendor entry of the
+  same ID from `/usr/share/applications`: the Hidden entry has to win first-wins and
+  take the ID out of the index with it. Drop it while scanning and the system twin
+  re-surfaces;
   `NoDisplay=true` → index it but exclude it from search and default listings;
   `OnlyShowIn`/`NotShowIn` matched case-sensitively against the colon-separated
   `$XDG_CURRENT_DESKTOP`, with unset meaning `OnlyShowIn` entries lose; `TryExec`
-  resolved against `$PATH` at index time. Three apps consume this, so an
+  resolved at index time against the **user session's** `$PATH`, not the indexing
+  process's — a daemon or systemd user service can have a minimal `PATH` in which
+  `~/.local/bin` entries look uninstalled and vanish from the dock — and re-evaluated
+  on every reindex. Three apps consume this, so an
   under-specified "honour" is exactly the drift the shared index exists to prevent.
   Resolve `Name`/`GenericName`/`Keywords` by the spec's locale ladder.
 - Parse `Exec` per spec: quoting rules and field codes (`%f %F %u %U %i %c %k`),
   returning an argv array; strip the deprecated codes (`%d %D %n %N %v %m`) and
   unescape `%%` to a literal `%`. Remember `%i` expands to **two** argv entries
-  (`--icon` and the value) and `%c` is the *localised* name. **Never** build a shell
+  (`--icon` and the value) — or **zero** when `Icon` is empty or absent, which is the
+  fixture that catches a naive implementation emitting `--icon ""` — and `%c` is the
+  *localised* name. **Never** build a shell
   string.
 - Retire `DesktopOverrideSync.overrideFilename(forSystemPath:)`'s documented
   best-effort desktop-ID guess in favour of the real index.
-- **Acceptance**: unit tests over hostile fixtures (quoting, embedded `%`, missing
-  `Exec`, bad locale keys, symlink loops) before anything is ever executed; existing
+- **Acceptance**: unit tests over hostile fixtures (quoting, embedded `%`, `%i` with
+  no `Icon` key, missing `Exec`, bad locale keys, symlink loops, and a `Hidden=true`
+  user entry masking a same-ID system one) before anything is ever executed; existing
   `DesktopOverrideSyncTests` and `DesktopEntryRewriterTests` green; macOS CI green
   (the whole target compiles on both platforms today — keep it that way).
 - **Pitfalls**: this is a **public** PictKit surface and therefore a
@@ -397,8 +429,12 @@ before any tier decision.*
   machine exposing no line-power device (a fully-charged idle battery reports
   `State=4`, so `OnBattery=false` while actually on battery), which would mis-drive
   `isLowBattery(percent:isPlugged:)`. Derive `isPlugged` from `State` instead:
-  `Discharging` ⇒ unplugged, `Charging`/`FullyCharged` ⇒ plugged, `Unknown` ⇒ hold
-  the last known value.
+  cover the whole enum (0 Unknown / 1 Charging / 2 Discharging / 3 Empty /
+  4 FullyCharged / 5 PendingCharge / 6 PendingDischarge), because the pending states
+  are what a ThinkPad or ASUS charge threshold parks the battery in and both mean
+  line power is connected: `Discharging` ⇒ unplugged,
+  `Charging`/`FullyCharged`/`PendingCharge`/`PendingDischarge` ⇒ plugged,
+  `Empty`/`Unknown`/anything unrecognised ⇒ hold the last known value.
 - Treat `PropertiesChanged` as a **delta plus an invalidated list**, never a full
   snapshot.
 - Keep `/sys/class/power_supply` (filtered `type=="Battery" && scope!="Device"`) as an
@@ -444,7 +480,9 @@ before any tier decision.*
   `org.freedesktop.DBus.ListNames` snapshot and dedupe arrivals against it. Without
   the snapshot every player started before the dock — the common case, since the dock
   autostarts — is invisible, and an integration test whose mock service starts *after*
-  the watcher would not catch it. Make the acceptance test start the mock first.
+  the watcher would not catch it. So cover **both** orders under `dbus-run-session`:
+  mock-before-watcher exercises the snapshot, watcher-before-mock exercises the live
+  `NameOwnerChanged` arrival, and each must find the player on its own.
 - Split out a pure `MPRISPlayerSelector.pick(from:)` and `parse(metadata:)` so both
   join the tested backbone.
 - **Correction**: do not present MPRIS as "strictly better" — it is opt-in per
@@ -455,8 +493,8 @@ before any tier decision.*
 - macOS keeps `MediaRemote/` behind `#if canImport(AppKit)`; nothing is deleted.
 - Free bonus to wire up: `PlayPause`/`Next`/`Previous`, and a `DesktopEntry` key
   that feeds straight into PictKit's icon ladder.
-- **Acceptance**: selector and parser unit tests; integration test against a mock
-  MPRIS service under `dbus-run-session`.
+- **Acceptance**: selector and parser unit tests; integration tests against a mock
+  MPRIS service under `dbus-run-session`, in both start orders.
 
 ### JP-17 · Jetty · `SleepWakeObserving` + the Pomodoro sound seam
 **Branch** `claude/jp-17-sleep-wake` · **Size** S-M
@@ -483,7 +521,9 @@ before any tier decision.*
 - Add `linux/Package.swift` (swift-tools 5.9) path-depending on the root package and
   PictKit, with executable `jettyd` and a `JettyDaemon` library target so tests can
   `@testable import` it. Copy Top Drawer's manifest shape and its `dbus` pin
-  (`wendylabsinc/dbus`, `.upToNextMinor(from: "0.4.1")`).
+  (`wendylabsinc/dbus`, `.upToNextMinor(from: "0.4.1")`). Add **`swift-crypto`**
+  here too — JP-21 needs `Crypto.Insecure.MD5` for thumbnail-cache names and there
+  is no CryptoKit on Linux.
 - Own `ch.lkmc.Jetty` on the session bus, export `/ch/lkmc/Jetty` implementing
   `ch.lkmc.Jetty1`; introspection-XML-first so the frontend and the GJS extension
   can both codegen. Claim the name by calling `org.freedesktop.DBus.RequestName`
@@ -508,7 +548,9 @@ before any tier decision.*
   for the volume holding the home directory — the spec's primary can, and where most
   deletions land on a single-volume install — plus, for *other* mounts in
   `/proc/self/mountinfo`, the two per-volume forms (`$topdir/.Trash/$uid`, which
-  requires the sticky bit and must not be a symlink, and `$topdir/.Trash-$uid`).
+  requires the sticky bit and must not be a symlink, and `$topdir/.Trash-$uid`, which
+  the spec requires to be an ordinary directory, not a symlink, owned by the user —
+  check that before counting into it and especially before *emptying* it).
   Applying the per-volume forms to `/` instead would probe `/.Trash-$uid` and read
   empty right after the user trashed something. Count with one `readdir` of each
   `files/`; trash via `gio trash -- <path>` invoked with an **argv array, never a
@@ -540,7 +582,8 @@ before any tier decision.*
   formulas.
 - Icon names are spec'd: `user-trash` / `user-trash-full`.
 - **Acceptance**: `TrashIconTests` green; new tests over a fixture trash tree
-  including a per-volume `.Trash-$uid`.
+  including a per-volume `.Trash-$uid`, plus one that is a symlink and one owned by
+  another uid, both of which must be skipped for counting and for emptying.
 
 ### JP-20 · Jetty · App model — index, launch, running state
 **Branch** `claude/jp-20-app-model` · **Size** L (split if it grows past ~600 lines)
@@ -548,7 +591,10 @@ before any tier decision.*
 - Consume PictKit's `DesktopEntryIndex` (JP-12) for the dock's app items and the
   command bar.
 - Launch via `systemd-run --user --quiet --scope --slice=app.slice
-  --unit=app-jetty-<escaped-id>-<random>.scope` with the argv from the parsed `Exec`.
+  --unit=app-jetty-<escaped-id>-<random>.scope` with the argv from JP-12's `Exec`
+  parser — the spec grammar (quotes, backslash escapes, field codes), never
+  whitespace splitting, and never a shell string. Honour `Path=` with
+  `--working-directory=`.
   **Pass `--expand-environment=no`.** `systemd-run` defaults
   `arg_expand_environment = true` and runs `replace_env_argv()` on the command line
   immediately before `execvpe`, so a desktop `Exec=` containing a literal `$` is
@@ -557,6 +603,17 @@ before any tier decision.*
   255 bytes and the gnome-desktop escape expands every non-`[A-Za-z0-9:_.]` byte to
   four characters, which a long Flatpak instance ID can overrun.
   `gio launch` only for `Terminal=true`; `gio open` for file/folder/URL tiles.
+  **`--scope` is load-bearing, not a style choice**, and a later reviewer will try to
+  "fix" it: a transient *service* is spawned by the user manager and gets the
+  manager's environment, so a session that never imported `WAYLAND_DISPLAY` /
+  `DISPLAY` / `XAUTHORITY` into the manager launches apps that cannot reach the
+  compositor. A transient *scope* is forked by `systemd-run` itself, which
+  systemd-run(1) states "will thus inherit the execution environment of the caller" —
+  i.e. `jettyd`'s, which is the session's. If this ever has to become a service, every
+  one of those variables needs an explicit `--setenv=`.
+  Also honour `DBusActivatable=true` per spec — `org.freedesktop.Application.Activate`
+  on the bus name matching the desktop-file ID — before falling back to `Exec`, or
+  single-instance apps get a second process instead of a hand-off.
 - Define `AppShell` with `runningApps`, `windows(of:)`, `activate`, `minimize`,
   `close` — **plus `hide`, `quit` and `forceQuit`**, which Jetty already ships
   (`Apps/AppLauncher.swift`, with `Apps/AppResponsivenessMonitor.swift` behind the
@@ -593,7 +650,9 @@ before any tier decision.*
   ≤256px, pick by requested size, and **never read `fail/`**, whose entries record
   failed generation rather than artwork. The name is the MD5 of the canonical
   percent-encoded absolute URI, so take `Crypto.Insecure.MD5` behind the standard
-  `#if canImport(CryptoKit)` idiom. Treat a thumbnail as valid only when its
+  `#if canImport(CryptoKit)` idiom — which means declaring **`swift-crypto`** in
+  `linux/Package.swift` (JP-18), since CryptoKit does not ship with the Linux
+  toolchain and the `#else` arm imports `Crypto` from that package. Treat a thumbnail as valid only when its
   `tEXt::Thumb::MTime` matches the file's current mtime, otherwise it is stale and
   must not be shown.
 - **The URI must be escaped glib's way, not `URL.absoluteString`'s.** GIO hashes a
@@ -623,9 +682,9 @@ before any tier decision.*
   `HotkeyRecorder.swift:65-83` accepts any keyDown with ≥1 modifier, so F-keys,
   keypad keys and punctuation all reach it. The translator therefore needs three
   tables plus a rejection path:
-  1. the 14 glyph labels → `BackSpace`/`Return`/`Tab`/`Escape`/arrows/`Home`/`End`/
-     `Prior`/`Next`/`space` — mind the macOS glyph inversion, ⌫ is **BackSpace** and
-     ⌦ is **Delete**;
+  1. the 14 glyph labels → `BackSpace`/`Delete`/`Return`/`Tab`/`Escape`/arrows/
+     `Home`/`End`/`Prior`/`Next`/`space` — mind the macOS glyph inversion, ⌫ is
+     **BackSpace** and ⌦ is **Delete**;
   2. ASCII letters lowercased, punctuation and digits via `xkb_utf32_to_keysym`;
   3. the AppKit private-use block **U+F704…U+F726 → F1…F35**, which arrives through
      the `chars.uppercased()` branch looking like an ordinary character.
@@ -796,7 +855,10 @@ CI action that builds gtk4-layer-shell from source on noble.*
   has existed since protocol **version 1**, so that is not the gate; the
   version-gated piece is `keyboard_interactivity = on_demand`, which the Jetty Menu
   surface needs. Check the advertised version at bind time and degrade deliberately
-  (the menu can take `EXCLUSIVE` while open) rather than silently losing type-to-find
+  (the menu can take `EXCLUSIVE` while open — and must give it back on close, by
+  unmapping the surface or resetting `keyboard_interactivity` to `NONE`; a reused
+  surface left mapped holds the compositor's keyboard and locks the user out of their
+  own apps) rather than silently losing type-to-find
   on an older compositor. The combination is unverified on our target compositors. If `GtkPopover` on a layer
   surface does not work, stacks/menus/peek all need separate layer surfaces
   positioned by hand — a different design, and better to learn that here than in
@@ -818,7 +880,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   clock, Pomodoro, system monitor and now-playing tiles in cairo over the JP-10
   cores and the JP-14…JP-17 providers.
 - **Acceptance**: golden-image tests for the deterministic faces (the seven-segment
-  and LCD renders are pure functions of the formatter output); builds in CI.
+  and LCD renders are pure functions of the formatter output) — but "deterministic"
+  only holds once the text path is pinned, so vendor the fonts in the repo, isolate
+  fontconfig with `FONTCONFIG_FILE` and fixed hinting/antialiasing, and draw the
+  seven-segment digits as cairo geometry rather than text. Otherwise the baselines
+  drift with every container rebuild and the safety net becomes a chore. Builds in CI.
 
 ### JP-30 · Jetty · Linux settings surface
 **Branch** `claude/jp-30-settings` · **Size** L
@@ -839,8 +905,10 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - A thin GJS extension that positions Jetty's *real* windows (`move_resize_frame`,
   `unmake_above()` **before** `make_above()`, `stick()`) — a **normal** window type,
   never DOCK, which Mutter demotes under fullscreen. Match windows by
-  `gtk_application_id` (arrives asynchronously on Wayland) or own them via
-  `Meta.WaylandClient`.
+  `gtk_application_id`, which arrives asynchronously on Wayland — that is the default
+  and the only one that works for the shipped configuration. `Meta.WaylandClient` owns
+  only clients the extension itself spawned, and JP-34 starts `jettyd` from a systemd
+  user unit, so keep it as a dev-session launch path, not an alternative.
 - All logic stays in `jettyd`; the extension speaks the JP-18 D-Bus interface.
 - **Acceptance**: `gnome-extensions pack/install/enable`; a nested session
   (`--devkit` on GNOME 49+, `--nested` on ≤48) shows a positioned, above dock.
@@ -900,9 +968,15 @@ CI action that builds gtk4-layer-shell from source on noble.*
 ### JP-35 · Jetty · Linux update flow + documentation
 **Branch** `claude/jp-35-updates-docs` · **Size** M
 
-- The existing `UpdateChecker`/`UpdateDownloader` port with a `.deb`/`.AppImage`
-  asset preference. Keep the `.bak` rotation, corrupt-quarantine and
-  newer-version-refusal semantics exactly — they are tested and load-bearing.
+- The existing `UpdateChecker`/`UpdateDownloader` port, but **split the install
+  strategy by tier** — the macOS in-place semantics do not survive a `.deb`. A
+  packaged `jettyd` runs unprivileged out of `/usr/bin`: it cannot write there, and
+  if it somehow did it would desynchronise dpkg's database, fail `debsums`, and be
+  silently reverted by the next `apt upgrade`. So: an AppImage (user-writable) keeps
+  the `.bak` rotation, corrupt-quarantine and newer-version-refusal semantics exactly
+  — they are tested and load-bearing — while a `.deb` install runs the same version
+  comparison and asset-integrity checks and then **hands the downloaded `.deb` to the
+  package system** rather than installing it itself.
 - Update `README.md`, `AGENTS.md` (a Linux section mirroring the macOS one) and
   `PLAN.md`; document the tier matrix honestly, including that stock GNOME needs the
   extension and that `hideDistance` is macOS-only.

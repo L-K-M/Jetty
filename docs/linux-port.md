@@ -158,11 +158,28 @@ Every row is `AGENTS.md`'s "Critical Constraints" section restated as protocol.
 |---|---|---|
 | Don't reserve screen space | never touching `visibleFrame` (convention) | `set_exclusive_zone(0)` — enforced by the compositor |
 | Float over content, all Spaces, over fullscreen | `level = .popUpMenu` + `collectionBehavior` | `layer = OVERLAY` — layer surfaces are output-scoped, not workspace-scoped |
-| Panels must stay non-activating | `.nonactivatingPanel` + `becomesKeyOnlyIfNeeded` + `acceptsFirstMouse` override | `keyboard_interactivity = NONE` |
+| Panels must stay non-activating | `.nonactivatingPanel` + `becomesKeyOnlyIfNeeded` + `acceptsFirstMouse` override | `keyboard_interactivity = NONE` (keyboard focus only — see below) |
 | Jetty Menu's deliberate focus hand-off | briefly activates, hands back on close | its **own** layer surface at `ON_DEMAND`, dock stays `NONE` |
 | Placement is edge × alignment × offset/inset, per display | `DockLayout.revealedFrame` against `visibleFrame` | `set_anchor` + `set_margin` + `set_monitor` |
 | Reveal on pointer at the screen edge | global mouse monitor + reveal-zone heuristics | a 1–2 px sliver surface; its `enter` event *is* the trigger |
 | Liquid Glass, honouring Reduce Transparency | `NSGlassEffectView` / `NSVisualEffectView` | translucent flat colour; optional KWin blur — see below |
+
+Three caveats keep that table honest, all from the adversarial pass:
+
+- **`keyboard_interactivity = NONE` covers keyboard focus only.** macOS's
+  `.nonactivatingPanel` rule is about *activation* — clicking a tile must not pull
+  focus from the frontmost app. The Wayland mode says nothing about pointer
+  interaction or what the compositor does on click, so the invariant needs an
+  empirical check per compositor rather than being declared solved by an enum.
+- **`set_exclusive_zone(0)` gets half of the rule.** It means "reserve nothing", but
+  it also opts the dock *into* being displaced by everyone else's positive zone — so
+  on Kubuntu the dock sits above the Plasma panel rather than at the screen edge, and
+  waybar pushes it inward on wlroots. That is a faithful analogue of `visibleFrame`,
+  which also excludes the menu bar and Dock; it is a **product decision** (usable
+  edge vs physical edge), not a free win, and `-1` is the other choice rather than
+  simply wrong.
+- **There is no readback.** Unlike `visibleFrame`, a layer-shell client cannot query
+  the resulting usable area, yet Jetty does arithmetic against a queryable rect.
 
 Two behaviours do **not** become declarative and must be re-implemented as they
 already are on macOS — which is fortunate, because the macOS code already solved
@@ -175,9 +192,17 @@ them the layer-shell-friendly way:
   `gtk_widget_add_tick_callback`. Never `gtk_layer_set_margin` per frame — that
   reconfigures compositor-side on every frame.
 - **Magnification headroom** is pre-allocated in `DockLayout.contentSize` rather
-  than resized per frame. Keep it that way: size the surface once, scale
-  pre-rasterised `GdkTexture`s inside it. Re-rasterising a dozen tiles per frame in
-  cairo will not hold 120 Hz.
+  than resized per frame. Keep it that way: size the surface once and scale *inside*
+  it. But note the correction the adversarial pass forced here, because it is the
+  one place a naive port will feel worse than macOS:
+  `gtk_fixed_set_child_transform` is **not** a `CALayer` transform. GSK
+  re-rasterises the transformed subtree at the new effective scale, so a continuous
+  magnification sweep re-runs every hovered tile's cairo draw — exactly the cost the
+  macOS design avoids. Tiles must therefore be rasterised once into `GdkTexture`s and
+  scaled as textures, not drawn into a `GtkDrawingArea` that is then transformed.
+  Design that in from the first frontend commit; it cannot be retrofitted.
+  `GtkFixed` also neither grows nor clip-extends for a scaled child, and
+  `GskTransform` is transfer-full with no ARC in Swift — both are real hazards.
 
 ## Subsystem findings
 
@@ -323,12 +348,23 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
 
 ## SF Symbols
 
-Jetty references only **~31 distinct SF Symbols** (Top Drawer had ~300), so the
-mapping table is small. They cannot ship on Linux for licence reasons; map to
-freedesktop/Adwaita symbolic names behind an `IconName` abstraction introduced on
-macOS first. Note the trap the adversarial pass caught: the *fallback* glyphs for
-"no battery" and "nothing playing" are themselves SF Symbols, so the degraded paths
-need Linux assets too.
+Jetty references **~88 distinct SF Symbols** — 48 of them `JettyMenuGlyph`'s curated
+picker list, the rest spread across `systemName:` call sites and, importantly, six
+*symbol-vending functions*: `PowerCommand.systemSymbol`,
+`WeatherService.symbol(forCode:)`, `SystemStats.batterySymbol(percent:)`,
+`TrashIconProvider`, `MenuCommand` and `JettyMenuGlyph.isValid`. Fewer than Top
+Drawer's ~300, but not the ~31 a `systemName:`-only grep suggests — and the
+adversarial pass was right that the undercount is systematic rather than incidental:
+the missed names live in the *pure logic layer* the port keeps verbatim, so they land
+on JP-09/JP-10's extracted code, not on the views being rewritten anyway.
+
+They cannot ship on Linux for licence reasons; map to freedesktop/Adwaita symbolic
+names behind an `IconName` abstraction introduced on macOS first. Two further traps
+the adversarial pass caught: the *fallback* glyphs for "no battery" and "nothing
+playing" are themselves SF Symbols, so the degraded paths need Linux assets too; and
+GTK 4.22's `GtkSymbolicPaintable` five colour slots are **semantic**
+(fg/error/warning/success/accent), not SwiftUI's `.palette` mode — they do not map
+onto a symbol's own layer hierarchy, so multi-tone symbols lose their tinting.
 
 ## What we give up, honestly
 
@@ -339,7 +375,10 @@ need Linux assets too.
   delay. Do **not** fake it by inflating the input region; that makes a band of the
   user's desktop unclickable.
 - **Liquid Glass** → translucent flat colour. KWin has a blur protocol; GNOME has
-  none.
+  none. Note the reason, because the first draft got it wrong: behind-window blur is
+  impossible for a GTK client because **Wayland gives a client no access to occluded
+  content**, not because GTK lacks a `backdrop-filter` CSS property. If GTK shipped
+  one tomorrow it could only blur content inside Jetty's own window.
 - **Window peek's live thumbnails** need the extension or screencopy; the
   permission-free window-*name* mode degrades to whatever the tier's toplevel
   protocol offers.
@@ -401,9 +440,38 @@ below changed the plan and are folded into the text above.
     GSettings and is GNOME-only, so the shipped promise needs a per-tier
     implementation, not a port.
 
-Six further domains (app model, toolkit, packaging, hotkeys/power/tray, displays,
-trash) were re-verified in a second pass; their corrections are recorded in
-[`linux-port-plan.md`](linux-port-plan.md) against the work items they affect.
+A second pass covers the remaining six domains. Two have reported so far, and their
+corrections are folded into the text above and into the affected work items in
+[`linux-port-plan.md`](linux-port-plan.md). The ones that changed a decision:
+
+13. **`gtk_fixed_set_child_transform` is not a `CALayer` transform.** GSK
+    re-rasterises the transformed subtree, so magnification must scale
+    pre-rasterised `GdkTexture`s, not transform a `GtkDrawingArea`. This decides the
+    widget tree (JP-25).
+14. **`systemd-run` rewrites argv by default** (`arg_expand_environment = true`), so
+    a desktop `Exec=` containing a literal `$` is silently mangled — pass
+    `--expand-environment=no` (JP-20).
+15. **Two permission-free running-app signals were missed on stock GNOME**:
+    `org.freedesktop.DBus.ListNames` + `NameOwnerChanged` over
+    `org.freedesktop.Application` exporters, and gnome-shell's introspection
+    *signals*, which carry **no** sender check even though its getters are
+    allowlisted (JP-20).
+16. **The SF Symbol count in this document was wrong** — ~88, not ~31 — and the
+    undercount fell exactly on the pure-logic symbol-vending functions the port keeps
+    verbatim. Corrected above.
+17. **Activation will be refused by focus-stealing prevention**, not by missing API:
+    `meta_window_activate_full` drops requests from an app that does not itself hold
+    focus — which is Jetty by design (JP-20).
+18. **Packaging decides the KDE tier.** KWin refuses six globals (including
+    `org_kde_plasma_window_management` and `zkde_screencast_unstable_v1`) to sandboxed
+    clients — so a natively packaged Jetty can have per-window live thumbnails on
+    Plasma today, and a Flatpak/Snap one cannot. Flatpak's unconditional
+    `--unshare-pid` likewise kills the `/proc`-based stock-GNOME fallback. Another
+    reason the `.deb` is the honest channel.
+19. **`GtkPopover` on a layer surface is unverified** and underpins three Jetty
+    features (stacks, context menus, window peek) — spiked first in JP-28.
+20. **A GSource on libdispatch's main-queue eventfd must `eventfd_read()` it**, or
+    the app spins at 100% CPU (JP-18).
 
 ## Suggested sequence
 

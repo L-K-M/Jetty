@@ -426,6 +426,15 @@ before any tier decision.*
   can both codegen. Claim the name by calling `org.freedesktop.DBus.RequestName`
   yourself — the library has no helper.
 - `linux/systemd/jettyd.service` (user unit), and the Linux CI job builds it.
+- **Decide the run-loop story here, once, for both executables.** Nothing in a
+  GLib main loop drains `DispatchQueue.main` or `RunLoop.main`, so Jetty's four
+  `RunLoop.main.add(_:forMode: .common)` timers (`LiveSystemStats:76`,
+  `PomodoroTimer:90`, `WindowPeek:36`, `UpdateChecker:99`) and its ~28
+  `DispatchQueue.main` hops — including `NowPlayingService:42`'s watchdog, whose
+  non-firing wedges the tile permanently — never run. If the bridge is a `GSource`
+  on libdispatch's main-queue eventfd, it **must `eventfd_read()`** the descriptor:
+  libdispatch pokes it with `eventfd_write` and never clears it, so a GSource that
+  only polls spins the app at 100% CPU.
 - **Acceptance**: `busctl --user introspect ch.lkmc.Jetty /ch/lkmc/Jetty` shows the
   interface; service tests under `dbus-run-session`.
 
@@ -455,13 +464,37 @@ before any tier decision.*
   command bar.
 - Launch via `systemd-run --user --quiet --scope --slice=app.slice
   --unit=app-jetty-<escaped-id>-<random>.scope` with the argv from the parsed `Exec`.
+  **Pass `--expand-environment=no`.** `systemd-run` defaults
+  `arg_expand_environment = true` and runs `replace_env_argv()` on the command line
+  immediately before `execvpe`, so a desktop `Exec=` containing a literal `$` is
+  silently rewritten. This is a correctness bug, not a nicety — add a test with a
+  `$`-bearing `Exec` fixture. Also budget for unit-name length: systemd caps names at
+  255 bytes and the gnome-desktop escape expands every non-`[A-Za-z0-9:_.]` byte to
+  four characters, which a long Flatpak instance ID can overrun.
   `gio launch` only for `Terminal=true`; `gio open` for file/folder/URL tiles.
 - Define `AppShell` with `runningApps`, `windows(of:)`, `activate`, `minimize`,
-  `close`. Implement the **degraded "no shell"** backend first (systemd user units +
-  `/proc/<pid>/cgroup`, which is *exact* for anything Jetty launched, thanks to the
-  scope naming) so Jetty is installable on stock GNOME before the extension exists,
-  with peek and minimise honestly greyed out. Then wlr-foreign-toplevel and
-  plasma-window-management.
+  `close` — **plus `hide`, `quit` and `forceQuit`**, which Jetty already ships
+  (`Apps/AppLauncher.swift`, with `Apps/AppResponsivenessMonitor.swift` behind the
+  force-quit affordance) and which the first draft of this item dropped.
+- Implement the **degraded "no shell"** backend first so Jetty is installable on
+  stock GNOME before the extension exists, with peek and minimise honestly greyed
+  out. Two mechanisms the research missed, both better than the systemd-scope
+  heuristic alone and both permission-free:
+  - `org.freedesktop.DBus.ListNames` + `NameOwnerChanged`. Every `GApplication` with
+    an application ID and default flags exports `org.freedesktop.Application`, so
+    this is an *exact* running signal for a large share of the app set, and it also
+    gives `Activate`/`Open`/`ActivateAction` for launching.
+  - gnome-shell's introspection **signals** (`RunningApplicationsChanged`,
+    `WindowsChanged`) are emitted with **no** sender check, even though its getters
+    are allowlisted to the two portal backends. So a stock-GNOME backend can be
+    notified of changes for free, and only the *read* needs another route.
+  Keep systemd scopes as the third source (exact for anything Jetty itself launched).
+  Then wlr-foreign-toplevel and plasma-window-management.
+- **Activation will fail for reasons that are not API availability.** Mutter's
+  `meta_window_activate_full` drops activation requests that fail focus-stealing
+  prevention — and Jetty is precisely the app that must not take focus itself. Treat
+  "the call succeeded but the window did not raise" as the expected first result and
+  design the timestamp/startup-notification handling for it.
 - **Acceptance**: index and launch unit tests; `AppShell` conformance tests per
   backend; the degraded backend proven against a real `systemd-run` scope in CI.
 
@@ -543,16 +576,29 @@ CI action that builds gtk4-layer-shell from source on noble.*
 ### JP-25 · Jetty · Tile rendering + magnification
 **Branch** `claude/jp-25-tiles` · **Size** L
 
-- A `GtkFixed` holding one `GtkDrawingArea` per tile; icons as `GdkTexture` built
-  once from PictKit's `ResolvedIconImage` via `gdk_memory_texture_new` (check the
+- A `GtkFixed` holding one tile widget each; icons as `GdkTexture` built once from
+  PictKit's `ResolvedIconImage` via `gdk_memory_texture_new` (check the
   premultiplied/byte-order match against `CAIRO_FORMAT_ARGB32` and add a round-trip
   test); labels through PangoCairo for synchronous measurement.
-- Magnification and the reveal slide are `GskTransform` updates driven by
-  `gtk_widget_add_tick_callback` — **never** window geometry, **never**
-  `gtk_layer_set_margin` per frame. Pre-rasterise and scale on the GPU; re-rasterising
-  a dozen tiles per frame in cairo will not hold frame rate.
+- Magnification and the reveal slide are driven by `gtk_widget_add_tick_callback` —
+  **never** window geometry, **never** `gtk_layer_set_margin` per frame.
+- **Correction, and it decides the widget tree**: `gtk_fixed_set_child_transform` is
+  *not* the `CALayer`-transform analogue the research assumed. GSK re-rasterises the
+  transformed subtree at the new effective scale, so transforming a cairo-drawn
+  `GtkDrawingArea` re-runs its draw function every frame of a magnification sweep —
+  the exact cost the macOS design avoids. **Rasterise each tile once into a
+  `GdkTexture` and scale the texture**; do not put a `GtkDrawingArea` under a
+  per-frame transform. Two related hazards: `GtkFixed` neither grows nor
+  clip-extends for a scaled child (so a magnified tile clips at the container's
+  allocation unless the layout reserves JP-07's headroom), and `GskTransform` is
+  transfer-full with no ARC in Swift (`gsk_transform_translate` *consumes* its first
+  argument and returns a new reference, imported as an `OpaquePointer` with no
+  compiler help).
+- Size icons in **device** pixels against `gdk_surface_get_scale()`, which is a
+  `double` since GTK 4.12 — fractional scaling is not an integer factor.
 - **Acceptance**: view-model tests populating a strip from document fixtures; builds
-  in CI; a frame-time measurement recorded in the PR from a real session.
+  in CI; a frame-time measurement over a full magnification sweep recorded in the PR
+  from a real session, which is the number that proves the texture decision.
 
 ### JP-26 · Jetty · Reveal, auto-hide, and the sliver
 **Branch** `claude/jp-26-reveal` · **Size** M
@@ -590,6 +636,12 @@ CI action that builds gtk4-layer-shell from source on noble.*
 ### JP-28 · Jetty · Popovers: folder stacks, context menus, the Jetty Menu
 **Branch** `claude/jp-28-popovers` · **Size** L
 
+- **Spike this first, before the rest of the item.** All three of these features
+  become `xdg_popup`s parented to a *layer* surface, which needs layer-shell v2's
+  `get_popup` and is unverified on our target compositors. If `GtkPopover` on a layer
+  surface does not work, stacks/menus/peek all need separate layer surfaces
+  positioned by hand — a different design, and better to learn that here than in
+  JP-29.
 - Folder-stack popover and tile context menus positioned by JP-11's
   `FolderStack.origin` and JP-06's `DockContextMenuPlacement`.
 - **The Jetty Menu gets its own layer surface at `ON_DEMAND`**, leaving the dock at

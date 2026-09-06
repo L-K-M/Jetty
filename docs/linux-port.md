@@ -342,9 +342,12 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
   `.so`s and do not depend on Ubuntu's `swiftlang` (wrong version, wrong ABI story).
   Verified working, including HTTPS `URLSession`, at ~56 MB stripped. **[V]**
 - **CI**: `container: swift:6.3-noble`, plus Top Drawer's existing composite action
-  that builds gtk4-layer-shell from source. CI can build the frontend but not run it
-  (no compositor); everything else — core, daemon, D-Bus under `dbus-run-session` —
-  is genuinely testable.
+  that builds gtk4-layer-shell from source. More is testable than first assumed: the
+  core and the daemon obviously, D-Bus under `dbus-run-session`, and — the
+  adversarial pass's finding — **the layer-shell tier too**, because sway under
+  `WLR_BACKENDS=headless WLR_RENDERER=pixman` runs in a bare container and advertises
+  `zwlr_layer_shell_v1` v4. Only the genuinely visual and per-compositor things
+  (fullscreen stacking, fractional scaling, real DnD from Nautilus) need a session.
 
 ## SF Symbols
 
@@ -440,9 +443,9 @@ below changed the plan and are folded into the text above.
     GSettings and is GNOME-only, so the shipped promise needs a per-tier
     implementation, not a port.
 
-A second pass covers the remaining six domains. Two have reported so far, and their
-corrections are folded into the text above and into the affected work items in
-[`linux-port-plan.md`](linux-port-plan.md). The ones that changed a decision:
+A second pass covered the remaining six domains — 53 confirmed, 34 partial, **3
+refuted**. All corrections are folded into the text above and into the affected work
+items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a decision:
 
 13. **`gtk_fixed_set_child_transform` is not a `CALayer` transform.** GSK
     re-rasterises the transformed subtree, so magnification must scale
@@ -472,6 +475,41 @@ corrections are folded into the text above and into the affected work items in
     features (stacks, context menus, window peek) — spiked first in JP-28.
 20. **A GSource on libdispatch's main-queue eventfd must `eventfd_read()` it**, or
     the app spins at 100% CPU (JP-18).
+21. **REFUTED — the COPY|MOVE drop mandate.** The corpus requires drop targets to
+    declare `COPY|MOVE` because "Nautilus rejects COPY-only wholesale". GTK4's
+    `gtk_drop_target_accept` is a plain non-empty intersection, so COPY-only *does*
+    accept the drag; and declaring MOVE is the riskier choice, because a
+    `gdk_drop_finish()` reporting MOVE tells the source to delete the original —
+    unrecoverable on the Trash tile. Jetty declares COPY only (JP-27).
+22. **REFUTED — `keyLabel` is a closed glyph set.** It has four branches, the last
+    being `return "Key \(event.keyCode)"`: a raw Carbon keycode in a string.
+    Confirmed by reading `HotkeyBinding.swift:56-79`. The translator needs three
+    tables — glyphs, `xkb_utf32_to_keysym`, and the AppKit PUA block U+F704…U+F726
+    for F-keys — plus an honest needs-re-record path (JP-22).
+23. **REFUTED — SwiftPM silently ignores unlisted sources.** Reproduced here: it
+    prints `warning: found 87 file(s) which are unhandled` and names every one. Loud,
+    but still not a gate — so `exclude:` until that list is empty and build with
+    `-Xswiftc -warnings-as-errors` (JP-01).
+24. **CI can test the layer-shell tier, not just build it.** sway under
+    `WLR_BACKENDS=headless WLR_RENDERER=pixman` runs in a bare container and
+    advertises `zwlr_layer_shell_v1` v4 (JP-24).
+25. **The `CInotify` shim is unnecessary** on Swift 6.3.3 — `import Glibc` alone
+    reaches `inotify_init1`/`add_watch`/`rm_watch`, and `inotify_event` is 16 bytes
+    (JP-19).
+26. **`Session.Lock()` is not unconditional**: gnome-shell returns early when
+    `org.gnome.desktop.lockdown disable-lock-screen` is set — the same
+    succeeds-but-does-nothing class `PowerCommands.swift:116-123` already documents
+    for macOS. And logind has no *graceful* log-out: `Terminate()` kills the session
+    with no save or inhibitor check (JP-22).
+27. **Adwaita ships `user-trash-full` only as SVG**, and PictKit's Linux image path
+    is PNG-only — so the Trash tile has no artwork on non-Ubuntu GNOME without a
+    rasteriser or bundled PNGs (JP-19).
+28. **XWayland is a real partial backend on stock GNOME**, contrary to this
+    document's "don't build an X11 tier" advice being read too broadly: an X11
+    connection can enumerate, raise, unminimize and iconify every **XWayland**
+    window (Electron, Steam, Wine, JetBrains, GTK3 apps) with plain EWMH today.
+    It does nothing for Wayland-native toplevels, so it is a supplement to the
+    degraded stock-GNOME backend, not a tier of its own.
 
 ## Suggested sequence
 

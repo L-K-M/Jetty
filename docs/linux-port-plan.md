@@ -26,10 +26,14 @@ Four deltas specific to Jetty:
 
 - **`SWIFT_VERSION = 5.0`.** Both new manifests use swift-tools 5.9 so Linux CI is
   neither stricter nor looser than `xcodebuild`.
-- **File-system-synchronized Xcode groups are a trap here.** Any new `.swift` file
-  under `Jetty/` is automatically added to the macOS target. Linux-only code lives
-  in `linux/`, outside `Jetty/`; the rare file that must live under `Jetty/` carries
-  a whole-file `#if os(Linux)`.
+- **File-system-synchronized Xcode groups are a trap here.** `Jetty` and `JettyTests`
+  are `PBXFileSystemSynchronizedRootGroup`s, so any new `.swift` file under `Jetty/`
+  is automatically added to the macOS target. Keep Linux-only code in `linux/`,
+  outside `Jetty/`, and give the rare file that must live under `Jetty/` a whole-file
+  `#if os(Linux)`. (Strictly, synchronized groups *do* support per-target membership
+  exceptions — `PBXFileSystemSynchronizedBuildFileExceptionSet` — so this is a
+  convention rather than a hard constraint; prefer the guard anyway, since it is
+  visible in the file rather than in project state.)
 - **Never run bare `xcodebuild`** in this repo — always pass `-project`, so the root
   `Package.swift` and `Jetty.xcodeproj` coexist safely. `ci.yml` and
   `scripts/build.sh` already do; confirm the shared `lkm-build` engine does too.
@@ -116,10 +120,20 @@ watcher and against sharing `IconStoreWatcher`.
 - **Acceptance**: Linux job green with the seeded suites running; macOS CI untouched
   and green; zero diff to macOS-compiled semantics (guards only); `.xcodeproj`
   untouched.
-- **Pitfalls**: don't reformat while adding guards. A `sources:` entry that doesn't
-  exist produces only a warning — treat any "Invalid Source" warning as an error.
-  Do **not** add `Model/Preferences.swift` or `Model/ColorHex.swift` yet (they are
-  `ObservableObject` / `NSColor` — JP-02 and JP-04).
+- **Pitfalls**: don't reformat while adding guards. Do **not** add
+  `Model/Preferences.swift` or `Model/ColorHex.swift` yet (they are `ObservableObject`
+  / `NSColor` — JP-02 and JP-04).
+- **A curated `sources:` list does not silently ignore the rest.** The corpus's Part 10
+  pin says unlisted files are ignored without warning; on Swift 6.3.3 that is wrong,
+  and I reproduced it here — the build prints
+  `warning: 'jetty': found 87 file(s) which are unhandled` and then names every one.
+  That is louder than expected but still not a gate, and the consequence the pin
+  warns about stands: an unlisted file is not compiled or tested on Linux, so a pure
+  file added later on the macOS side goes unnoticed. The cheap mitigation follows
+  from the real mechanism: `exclude:` the macOS-only files and directories until the
+  unhandled list is **empty**, then build with `-Xswiftc -warnings-as-errors` (or
+  grep the log for `unhandled`) so the next unlisted file fails Linux CI instead of
+  being scrolled past. No separate file-diff check is needed.
 
 ### JP-02 · Jetty · Combine compatibility shim
 **Branch** `claude/jp-02-observation-compat` · **Size** S
@@ -129,8 +143,17 @@ watcher and against sharing `IconStoreWatcher`.
 - Bring `Model/Preferences.swift`, `Widgets/WeatherService.swift` and the other
   `ObservableObject` types that are otherwise portable into the `sources:` list.
 - **Decline the full `@Observable` migration** and record why in the PR body:
-  Jetty has 96 `@Published` / 16 `ObservableObject` but only **6** `.sink` calls;
-  converting 15 types is a large macOS-visible diff for zero Linux benefit.
+  Jetty has 96 `@Published` / 16 `ObservableObject` but only **6** `.sink` chains
+  (in `DockController`, `JettyMenuModel` and `PomodoroTimer`, plus
+  `PermissionsView`'s `Timer.publish`); converting 15 types is a large macOS-visible
+  diff for zero Linux benefit.
+- **Two shim gaps to check before relying on it**, from the adversarial pass:
+  `AnyCancellable` is not `Hashable` under the shim, so `Set<AnyCancellable>` — the
+  canonical bag, and what `DockController` uses — will not compile; and
+  `ObservableObject` conformance details differ. Both are in files that stay
+  macOS-only at this stage, so they do not block JP-02; fix them when JP-08 moves
+  `DockController`'s policies, and say so in the PR body rather than discovering it
+  there.
 - **Acceptance**: `Preferences` and `WeatherService` compile and test on Linux;
   macOS diff is additive only.
 
@@ -448,7 +471,22 @@ before any tier decision.*
 - Copy PictKit's inotify pattern into `linux/` (whole-file Linux-only), with **one
   inotify instance and a `[wd: path]` map** rather than one instance per path
   (`max_user_instances` is 128). Say in the PR body why this is a deliberate copy
-  rather than a reuse of `IconStoreWatcher`.
+  rather than a reuse of `IconStoreWatcher`. **Drop the `CInotify` import while
+  copying**: the shim turns out to be unnecessary on Swift 6.3.3 — the adversarial
+  pass compiled and ran `inotify_init1`/`inotify_add_watch`/`inotify_rm_watch` with
+  `import Glibc` alone, and `MemoryLayout<inotify_event>.size` is 16 as expected. One
+  fewer target in the graph.
+- Trash counting is **one `readdir` scan of each `files/`, returning full at the
+  first entry that is not `.` or `..`** — and it spans the per-volume cans, not just
+  the home one. `TrashLocations.candidateTrashURLs()` deliberately covers both, and
+  the freedesktop layout has two per-volume forms (`$topdir/.Trash/$uid` and
+  `$topdir/.Trash-$uid`); a home-only implementation silently under-reports.
+- **Icon gap to close in this item**: `user-trash-full` exists in Adwaita **only as
+  SVG** (and `user-trash` only as a 16×16 PNG plus SVG). Adwaita is the fallback
+  whenever Yaru is not active, i.e. on all non-Ubuntu GNOME. PictKit's Linux image
+  path is swift-png — **PNG only, no SVG rasteriser** — so the Trash tile has no
+  artwork on those systems unless Jetty either shells out to `rsvg-convert` (the
+  JP-13 sandbox recipe) or ships its own PNGs. Decide here; it is not free.
 - **Delete on the Linux side**: `TrashStateResolver`, `FinderAutomation`, the
   AppleScript trash path and the Permissions-pane Finder-Automation row have no
   analogue — TCC does not exist. Keep `TrashLocations`' shape; change only the path
@@ -506,6 +544,12 @@ before any tier decision.*
   thumbnails read (not generated) from the freedesktop cache at
   `~/.cache/thumbnails` — MD5 of the URI, so take `Crypto.Insecure.MD5` behind the
   standard `#if canImport(CryptoKit)` idiom.
+- **The URI must be escaped glib's way, not `URL.absoluteString`'s.** GIO hashes a
+  canonical URI built with `g_escape_uri_string(…, UNSAFE_PATH)` — RFC 2396
+  unreserved plus `/&=:@+$,` — so any path containing a semicolon, in the filename
+  *or any parent directory*, hashes differently under Foundation's escaping and
+  silently misses the cache for every file beneath it. Reimplement that character
+  set and unit-test it with a semicolon fixture.
 - Reveal-in-file-manager via `org.freedesktop.FileManager1.ShowItems`.
 - **Acceptance**: MIME→icon-name resolution tests; thumbnail-cache path tests.
 
@@ -516,16 +560,47 @@ before any tier decision.*
   name**: extension keybinding, GlobalShortcuts portal, compositor config + a
   `jetty-cli` verb, GSettings custom-keybindings (documented, never auto-written).
   On 24.04 the expected portal error is `UnknownMethod`. Render the portal's returned
-  `trigger_description` rather than Jetty's own `displayString`.
-- `LinuxHotkeyTranslator`: invert `HotkeyBinding.label(for:)`'s closed glyph set into
-  keysym names, map Carbon modifier bits to `CTRL/ALT/SHIFT/LOGO`, and mark anything
-  unmappable as needing re-record.
+  `trigger_description` rather than Jetty's own `displayString`. Note **Hyprland is
+  the exception** in the wlroots family: `xdg-desktop-portal-hyprland` implements
+  GlobalShortcuts over its own protocol, while `xdg-desktop-portal-wlr` ships none
+  through 0.8.1 (26.04) — so sway/river/Wayfire really are compositor-config only.
+- `LinuxHotkeyTranslator`: **`keyLabel` is not a closed set** — the adversarial pass
+  refuted that, and reading `HotkeyBinding.swift:56-79` confirms it. There are four
+  branches, and the last is `return "Key \(event.keyCode)"`: a raw Carbon virtual
+  keycode inside a string, undecodable without a Carbon table.
+  `HotkeyRecorder.swift:65-83` accepts any keyDown with ≥1 modifier, so F-keys,
+  keypad keys and punctuation all reach it. The translator therefore needs three
+  tables plus a rejection path:
+  1. the 14 glyph labels → `BackSpace`/`Return`/`Tab`/`Escape`/arrows/`Home`/`End`/
+     `Prior`/`Next`/`space` — mind the macOS glyph inversion, ⌫ is **BackSpace** and
+     ⌦ is **Delete**;
+  2. ASCII letters lowercased, punctuation and digits via `xkb_utf32_to_keysym`;
+  3. the AppKit private-use block **U+F704…U+F726 → F1…F35**, which arrives through
+     the `chars.uppercased()` branch looking like an ordinary character.
+  Map Carbon modifier bits to `CTRL/ALT/SHIFT/LOGO`. Everything else — every
+  `"Key <n>"` label included — is unmappable: mark it needs-re-record rather than
+  guessing at it.
 - `PowerCommand.linuxAction` as a pure value beside `appleScript`; four of six go to
   `org.freedesktop.login1.Manager` with its `Can*` probes driving greyed-out items.
   Lock Screen uses `login1.Session.Lock()` — **never**
   `org.freedesktop.ScreenSaver.Lock()`, a declared-but-unimplemented stub on GNOME.
   Only Log Out branches per desktop, resolved by asking the bus who owns
   `org.gnome.SessionManager` / `org.kde.Shutdown`.
+- Three corrections from the adversarial pass, each a "the call succeeds but nothing
+  happens" trap of the same class `PowerCommands.swift:116-123` already documents for
+  macOS:
+  - `Session.Lock()` is **not** unconditional. gnome-shell's `screenShield.js`
+    `lock()` returns immediately, logging "Screen lock is locked down, not locking",
+    when `org.gnome.desktop.lockdown disable-lock-screen` is set. Report that to the
+    user rather than showing a lock that did not happen.
+  - The `Can*` probes are necessary but not sufficient: logind picks the polkit
+    action per situation (`*-multiple-sessions` when another user is logged in,
+    `*-ignore-inhibit` when an inhibitor is held), so a command that probes as
+    available can still raise an auth prompt or fail.
+  - **logind has no *graceful* log-out.** `Session.Terminate()` kills the session
+    outright — no session save, no inhibitor check, no confirmation — so the
+    desktop's own session manager is the real implementation and `Terminate` is a
+    last-resort fallback, not an equivalent.
 - **Acceptance**: translator unit tests; portal client tested against a mock service;
   `PowerCommandTests` extended with the Linux action table.
 
@@ -565,8 +640,17 @@ CI action that builds gtk4-layer-shell from source on noble.*
   the launcher with `LD_PRELOAD` set, because gtk4-layer-shell is a
   symbol-interposition shim that does nothing if libwayland loads first. (It does
   warn — the failure is loud, not silent.)
-- **Acceptance**: builds in CI (no compositor there); `LinuxScreenSpace` tests green;
-  manual verification on KDE/Sway documented honestly in the PR.
+- **Stand up a headless compositor job here**, and let every later frontend item
+  inherit it. The adversarial pass found that a GitHub runner ships no compositor
+  *preinstalled* but is one apt install away: **sway under
+  `WLR_BACKENDS=headless WLR_RENDERER=pixman` runs in a bare container and advertises
+  `zwlr_layer_shell_v1` v4**. So the layer-shell tier is testable in CI — anchoring,
+  exclusive zone, keyboard mode, the sliver's enter event — not merely compiled,
+  which is a much better net than this plan first assumed.
+- **Acceptance**: `LinuxScreenSpace` tests green; the surface comes up anchored under
+  headless sway in CI; manual verification on real KDE/Sway sessions documented
+  honestly in the PR (for the things headless cannot show — fullscreen stacking,
+  fractional scaling).
 - **Pitfalls**: `set_exclusive_zone(0)` is right (never `-1`, which would put Jetty
   under other panels; never positive, which would reserve space and break the app's
   one load-bearing design decision). There is **no readback** of the resulting usable
@@ -626,7 +710,17 @@ CI action that builds gtk4-layer-shell from source on noble.*
 **Branch** `claude/jp-27-dnd` · **Size** M
 
 - `GtkDropTarget` on the dock and the sliver accepting `GdkFileList` / `text/uri-list`
-  with **actions COPY|MOVE** — Nautilus rejects COPY-only drops wholesale.
+  with **`GDK_ACTION_COPY` only**.
+- **This reverses the corpus's COPY|MOVE guidance, which the adversarial pass
+  refuted.** GTK4's `gtk_drop_target_accept` is a plain non-empty intersection
+  (`gtk/gtkdroptarget.c`, 4.14.2 as shipped on noble), so a COPY-only target does
+  accept a Nautilus drag whose preferred action is MOVE — the wholesale rejection the
+  corpus warns about is not GTK4's behaviour. And declaring MOVE is the *riskier*
+  choice here: `make_action_unique` still picks COPY when both are in the
+  intersection, so it buys nothing, while a `gdk_drop_finish()` that reports MOVE is
+  exactly what tells the source to **delete the original** — a data-loss hazard on
+  the Trash tile, which is the one target where a wrong action is unrecoverable.
+  Add a test asserting the finish action.
 - Drop on the sliver reveals then pins (the `DragRevealSensorView` analogue); drop on
   a folder tile moves; drop on Trash calls `gio trash`; reorder within the strip
   reuses JP-06's `DockDragPolicy`.

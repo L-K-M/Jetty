@@ -69,20 +69,48 @@ watcher and against sharing `IconStoreWatcher`.
   and a curated `sources:` list; test target **`JettyTests`** at `path: "JettyTests"`
   with a curated list, so the existing `@testable import Jetty` files compile
   unmodified.
-- Seed `sources:` with the set already proven to compile on Swift 6.3.3 / Ubuntu
-  24.04 (26 files, 2,415 LOC): `Screens/DockLayout.swift`,
-  `Dock/MagnificationCurve.swift`, `Dock/DockSlot.swift`, `Model/` (DockEdge,
-  DockAlignment, DockAnchor, DockDocument, DockItem, DockItemKind, ClockFaceStyle,
-  DecorationPosition, DecorationStyle, SystemMonitorStyle, TrashIconStyle,
-  JettyMenuGlyph, PreferenceEnums), `Widgets/ClockFormatter.swift`,
-  `Widgets/ClockGeometry.swift`, `Widgets/SevenSegment.swift`,
-  `Menu/AppSearch.swift`, `Menu/ExpressionEvaluator.swift`,
-  `Menu/UnitConverter.swift`, `Updates/SemanticVersion.swift`,
-  `Updates/GitHubRelease.swift`, `Updates/GitHubReleaseClient.swift`,
-  `Updates/UpdateDownloader.swift`, `Updates/UpdateVersionComparison.swift`.
-- Guards needed, and no others: `#if canImport(CoreGraphics) … #else import Foundation #endif`
-  on the five files using CG value types; `#if canImport(FoundationNetworking)` on
-  the three networking files; `#if canImport(AppKit)` around `Model/DockItem.swift:2`.
+- Seed `sources:` with this exact set of **24 files**. It is not a guess: it was
+  built and its tests run on Swift 6.3.3 / Ubuntu 24.04 while this plan was being
+  written — **116 tests across 8 suites, 0 failures**.
+
+  `Screens/DockLayout.swift`, `Dock/MagnificationCurve.swift`,
+  `Model/`{`DockEdge`, `DockAnchor`, `DockDocument`, `DockItem`, `DockItemKind`,
+  `ClockFaceStyle`, `DecorationPosition`, `DecorationStyle`, `SystemMonitorStyle`,
+  `TrashIconStyle`, `PreferenceEnums`}, `Widgets/`{`ClockFormatter`,
+  `ClockGeometry`, `SevenSegment`}, `Menu/`{`AppSearch`, `ExpressionEvaluator`,
+  `UnitConverter`}, `Updates/`{`SemanticVersion`, `GitHubRelease`,
+  `GitHubReleaseClient`, `UpdateDownloader`, `UpdateVersionComparison`}.
+
+  Tests: `DockLayoutTests`, `MagnificationCurveTests`, `ClockFormatterTests`,
+  `ClockGeometrySecondsTests`, `AppSearchTests`, `ExpressionEvaluatorTests`,
+  `SemanticVersionTests`, `GitHubReleaseTests`, `UpdateVersionComparisonTests`.
+- Guards needed, and no others — each one verified as necessary and sufficient by
+  compiling:
+  - `#if canImport(CoreGraphics) … #else import Foundation #endif` on the four files
+    that import CoreGraphics for its value types: `DockLayout`,
+    `MagnificationCurve`, `DockItemKind`, `ClockGeometry` (plus the same in
+    `DockLayoutTests`).
+  - `#if canImport(FoundationNetworking)` in `GitHubReleaseClient`,
+    `UpdateDownloader`, `UpdateVersionComparison`.
+  - `#if canImport(SwiftUI) … #else import Foundation #endif` on
+    `DecorationPosition` and `DecorationStyle` — they import SwiftUI only for
+    `Identifiable` — **plus** a `#if canImport(SwiftUI)` around
+    `DecorationStyle.colors` alone (`DecorationStyle.swift:45-47`), which maps the
+    pure `hexes` array through SwiftUI's `Color`. `hexes` itself stays portable.
+  - `#if canImport(AppKit)` around **`DockItem`'s three classifier factories**
+    (`DockItem.swift:61-89`), not around its `import AppKit`: the actual blocker is
+    `fromFileURL`'s `TrashLocations.isTrashURL` call. The Codable half — which is
+    what the document format needs — is fully portable. JP-04 separates them
+    properly; this is the minimal guard that gets CI green today.
+- **Three files the research proposed for this set do not belong in it**, each for a
+  concrete reason found by compiling:
+  - `Dock/DockSlot.swift` references `DockTile`, which lives in `DockModel.swift`
+    and is `NSImage`-bound → **JP-06**.
+  - `Model/JettyMenuGlyph.swift` validates symbol names with
+    `NSImage(systemSymbolName:)` (`JettyMenuGlyph.swift:32`) — a real AppKit
+    dependency, and precisely the thing JP-11's `IconName` abstraction replaces.
+  - `JettyTests/DockLayoutGapTests.swift` needs `Preferences` → add it in **JP-02**,
+    once the Observation shim lands.
 - Add `.github/workflows/linux-ci.yml`: `container: swift:6.3-noble` (pin by digest,
   as Top Drawer does), `swift build && swift test`, on PRs and pushes to `main`.
 - **Acceptance**: Linux job green with the seeded suites running; macOS CI untouched

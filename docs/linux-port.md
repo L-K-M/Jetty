@@ -104,11 +104,14 @@ geometry), `MagnificationCurve`, `DockModel.makeSlots`/`makeTiles`,
 `FolderStack`'s ordering/geometry, `SemanticVersion`, `GitHubRelease`, the
 `PowerCommand` catalogue, and `DockDocument`'s lenient-decode machinery.
 
-**Empirically confirmed, not just claimed:** 26 of those files (2,415 LOC) were
-compiled as a SwiftPM library on Swift 6.3.3 / Ubuntu 24.04 during this research,
-needing only `#if canImport(CoreGraphics)` on five files,
-`#if canImport(FoundationNetworking)` on three, `#if canImport(AppKit)` around one
-line of `DockItem.swift`, and Top Drawer's existing `ObservationCompat` shim. **[V]**
+**Empirically confirmed, not just claimed:** 24 of those files were built as a SwiftPM
+library on Swift 6.3.3 / Ubuntu 24.04 during this research, and **116 of Jetty's own
+tests ran green on Linux across 8 suites, 0 failures** — `DockLayout`,
+`MagnificationCurve`, `ClockFormatter`, `ClockGeometry`, `AppSearch`,
+`ExpressionEvaluator`, `SemanticVersion`, `GitHubRelease` and the update-version
+comparison. The only edits needed were import guards on ten files plus two
+one-declaration guards. **[V]** The exact set, and the three files that turned out
+*not* to belong in it, are pinned in [`linux-port-plan.md`](linux-port-plan.md) §JP-01.
 
 ## The desktop wall (and where Jetty stands in it)
 

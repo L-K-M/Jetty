@@ -75,7 +75,7 @@ watcher and against sharing `IconStoreWatcher`.
   unmodified.
 - Seed `sources:` with this exact set of **24 files**. It is not a guess: it was
   built and its tests run on Swift 6.3.3 / Ubuntu 24.04 while this plan was being
-  written — **116 tests across 8 suites, 0 failures**.
+  written — **116 tests across 9 suites, 0 failures**.
 
   `Screens/DockLayout.swift`, `Dock/MagnificationCurve.swift`,
   `Model/`{`DockEdge`, `DockAnchor`, `DockDocument`, `DockItem`, `DockItemKind`,
@@ -102,8 +102,9 @@ watcher and against sharing `IconStoreWatcher`.
     `DecorationStyle.colors` alone (`DecorationStyle.swift:45-47`), which maps the
     pure `hexes` array through SwiftUI's `Color`. `hexes` itself stays portable.
   - `#if canImport(AppKit)` around **`DockItem`'s three classifier factories**
-    (`DockItem.swift:61-89`), not around its `import AppKit`: the actual blocker is
-    `fromFileURL`'s `TrashLocations.isTrashURL` call. The Codable half — which is
+    (`DockItem.swift:61-89`) **and** its `import AppKit` line (there is no AppKit
+    module on Linux, so that import must be guarded like the others). The *API*
+    blocker is not the import but `fromFileURL`'s `TrashLocations.isTrashURL` call. The Codable half — which is
     what the document format needs — is fully portable. JP-04 separates them
     properly; this is the minimal guard that gets CI green today.
 - **Three files the research proposed for this set do not belong in it**, each for a
@@ -173,9 +174,11 @@ each is small enough to review as a move.*
   `(anchorEdges, margins, exclusiveZone)`, unit-tested against the existing
   `DockLayoutTests` fixture (`CGRect(0, 0, 1000, 800)` — already per-output local
   space, so every existing assertion stays valid verbatim).
-- Document the five cross-file "keep in sync" constants `DockLayout`'s doc comments
-  name (separator width 12; clock resting 1.6×; LCD 1.35×; the clock edge factor)
-  as `JettyCore` constants rather than duplicated literals.
+- `DockLayout` carries **six** "keep in sync" markers (lines 59, 80, 108, 119, 293,
+  306): `DockTileView.tileWidth`, the LCD's `caseH * 1.35`, `ClockWidgetView`'s edge
+  padding, the hover-capsule ~16pt, `DockView.scale`'s 2.2 influence factor, and
+  `clockZoomHeadroom`. Make each a named `JettyCore` constant rather than a literal
+  duplicated across files with a comment asking the next reader to keep them aligned.
 - **Acceptance**: `DockLayoutTests`, `DockLayoutGapTests`, `MagnificationCurveTests`
   green on both platforms, unchanged.
 - **Pitfalls**: `DockLayout` is Cocoa bottom-left-origin y-up throughout. Do **not**
@@ -325,12 +328,33 @@ each is small enough to review as a move.*
   (Jetty's app index and command bar, Top Drawer's LP-19, the Pict editor), which
   clears PictKit's "more than one app needs it" bar.
 - Scan the union of `$XDG_DATA_HOME/applications`, `$XDG_DATA_DIRS/applications`,
-  `/var/lib/snapd/desktop/applications` and both Flatpak export dirs — never trust
-  `$XDG_DATA_DIRS` alone. Dedupe by desktop-file ID, first-wins. Honour `NoDisplay`,
-  `Hidden`, `OnlyShowIn`, `NotShowIn`, `TryExec`. Resolve `Name`/`GenericName`/
-  `Keywords` by the spec's locale ladder.
+  `/var/lib/snapd/desktop/applications` and both Flatpak export dirs
+  (`~/.local/share/flatpak/exports/share`, `/var/lib/flatpak/exports/share`) — never
+  trust `$XDG_DATA_DIRS` alone. Apply the XDG defaults (`$XDG_DATA_HOME` →
+  `~/.local/share`, `$XDG_DATA_DIRS` → `/usr/local/share:/usr/share`) and pin the
+  precedence order — `$XDG_DATA_HOME`, then `$XDG_DATA_DIRS` left to right, then
+  Flatpak user and system exports, then snapd — because "first-wins" is meaningless
+  without it, and scanning system dirs first lets a system entry shadow a user's
+  override.
+- **Derive the desktop-file ID per the menu spec**: the path relative to the
+  applications directory with `/` replaced by `-`, so
+  `applications/kde4/konsole.desktop` is `kde4-konsole.desktop` and does *not*
+  collide with `applications/konsole.desktop`. A basename implementation silently
+  merges them — and since this index also replaces `DesktopOverrideSync`'s ID guess,
+  a different derivation would stop existing override files matching.
+- Give each filtering key defined semantics rather than "honour": `Hidden=true` →
+  drop the entry entirely (the spec's "treat as if it did not exist");
+  `NoDisplay=true` → index it but exclude it from search and default listings;
+  `OnlyShowIn`/`NotShowIn` matched case-sensitively against the colon-separated
+  `$XDG_CURRENT_DESKTOP`, with unset meaning `OnlyShowIn` entries lose; `TryExec`
+  resolved against `$PATH` at index time. Three apps consume this, so an
+  under-specified "honour" is exactly the drift the shared index exists to prevent.
+  Resolve `Name`/`GenericName`/`Keywords` by the spec's locale ladder.
 - Parse `Exec` per spec: quoting rules and field codes (`%f %F %u %U %i %c %k`),
-  returning an argv array. **Never** build a shell string.
+  returning an argv array; strip the deprecated codes (`%d %D %n %N %v %m`) and
+  unescape `%%` to a literal `%`. Remember `%i` expands to **two** argv entries
+  (`--icon` and the value) and `%c` is the *localised* name. **Never** build a shell
+  string.
 - Retire `DesktopOverrideSync.overrideFilename(forSystemPath:)`'s documented
   best-effort desktop-ID guess in favour of the real index.
 - **Acceptance**: unit tests over hostile fixtures (quoting, embedded `%`, missing
@@ -372,7 +396,9 @@ before any tier decision.*
   and do **not** map `!OnBattery` to macOS's `isPlugged` — they diverge on any
   machine exposing no line-power device (a fully-charged idle battery reports
   `State=4`, so `OnBattery=false` while actually on battery), which would mis-drive
-  `isLowBattery(percent:isPlugged:)`.
+  `isLowBattery(percent:isPlugged:)`. Derive `isPlugged` from `State` instead:
+  `Discharging` ⇒ unplugged, `Charging`/`FullyCharged` ⇒ plugged, `Unknown` ⇒ hold
+  the last known value.
 - Treat `PropertiesChanged` as a **delta plus an invalidated list**, never a full
   snapshot.
 - Keep `/sys/class/power_supply` (filtered `type=="Battery" && scope!="Device"`) as an
@@ -389,8 +415,13 @@ before any tier decision.*
 - `/proc/loadavg` (the `getloadavg` call ports with an import swap),
   `/proc/meminfo`, and a `/proc/net/dev` reader replacing the `AF_LINK` `getifaddrs`
   walk. `isCountedInterface`'s exclusion list is Darwin-specific — rewrite it for
-  Linux (`lo`, `docker*`, `veth*`, `br-*`, `virbr*`, `tun*`, `tap*`) rather than
-  forking the prefix array.
+  Linux, and make it **type-aware rather than prefix-only**: drop interfaces whose
+  `/sys/class/net/<if>/type` is `ARPHRD_LOOPBACK` (772) or `ARPHRD_NONE` (65534),
+  then apply a prefix list for the `ARPHRD_ETHER` virtuals a type check cannot catch
+  (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tun*`, `tap*`, `wg*`, `ppp*`,
+  `zt*`, `tailscale*`, `sit*`, `ip6tnl*`, `ip_vti*`). A prefix-only list both rots as
+  new tools ship and misses the tunnel scaffolding (`sit0`, `ip6tnl0`, `gre0`) that
+  is present by default on many distros.
 - **Corrections**: procfs files report `st_size == 0`, so any code that pre-sizes a
   buffer from `stat` silently reads nothing — **read to EOF**. Memory occupancy is
   `1 − MemAvailable/MemTotal`; document that MemFree's real hazard is a permanently
@@ -408,6 +439,12 @@ before any tier decision.*
 - Watch `org.mpris.MediaPlayer2.*` via `NameOwnerChanged`, proxy
   `/org/mpris/MediaPlayer2`, read `PlaybackStatus` + `Metadata`, subscribe
   `PropertiesChanged`. `xesam:artist` is an **array**.
+- **`NameOwnerChanged` reports only transitions**, so install the match rule
+  (`arg0namespace='org.mpris.MediaPlayer2'`) **first**, then take an
+  `org.freedesktop.DBus.ListNames` snapshot and dedupe arrivals against it. Without
+  the snapshot every player started before the dock — the common case, since the dock
+  autostarts — is invisible, and an integration test whose mock service starts *after*
+  the watcher would not catch it. Make the acceptance test start the mock first.
 - Split out a pure `MPRISPlayerSelector.pick(from:)` and `parse(metadata:)` so both
   join the tested backbone.
 - **Correction**: do not present MPRIS as "strictly better" — it is opt-in per
@@ -427,7 +464,10 @@ before any tier decision.*
 - logind `PrepareForSleep(b)` on the system bus replaces the two `NSWorkspace`
   notifications. **Correction**: it is not an exact equivalent —
   `PrepareForSleep(true)` is a *pre*-sleep inhibitor-gated signal, not
-  `willSleep`-then-`didWake`; document the difference where the Pomodoro timer reads it.
+  `willSleep`-then-`didWake`; document the difference where the Pomodoro timer reads
+  it. A `delay` inhibitor must be taken **before** suspension begins — it cannot
+  usefully be acquired inside the handler — and the handler must return promptly or
+  it stalls the suspend.
 - `NSSound(named: "Glass")` → GSound playing the freedesktop `complete` event.
 - These are the only two AppKit touches in `PomodoroTimer.swift`; removing them makes
   all 201 lines portable.
@@ -464,8 +504,15 @@ before any tier decision.*
 ### JP-19 · Jetty · Trash over the XDG spec + the inotify watcher
 **Branch** `claude/jp-19-trash` · **Size** M
 
-- Discover trash dirs from `/proc/self/mountinfo` plus the spec's two per-volume
-  forms; count with one `readdir` of each `files/`; trash via `gio trash <path>`;
+- Discover trash dirs: **`$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`)**
+  for the volume holding the home directory — the spec's primary can, and where most
+  deletions land on a single-volume install — plus, for *other* mounts in
+  `/proc/self/mountinfo`, the two per-volume forms (`$topdir/.Trash/$uid`, which
+  requires the sticky bit and must not be a symlink, and `$topdir/.Trash-$uid`).
+  Applying the per-volume forms to `/` instead would probe `/.Trash-$uid` and read
+  empty right after the user trashed something. Count with one `readdir` of each
+  `files/`; trash via `gio trash -- <path>` invoked with an **argv array, never a
+  shell string** (the `--` stops a file named `-x` being parsed as an option);
   empty by deleting `files/` + `info/` contents; open via
   `org.freedesktop.FileManager1.ShowFolders(["trash:///"])`.
 - Copy PictKit's inotify pattern into `linux/` (whole-file Linux-only), with **one
@@ -542,8 +589,13 @@ before any tier decision.*
 - Directory read behind the JP-11 pure sort/cap; entry icons via shared-mime-info
   (`globs2`, `generic-icons`, `aliases`) into the icon-theme lookup from JP-13;
   thumbnails read (not generated) from the freedesktop cache at
-  `~/.cache/thumbnails` — MD5 of the URI, so take `Crypto.Insecure.MD5` behind the
-  standard `#if canImport(CryptoKit)` idiom.
+  `$XDG_CACHE_HOME/thumbnails/{normal,large}/<md5>.png` — `normal` is ≤128px, `large`
+  ≤256px, pick by requested size, and **never read `fail/`**, whose entries record
+  failed generation rather than artwork. The name is the MD5 of the canonical
+  percent-encoded absolute URI, so take `Crypto.Insecure.MD5` behind the standard
+  `#if canImport(CryptoKit)` idiom. Treat a thumbnail as valid only when its
+  `tEXt::Thumb::MTime` matches the file's current mtime, otherwise it is stale and
+  must not be shown.
 - **The URI must be escaped glib's way, not `URL.absoluteString`'s.** GIO hashes a
   canonical URI built with `g_escape_uri_string(…, UNSAFE_PATH)` — RFC 2396
   unreserved plus `/&=:@+$,` — so any path containing a semicolon, in the filename
@@ -582,8 +634,13 @@ before any tier decision.*
   guessing at it.
 - `PowerCommand.linuxAction` as a pure value beside `appleScript`; four of six go to
   `org.freedesktop.login1.Manager` with its `Can*` probes driving greyed-out items.
-  Lock Screen uses `login1.Session.Lock()` — **never**
-  `org.freedesktop.ScreenSaver.Lock()`, a declared-but-unimplemented stub on GNOME.
+  Lock Screen uses `login1.Session.Lock()`, which GNOME Shell answers as the logind
+  lock agent. The research also claimed `org.freedesktop.ScreenSaver.Lock()` is a
+  declared-but-unimplemented stub on GNOME; that one is **[U]** — it did not survive
+  into the verified set, and gnome-shell has owned that bus name for years. Check it
+  empirically (`gdbus call --session --dest org.freedesktop.ScreenSaver …`) before
+  ruling it out, and keep it as a tested fallback if it works, since some desktops
+  register no logind lock agent.
   Only Log Out branches per desktop, resolved by asking the bus who owns
   `org.gnome.SessionManager` / `org.kde.Shutdown`.
 - Three corrections from the adversarial pass, each a "the call succeeds but nothing
@@ -702,7 +759,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   region.
 - **Spike first**: KWin implements `installAutoHideScreenEdgeV1()` — a
   compositor-side auto-hide-and-reveal for layer surfaces, directly relevant to
-  Jetty's central behaviour. Evaluate it before hand-rolling the sliver on KDE.
+  Jetty's central behaviour. **First establish whether it is reachable by a
+  third-party client at all** — the name matches KWin-internal API on its layer-shell
+  implementation, and no `*screen_edge*` request appears in wlr-protocols or KDE's
+  wayland-protocols — then evaluate it before hand-rolling the sliver on KDE. If it
+  is internal-only, the sliver is the answer on KDE too.
 - **Acceptance**: policy tests reused unchanged; manual reveal verification on KDE
   and Sway, including over a fullscreen window.
 
@@ -731,8 +792,12 @@ CI action that builds gtk4-layer-shell from source on noble.*
 **Branch** `claude/jp-28-popovers` · **Size** L
 
 - **Spike this first, before the rest of the item.** All three of these features
-  become `xdg_popup`s parented to a *layer* surface, which needs layer-shell v2's
-  `get_popup` and is unverified on our target compositors. If `GtkPopover` on a layer
+  become `xdg_popup`s parented to a *layer* surface. `zwlr_layer_surface_v1.get_popup`
+  has existed since protocol **version 1**, so that is not the gate; the
+  version-gated piece is `keyboard_interactivity = on_demand`, which the Jetty Menu
+  surface needs. Check the advertised version at bind time and degrade deliberately
+  (the menu can take `EXCLUSIVE` while open) rather than silently losing type-to-find
+  on an older compositor. The combination is unverified on our target compositors. If `GtkPopover` on a layer
   surface does not work, stacks/menus/peek all need separate layer surfaces
   positioned by hand — a different design, and better to learn that here than in
   JP-29.
@@ -820,8 +885,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - Copy Top Drawer's `build-deb.sh`. Static-link the Swift runtime
   (`--static-swift-stdlib`); do **not** bundle `.so`s and do **not** depend on
   Ubuntu's `swiftlang`. Ship the binaries, `/usr/share/applications/<app-id>.desktop`
-  (`NoDisplay=true`), icons, the systemd user unit, and the extension zip under
-  `/usr/share/jetty/`. `lintian --fail-on error`.
+  (`NoDisplay=true`), icons, the systemd user unit, and **the extension unpacked
+  under `/usr/share/gnome-shell/extensions/<uuid>/`** — not a zip under
+  `/usr/share/jetty/`, which GNOME Shell never scans, so nothing would appear in the
+  Extensions app for JP-33's first-run flow to deep-link to.
+  `lintian --fail-on error`.
 - Dependencies resolve via `dpkg-shlibdeps`; add `libglib2.0-bin`,
   `dbus-user-session`, `hicolor-icon-theme`, `adwaita-icon-theme`,
   `shared-mime-info`, `desktop-file-utils`; `upower`, `xdg-desktop-portal-gnome |

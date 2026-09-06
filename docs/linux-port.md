@@ -106,7 +106,7 @@ geometry), `MagnificationCurve`, `DockModel.makeSlots`/`makeTiles`,
 
 **Empirically confirmed, not just claimed:** 24 of those files were built as a SwiftPM
 library on Swift 6.3.3 / Ubuntu 24.04 during this research, and **116 of Jetty's own
-tests ran green on Linux across 8 suites, 0 failures** — `DockLayout`,
+tests ran green on Linux across 9 suites, 0 failures** — `DockLayout`,
 `MagnificationCurve`, `ClockFormatter`, `ClockGeometry`, `AppSearch`,
 `ExpressionEvaluator`, `SemanticVersion`, `GitHubRelease` and the update-version
 comparison. The only edits needed were import guards on ten files plus two
@@ -256,7 +256,8 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
 ### The info tiles
 
 This is the one subsystem entirely independent of the desktop wall, so it can be
-built, tested and merged before any tier decision. Four seams:
+built, tested and merged before any tier decision. Five tile families, four seams —
+Weather needs none, since it already speaks plain HTTP:
 
 | Tile | macOS | Linux |
 |---|---|---|
@@ -279,7 +280,9 @@ attempts to get right per `TRASH.md`) all disappear: trash state becomes one
 unprivileged `readdir`. The icon saga disappears too — `user-trash` /
 `user-trash-full` are spec'd names every theme ships.
 
-Split along the write/read seam: **shell out to `gio trash <path>`** (glib's
+Split along the write/read seam: **shell out to `gio trash -- <path>`**, invoked
+with a real argv array rather than a shell string — dock items can name files
+beginning with `-`, and the `--` stops GLib's option parser eating them (glib's
 `g_local_file_trash` correctly implements topdir detection, sticky-bit validation,
 `O_CREAT|O_EXCL` collision naming and relative-vs-absolute `Path` — do not
 reimplement it), and do everything else in pure Swift (discover trash dirs from
@@ -336,7 +339,7 @@ copying: **one inotify instance with a `[wd: path]` map**, not one per path
   must live outside `Jetty/` or carry a whole-file `#if os(Linux)`.
 - **Combine**: take Top Drawer's merged `ObservationCompat` shim, not a migration.
   Jetty's Combine surface is 96 `@Published` / 16 `ObservableObject` but only **6**
-  `.sink` calls; converting 15 types would be a large macOS-visible diff for zero
+  `.sink` chains; converting all 16 types would be a large macOS-visible diff for zero
   Linux benefit.
 - **`.deb`**: static-link the Swift runtime (`--static-swift-stdlib`) — do not bundle
   `.so`s and do not depend on Ubuntu's `swiftlang` (wrong version, wrong ABI story).
@@ -458,7 +461,13 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     `org.freedesktop.DBus.ListNames` + `NameOwnerChanged` over
     `org.freedesktop.Application` exporters, and gnome-shell's introspection
     *signals*, which carry **no** sender check even though its getters are
-    allowlisted (JP-20).
+    allowlisted (JP-20). But "no sender check" cuts both ways, and the research
+    framed it only as an opportunity: any local process can emit a signal with that
+    path, interface and member, so `jettyd` must subscribe with
+    `sender=org.gnome.Shell` (GDBus resolves the well-known name to its current
+    unique owner) before trusting a payload that drives the running-apps model —
+    otherwise a hostile or buggy app in the session can inject or suppress dock
+    entries. Test that a matching signal from a foreign unique name is ignored.
 16. **The SF Symbol count in this document was wrong** — ~88, not ~31 — and the
     undercount fell exactly on the pure-logic symbol-vending functions the port keeps
     verbatim. Corrected above.

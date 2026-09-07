@@ -1,4 +1,6 @@
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 /// How a `DecorationStyle` is drawn: a set of diagonal corner stripes, or the
 /// Amiga "boing ball" nestled in the corner.
@@ -42,9 +44,11 @@ enum DecorationStyle: String, CaseIterable, Identifiable {
 
     /// Stripe colors, ordered from the one nearest the corner inward. Empty for
     /// `.none`.
+#if canImport(SwiftUI)
     var colors: [Color] {
         hexes.map { Color(hexString: $0) }
     }
+#endif
 
     private var hexes: [String] {
         switch self {

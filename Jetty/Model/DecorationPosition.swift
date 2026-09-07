@@ -1,5 +1,3 @@
-import SwiftUI
-
 /// Which top corner a `DecorationStyle` is drawn in.
 enum DecorationPosition: String, CaseIterable, Identifiable {
     case topLeading

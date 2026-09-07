@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 /// One pinned entry in the dock. Identity is a `UUID` so items survive rename and
 /// reorder. File/folder/app targets are held as security-scoped-ready **bookmarks**
@@ -58,6 +60,7 @@ struct DockItem: Codable, Identifiable, Equatable {
         return "item:\(id.uuidString)"
     }
 
+#if canImport(AppKit)
     // MARK: Factories
 
     /// A pinned application from its on-disk URL (`/Applications/Safari.app`).
@@ -87,4 +90,5 @@ struct DockItem: Codable, Identifiable, Equatable {
     static func fromLink(_ url: URL, name: String? = nil) -> DockItem {
         DockItem(kind: .url, displayName: name ?? url.host ?? url.absoluteString, url: url)
     }
+#endif
 }

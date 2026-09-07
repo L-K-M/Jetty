@@ -1,0 +1,158 @@
+// swift-tools-version: 5.9
+import PackageDescription
+
+// Jetty is a macOS app built through Jetty.xcodeproj. This manifest exists so the
+// portable subset of that same source tree — "JettyCore" in docs/linux-port-plan.md —
+// compiles and tests on Linux. The two build systems read the same files: Xcode picks
+// them up through its file-system-synchronized groups, SwiftPM through the curated
+// `sources:` lists below.
+//
+// The target is named `Jetty`, not `JettyCore`, so the existing tests' `@testable
+// import Jetty` compiles unmodified under both.
+//
+// IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
+// may build or test this package — a Mac-side `swift test` would compile these 24
+// files and 9 suites and pass, having skipped almost everything. macOS goes through
+// the .xcodeproj, always.
+//
+// `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
+// target directory that is in neither as "unhandled" and names it, and Linux CI fails
+// on that. A new macOS file therefore has to be ported or excluded deliberately.
+let package = Package(
+    name: "Jetty",
+    platforms: [.macOS(.v13)],
+    products: [.library(name: "Jetty", targets: ["Jetty"])],
+    targets: [
+        .target(
+            name: "Jetty",
+            path: "Jetty",
+            exclude: [
+                "Resources",
+                "MediaRemote",
+                "Jetty.entitlements",
+                "AppDelegate.swift",
+                "JettyApp.swift",
+                "Apps",
+                "Common",
+                "Dock/DockContextAction.swift",
+                "Dock/DockContextMenuPlacement.swift",
+                "Dock/DockContextMenuSource.swift",
+                "Dock/DockController.swift",
+                "Dock/DockModel.swift",
+                "Dock/DockPanelController.swift",
+                "Dock/DockSlot.swift",
+                "Dock/DockTileView.swift",
+                "Dock/DockView.swift",
+                "Dock/EdgeHoverMonitor.swift",
+                "Hotkeys",
+                "Icons",
+                "Menu/AppIndex.swift",
+                "Menu/AppleScriptRunner.swift",
+                "Menu/CurrencyService.swift",
+                "Menu/JettyMenuController.swift",
+                "Menu/JettyMenuModel.swift",
+                "Menu/JettyMenuView.swift",
+                "Menu/MenuCommand.swift",
+                "Menu/PowerCommands.swift",
+                "Menu/RecentAppsStore.swift",
+                "Model/AppearancePreset.swift",
+                "Model/ColorHex.swift",
+                "Model/HotkeyBinding.swift",
+                "Model/JettyMenuGlyph.swift",
+                "Model/Preferences.swift",
+                "Screens/DisplayRegistry.swift",
+                "Settings",
+                "Stacks",
+                "Store",
+                "SystemDock",
+                "Updates/UpdateChecker.swift",
+                "Widgets/AnalogClockFace.swift",
+                "Widgets/BatteryWidgetView.swift",
+                "Widgets/ClockWidgetView.swift",
+                "Widgets/LCDClockFace.swift",
+                "Widgets/LiveSystemStats.swift",
+                "Widgets/NowPlayingService.swift",
+                "Widgets/NowPlayingWidgetView.swift",
+                "Widgets/PomodoroTimer.swift",
+                "Widgets/PomodoroWidgetView.swift",
+                "Widgets/SystemMonitorGaugeView.swift",
+                "Widgets/SystemMonitorLEDView.swift",
+                "Widgets/SystemMonitorScopeView.swift",
+                "Widgets/SystemMonitorWidgetView.swift",
+                "Widgets/SystemStats.swift",
+                "Widgets/WeatherService.swift",
+                "Widgets/WeatherWidgetView.swift",
+                "Widgets/WorldClockWidgetView.swift",
+                "Windows",
+            ],
+            sources: [
+                "Screens/DockLayout.swift",
+                "Dock/MagnificationCurve.swift",
+                "Model/DockEdge.swift",
+                "Model/DockAnchor.swift",
+                "Model/DockDocument.swift",
+                "Model/DockItem.swift",
+                "Model/DockItemKind.swift",
+                "Model/ClockFaceStyle.swift",
+                "Model/DecorationPosition.swift",
+                "Model/DecorationStyle.swift",
+                "Model/SystemMonitorStyle.swift",
+                "Model/TrashIconStyle.swift",
+                "Model/PreferenceEnums.swift",
+                "Widgets/ClockFormatter.swift",
+                "Widgets/ClockGeometry.swift",
+                "Widgets/SevenSegment.swift",
+                "Menu/AppSearch.swift",
+                "Menu/ExpressionEvaluator.swift",
+                "Menu/UnitConverter.swift",
+                "Updates/SemanticVersion.swift",
+                "Updates/GitHubRelease.swift",
+                "Updates/GitHubReleaseClient.swift",
+                "Updates/UpdateDownloader.swift",
+                "Updates/UpdateVersionComparison.swift",
+            ]
+        ),
+        .testTarget(
+            name: "JettyTests",
+            dependencies: ["Jetty"],
+            path: "JettyTests",
+            exclude: [
+                "AppResponsivenessTests.swift",
+                "ClockFaceTests.swift",
+                "CodableModelTests.swift",
+                "ColorHexTests.swift",
+                "CommandBarTests.swift",
+                "DockContextMenuPlacementTests.swift",
+                "DockLayoutGapTests.swift",
+                "DockModelTests.swift",
+                "FolderStackTests.swift",
+                "HotkeyBindingTests.swift",
+                "InfoWidgetTests.swift",
+                "KeepRevealedFrameTests.swift",
+                "LinkNormalizationTests.swift",
+                "MenuGlyphAndStoreTests.swift",
+                "PointerOverDockContentTests.swift",
+                "PomodoroTests.swift",
+                "PowerCommandTests.swift",
+                "PreferencesTests.swift",
+                "RecentsTests.swift",
+                "StoreBackupTests.swift",
+                "StoreVersionTests.swift",
+                "SystemMonitorPathTests.swift",
+                "TrashIconTests.swift",
+                "WeatherRetryTests.swift",
+            ],
+            sources: [
+                "DockLayoutTests.swift",
+                "MagnificationCurveTests.swift",
+                "ClockFormatterTests.swift",
+                "ClockGeometrySecondsTests.swift",
+                "AppSearchTests.swift",
+                "ExpressionEvaluatorTests.swift",
+                "SemanticVersionTests.swift",
+                "GitHubReleaseTests.swift",
+                "UpdateVersionComparisonTests.swift",
+            ]
+        ),
+    ]
+)

@@ -1,0 +1,70 @@
+name: Linux CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Pinned by digest, not by tag. Two claims in docs/linux-port.md's verification
+    # appendix are conditional on this exact toolchain: correction 25 (the CInotify
+    # shim is unnecessary because `import Glibc` alone reaches inotify_init1) and
+    # correction 11 (canImport(CoreGraphics) is false here, so the #else arms in the
+    # guarded files are live). A floating 6.3-noble tag could invalidate either
+    # silently. Digest is swift:6.3.3-noble as of 2026-09-07.
+    container: swift@sha256:56ef1be2c1ca36f4c52440357dc1fcdfdb5e113587134fcadeef57c225c71b54
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The build is gated on its own log, and every part of this pipeline is
+      # load-bearing — all three were established by measurement, so please don't
+      # "simplify" it:
+      #
+      #   set -o pipefail  A pipeline takes its status from the last command, i.e.
+      #                    `tee`, which always succeeds. Without this a *failing*
+      #                    build exits 0, prints no unhandled-file warning, and the
+      #                    grep below reports green on a broken build.
+      #   --build-tests    A plain `swift build` does not plan the test target, so it
+      #                    reports nothing for an unlisted test file and JettyTests'
+      #                    exclude list would be decorative.
+      #   ! grep -q ...    SwiftPM emits "found N file(s) which are unhandled" during
+      #                    target planning, never from the compiler, so no -Xswiftc
+      #                    flag can promote it to an error. Grepping the log is what
+      #                    turns it into a gate.
+      #
+      # What it gates: any .swift file under Jetty/ or JettyTests/ that appears in
+      # neither `sources:` nor `exclude:` in Package.swift. A new macOS-only file
+      # therefore has to be ported or excluded deliberately, rather than silently
+      # dropping out of the Linux build. Add such files to `sources:` where they are
+      # portable — mass-excluding satisfies the gate while reintroducing exactly the
+      # omission it exists to catch.
+      #
+      # The pattern below matches SwiftPM's current wording; re-verify it when the
+      # digest above is rotated.
+      - name: Build (with the unhandled-file gate)
+        run: |
+          set -o pipefail
+          swift build --build-tests 2>&1 | tee build.log
+          if grep -q 'which are unhandled' build.log; then
+            echo "::error::Files under Jetty/ or JettyTests/ are in neither sources: nor exclude: in Package.swift. Port them (add to sources:) or exclude them deliberately."
+            grep -A100 'which are unhandled' build.log
+            exit 1
+          fi
+
+      - name: Test
+        run: swift test

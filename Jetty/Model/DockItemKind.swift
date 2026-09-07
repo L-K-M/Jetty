@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// What a dock tile *is*. Apps, files/folders, and links are launchable targets;
 /// the rest are built-in tiles (a divider, the Trash, the date/time widget, and

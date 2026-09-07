@@ -37,4 +37,34 @@ final class BookmarkResolverTests: XCTestCase {
         let item = DockItem(kind: .file, displayName: "Notes", url: path)
         XCTAssertEqual(BookmarkResolver.refreshedIfStale(item), item)
     }
+
+    #if canImport(Darwin)
+    /// The Darwin half, which this port gated behind `canImport(Darwin)` and which had
+    /// no coverage on the only platform that runs it: a bookmark is created, and it
+    /// **wins over** the stored `url`. Asserted by pointing the two at different files,
+    /// so a `resolve` that quietly stopped preferring the bookmark would fail here
+    /// rather than pass by coincidence.
+    ///
+    /// Deliberately not asserting that a bookmark tracks a *moved* file. That is real
+    /// behaviour and the reason bookmarks are used at all, but it belongs to the OS
+    /// rather than to this function, and a test for it could not be run from the Linux
+    /// container this was written in. Precedence is the branch, and precedence is
+    /// deterministic.
+    func testResolvePrefersAValidBookmarkOverTheStoredURL() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let bookmarked = dir.appendingPathComponent("jetty-bookmarked-\(UUID().uuidString).txt")
+        try "x".write(to: bookmarked, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: bookmarked) }
+
+        let data = try XCTUnwrap(BookmarkResolver.bookmark(for: bookmarked),
+                                 "bookmark(for:) must produce data on Darwin")
+        let decoy = dir.appendingPathComponent("jetty-decoy-\(UUID().uuidString).txt")
+        let item = DockItem(kind: .file, displayName: "Notes", bookmark: data, url: decoy)
+
+        let resolved = try XCTUnwrap(BookmarkResolver.resolve(item))
+        XCTAssertEqual(resolved.url.resolvingSymlinksInPath().path,
+                       bookmarked.resolvingSymlinksInPath().path,
+                       "the bookmark, not the stored url, decides")
+    }
+    #endif
 }

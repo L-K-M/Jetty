@@ -110,10 +110,9 @@ final class StoreBackupTests: XCTestCase {
 
         // And nothing is left lying next to the document: rotation writes through a
         // temp snapshot, which `rotateBackup`'s `defer` removes on every path.
-        let leftovers = try FileManager.default
-            .contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasPrefix(".dock.json.bak.tmp-") }
-        XCTAssertEqual(leftovers, [], "backup rotation must not strand its temp snapshot")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted(),
+                       [fileURL.lastPathComponent, bakURL.lastPathComponent].sorted(),
+                       "the directory holds the document and its backup, and nothing else")
     }
 
     func testBackupCopyFailurePreservesPrimaryAndPriorBackup() throws {

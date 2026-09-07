@@ -344,7 +344,7 @@ move half stays reviewable as a move.*
   `ColorHexTests`' cases went through `NSColor`. Rather than exclude both files, each
   now guards the part that needs a framework — which made `ColorHexTests` a better
   suite, because the hex rules are a **storage contract** and belonged against
-  `RGBA8`, not against a colour object. 9 + 10 cases now run on Linux. **The guards
+  `RGBA8`, not against a colour object. 9 + 11 cases now run on Linux. **The guards
   are temporary and JP-05 and JP-06 own removing them**: whichever step lands
   `Preferences` and `AppearancePreset` must un-guard the 12 deferred
   `CodableModelTests` cases in the same PR, or a guard meant to be temporary becomes a

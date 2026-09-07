@@ -23,5 +23,10 @@ final class XDGDataHomeTests: XCTestCase {
         XCTAssertEqual(DockStore.xdgDataHome("", home: home).path, "/home/tester/.local/share")
         XCTAssertEqual(DockStore.xdgDataHome("relative/data", home: home).path,
                        "/home/tester/.local/share")
+        // `~` is the tempting one to "fix" later: `getenv` hands back the literal
+        // character — only a shell expands it — so a tilde value is non-absolute and
+        // therefore invalid, like any other.
+        XCTAssertEqual(DockStore.xdgDataHome("~/data", home: home).path,
+                       "/home/tester/.local/share")
     }
 }

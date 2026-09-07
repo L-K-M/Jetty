@@ -113,6 +113,7 @@ final class DockTileMergeTests: XCTestCase {
         XCTAssertEqual(tile.kind, .trash)
         XCTAssertNil(tile.url)
         XCTAssertNil(tile.customIconPath)
+        XCTAssertNil(tile.folderDisplay, "normalisation must drop folder-presentation data too")
     }
 
     func testRunningAppsCollapseIntoOneSlotAtSentinel() {

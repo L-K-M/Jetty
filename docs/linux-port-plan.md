@@ -456,14 +456,14 @@ strip-geometry half — the pure types extracted out of the SwiftUI views, inclu
 the `tileWidth`/`tileExtent` single-source-of-truth pitfall below. The halves share no
 code, and the earlier steps showed a smaller diff draws sharper review.
 
-- Move `makeSlots`/`makeTiles` (with all three unique-id guards and Trash
+- **(JP-06a)** Move `makeSlots`/`makeTiles` (with all three unique-id guards and Trash
   normalisation) **onto a portable `DockTileMerge`** — they cannot stay on `DockModel`,
   which is an `NSImage`-resolving `ObservableObject`. Move the `DockTile`/`DockSlot`
   value types with them: `var icon: NSImage?` is **guarded and defaulted**, not retyped
   to a PictKit handle — PictKit is a macOS package and is not a dependency of the
   SwiftPM target at all. Also `DockContextMenuPlacement`, `DockContextAction`,
   `LRUImageCacheByKey` (generic over the image type).
-- The merge's own dependencies, which this step's first draft omitted: `RunningAppInfo`
+- **(JP-06a)** The merge's own dependencies, which this step's first draft omitted: `RunningAppInfo`
   (AppKit-free by design, but stranded in `RunningAppsModel.swift`) and
   `TrashLocations`. The latter is **not semantically portable** — it encodes Finder's
   model, while Linux uses the XDG spec, a different location rather than a fallback.
@@ -477,14 +477,14 @@ code, and the earlier steps showed a smaller diff draws sharper review.
     appeared, leaving the tile stuck on "empty". That step needs to watch the Trash
     root as well and rebuild the set when its children change. Raised on #79; no Linux
     consumer exists yet, so nothing is wired for it here.
-- Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
+- **(JP-06b)** Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
   (clockWidthFactor, contentOverflows, tileCenters, stackLocalAlong, scale),
   `DockDragPolicy` (slotExtents, the neighbour-shift rule, the index→ordered-itemID
   mapping), `DockTileGeometry` (tileWidth, the Fitts'-law padding split),
   `DockTileAccessibility.label(for:)`/`value(for:)`.
 - **Acceptance**: `DockModelTests`, `DockContextMenuPlacementTests` green; new
   tests for each extracted type.
-- **Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
+- **(JP-06b) Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
   the existing comment says "keep in sync"; extraction is the chance to make that a
   single source of truth instead of a comment.
 - *(The three bullets above were corrected in flight during JP-06a — the original

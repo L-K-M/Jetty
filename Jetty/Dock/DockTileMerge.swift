@@ -124,7 +124,15 @@ enum DockTileMerge {
                                  bundleIdentifier: isTrash ? nil : item.bundleIdentifier,
                                  url: isTrash ? nil : item.url, itemID: item.id,
                                   isRunning: info != nil, isActive: info?.isActive ?? false, pid: info?.pid,
-                                 customIconPath: customIconPath, folderDisplay: item.folderDisplay)
+                                 customIconPath: customIconPath,
+                                 // Complete the normalisation: `url`, `bundleIdentifier`
+                                 // and `customIconPath` are already dropped, and a
+                                 // folder-presentation style on a Trash tile is data an
+                                 // authored `.trash` item would never carry. Not a live
+                                 // bug — both readers of `folderDisplay` are guarded on
+                                 // `kind == .folder` — but the asymmetry is what invites
+                                 // one later.
+                                 folderDisplay: isTrash ? nil : item.folderDisplay)
             slots.append(DockSlot(id: uniqueSlotID(for: item), itemID: item.id,
                                   tiles: [tile], isRunningGroup: false))
         }

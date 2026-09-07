@@ -24,9 +24,10 @@ enum TrashLocations {
         #endif
     }
 
-
-
-    /// Existing Trash folders that can currently contain this user's discarded items.
+    /// Existing directories whose **children are** this user's discarded items:
+    /// `~/.Trash` and `.Trashes/$uid` on Darwin, `$XDG_DATA_HOME/Trash/files` under XDG.
+    /// For the trash *root* — what a user pins, and what `isTrashURL` matches — use
+    /// `userTrashURL()`; off Darwin these sit one level below it.
     static func existingTrashURLs() -> [URL] {
         unique(trashContentsURLs()).filter(isDirectory)
     }

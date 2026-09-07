@@ -152,8 +152,19 @@ extension DockLayout {
     /// and a dock placed at the far edge of the world is a better outcome than an
     /// arithmetic crash inside the compositor callback.
     private static func wireMargin(_ value: CGFloat) -> Int32 {
-        guard value.isFinite else { return 0 }
-        let rounded = value.rounded()
+        // NaN first, because every comparison below is false for it: it would fall
+        // through to the `Int32` conversion and trap. It degrades to `.min` — far
+        // off-output — and pointedly not to 0, which on an *anchored* edge means flush
+        // with the screen edge and fully visible. An auto-hiding dock frozen across
+        // the user's screen is the worst reachable outcome here, so: fail hidden.
+        guard !value.isNaN else { return .min }
+        // `.toNearestOrAwayFromZero` is `rounded()`'s default, spelled out because the
+        // direction is load-bearing on the negative side: a hidden dock's own-edge
+        // margin is `-height`, and rounding -60.5 *toward* zero would leave half a
+        // point of the "hidden" dock showing.
+        let rounded = value.rounded(.toNearestOrAwayFromZero)
+        // Saturate rather than trap. ±infinity arrives here and lands on the matching
+        // end, so an infinite coordinate does not masquerade as the NaN case.
         if rounded <= CGFloat(Int32.min) { return .min }
         if rounded >= CGFloat(Int32.max) { return .max }
         return Int32(rounded)

@@ -63,9 +63,12 @@ final class LayerShellPlacementTests: XCTestCase {
     /// The only test that exercises `Equatable`, which the type declares and JP-24
     /// will lean on: a Wayland binding that re-commits `set_anchor`/`set_margin` on
     /// every frame wants to skip the ones that changed nothing, and that diff is this
-    /// `==`. Both halves are needed. The equality half alone has almost no teeth —
-    /// both sides carry identical margins, so an `==` comparing only `anchorEdges`
-    /// passes it (measured, not assumed). The inequality half is what fails then.
+    /// `==`. All three cases are needed, and each covers a different broken `==`
+    /// (measured, not assumed). Equality alone has almost no teeth: both sides carry
+    /// identical margins *and* identical anchors, so an `==` comparing either field
+    /// alone passes it. Differing by one margin fails an `==` that ignores margins;
+    /// differing by one anchor fails an `==` that ignores anchors. Drop either
+    /// inequality case and half the contract goes unchecked.
     func testWholePlacementEquality() {
         let p = placement(DockAnchor(edge: .bottom, alignment: .center, inset: 12),
                           size: CGSize(width: 300, height: 70))
@@ -78,6 +81,11 @@ final class LayerShellPlacementTests: XCTestCase {
             anchorEdges: [.bottom, .left],
             margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 351))
         XCTAssertNotEqual(p, oneMarginOff)
+
+        let oneAnchorOff = LayerShellPlacement(
+            anchorEdges: [.bottom, .right],
+            margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 350))
+        XCTAssertNotEqual(p, oneAnchorOff)
     }
 
     // MARK: The margin always belongs to an anchored edge
@@ -182,20 +190,44 @@ final class LayerShellPlacementTests: XCTestCase {
         XCTAssertEqual(tie.margins.left, 351)
     }
 
-    /// Both axes go through the same sanitiser, so both are driven here: an
-    /// `isFinite` check written against `origin.x` alone would pass a NaN y straight
-    /// into the `Int32` conversion and trap.
+    /// Both axes and both kinds of non-finite go through the same sanitiser, so all
+    /// four combinations are driven here. A guard written as `isNaN` alone passes
+    /// `Int32(Double.infinity)` to the conversion and traps; one written as `isFinite`
+    /// alone has nowhere to send NaN, whose every comparison is false.
+    ///
+    /// The expectations encode "fail hidden": a corrupt coordinate drives its own
+    /// margin off-output, never to 0, which on an anchored edge is flush with the
+    /// screen edge and fully visible. Infinity keeps its sign rather than collapsing
+    /// into the NaN case.
     ///
     /// `.nan` alone is ambiguous on Linux (`Foundation.CGFloat` and `Swift.Double`
     /// both offer it); spelling the type keeps this compiling on both platforms.
     func testNonFiniteFrameDoesNotTrap() {
-        let frames = [CGRect(x: CGFloat.nan, y: 0, width: 300, height: 70),
-                      CGRect(x: 0, y: CGFloat.nan, width: 300, height: 70)]
-        for frame in frames {
+        // frame, expected left (anchored), expected bottom (anchored)
+        let cases: [(CGRect, Int32, Int32)] = [
+            (CGRect(x: CGFloat.nan, y: 0, width: 300, height: 70), .min, 0),
+            (CGRect(x: 0, y: CGFloat.nan, width: 300, height: 70), 0, .min),
+            (CGRect(x: CGFloat.infinity, y: 0, width: 300, height: 70), .max, 0),
+            (CGRect(x: 0, y: -CGFloat.infinity, width: 300, height: 70), 0, .min),
+        ]
+        for (frame, left, bottom) in cases {
             let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
-            XCTAssertEqual(p.margins.left, 0)
-            XCTAssertEqual(p.margins.bottom, 0)
+            XCTAssertEqual(p.margins.left, left, "left for \(frame)")
+            XCTAssertEqual(p.margins.bottom, bottom, "bottom for \(frame)")
+            XCTAssertEqual(p.margins.top, 0, "unanchored edges stay zero even here")
+            XCTAssertEqual(p.margins.right, 0, "unanchored edges stay zero even here")
         }
+    }
+
+    /// The rounding direction on the negative side — the side that actually shows.
+    /// `edgeReveal` is 0 so a hidden dock peeks by nothing; rounding a fractional
+    /// height toward zero instead of away from it would leave half a point of it on
+    /// screen, on every output whose layout lands on a fraction.
+    func testFractionalHiddenFrameRoundsFullyOffEdge() {
+        let revealed = CGRect(x: 350, y: 0, width: 300, height: 60.5)
+        let hidden = DockLayout.hiddenFrame(edge: .bottom, revealedFrame: revealed, in: bounds)
+        let p = DockLayout.layerShellPlacement(frame: hidden, in: bounds, edge: .bottom)
+        XCTAssertEqual(p.margins.bottom, -61)   // -60 would leave 0.5pt showing
     }
 
     func testHugeFrameSaturatesInsteadOfTrapping() {

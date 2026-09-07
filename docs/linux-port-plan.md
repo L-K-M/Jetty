@@ -987,9 +987,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   `pointerOverDockContent`. **Two flip sites, no more.**
   *(Correction, JP-03: the placement flip **moved** rather than vanished, and an
   earlier draft of this note claimed the stronger thing. `layerShellPlacement` emits
-  all four margins as **gaps** — the distance between a side of the frame and the same
-  side of the bounds — so the *values* carry no handedness and no y coordinate reaches
-  the wire. But deciding which side of the frame is its top still does: the function
+  the margin on each **anchored** edge as a **gap** — the distance between that side of
+  the frame and the same side of the bounds — so the *values* carry no handedness and
+  no y coordinate reaches the wire. The other two stay 0, because `set_margin` on an
+  unanchored edge is a documented no-op and a non-zero value there would be a silent
+  lie; the tests pin that. But deciding which side of the frame is its top still does: the function
   computes `bounds.maxY − frame.maxY`, i.e. exactly the flip this bullet named, and it
   requires **y-up** input. Hand it a y-down rect and `top` and `bottom` swap silently.
   What JP-24 gains is that it no longer *computes* the flip — it constructs the y-up

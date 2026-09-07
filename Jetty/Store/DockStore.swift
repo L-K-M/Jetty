@@ -5,6 +5,11 @@ import Foundation
 #if canImport(Combine)
 import Combine
 #endif
+// `moveItem` below calls SwiftUI's `move(fromOffsets:toOffset:)`, so this file needs
+// SwiftUI under exactly the condition that call is gated on.
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 
 /// Loads and saves the `DockDocument` (pinned items + per-display anchors) as JSON
 /// in Application Support. Writes are **atomic** and **debounced**, keeping one

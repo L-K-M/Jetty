@@ -360,9 +360,12 @@ move half stays reviewable as a move.*
   wrong bar for anything in the save path.** In swift-corelibs-foundation it throws
   *and deletes the destination*. `DockStore.rotateBackup` called it whenever a `.bak`
   already existed, and the throw propagates into `saveNow`'s do-block — so on Linux
-  every save from the **third** onward (the first with a backup to replace) destroyed
-  `dock.json.bak` and then silently persisted nothing at all, leaving only an `NSLog`
-  line behind. Promote the verified snapshot with
+  **alternate** saves from the **third** onward destroyed `dock.json.bak` and then
+  silently persisted nothing at all, leaving only an `NSLog` line behind. Alternate,
+  not every: the failure deletes `.bak`, so the next save finds none, takes the create
+  branch, and succeeds — then the one after that fails again. That self-concealing
+  rhythm is part of why it was easy to miss, and the first draft of this entry said
+  "every save" before checking. Promote the verified snapshot with
   `Data.write(to:options:.atomic)` instead: measured to be a temp-file-plus-rename on
   both platforms by watching the destination inode change, which is the only property
   `replaceItemAt` was there for, and it creates or replaces alike so the two branches

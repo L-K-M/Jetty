@@ -99,6 +99,21 @@ final class StoreBackupTests: XCTestCase {
         XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO"],
                        "the prior good primary must rotate over the existing backup")
+
+        // A fourth save, because the pre-fix failure was self-concealing: the throw
+        // deleted `.bak`, so the *next* save found none and took the create branch and
+        // succeeded. Losses alternated rather than persisting, which is easy to mistake
+        // for a one-off. Both branches now run in sequence here.
+        store.setDisplayDisabled(true, forDisplayUUID: "FOUR")
+        store.flush()
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
+
+        // And nothing is left lying next to the document: rotation writes through a
+        // temp snapshot, which `rotateBackup`'s `defer` removes on every path.
+        let leftovers = try FileManager.default
+            .contentsOfDirectory(atPath: dir.path)
+            .filter { $0.hasPrefix(".dock.json.bak.tmp-") }
+        XCTAssertEqual(leftovers, [], "backup rotation must not strand its temp snapshot")
     }
 
     func testBackupCopyFailurePreservesPrimaryAndPriorBackup() throws {

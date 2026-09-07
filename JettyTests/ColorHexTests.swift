@@ -19,8 +19,7 @@ final class ColorHexTests: XCTestCase {
     }
 
     func testLeadingHashOptional() {
-        XCTAssertNotNil(RGBA8(hex: "00FF00"))
-        XCTAssertEqual(RGBA8(hex: "00FF00"), RGBA8(hex: "#00FF00"))
+        XCTAssertEqual(RGBA8(hex: "00FF00"), RGBA8(red: 0, green: 255, blue: 0))
     }
 
     func testInvalidReturnsNil() {
@@ -117,6 +116,10 @@ final class ColorHexTests: XCTestCase {
         XCTAssertEqual(NSColor(hex: "#3A7BD580")!.hexString, "#3A7BD580")
         XCTAssertEqual(NSColor(hex: "#3A7BD5FF")!.hexString, "#3A7BD5")
         XCTAssertNil(NSColor(hex: "+ABCDEF"))
+        // Shorthand expansion went through `NSColor` before the split and only through
+        // `RGBA8` after it; keep one case on the bridge so a separate fast path added
+        // to `NSColor(hex:)` could not skip nibble expansion unnoticed.
+        XCTAssertEqual(NSColor(hex: "#abc")!.hexString, "#AABBCC")
     }
 
     func testSwiftUIColorBridging() {

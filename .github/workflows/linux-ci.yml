@@ -26,6 +26,14 @@ jobs:
     # silently. Digest is swift:6.3.3-noble as of 2026-09-07.
     container: swift@sha256:56ef1be2c1ca36f4c52440357dc1fcdfdb5e113587134fcadeef57c225c71b54
 
+    # Inside a container, Actions defaults `run` steps to `sh`, which on Ubuntu is
+    # dash — and dash has no `pipefail` ("set: Illegal option -o pipefail"). The gate
+    # below is built on it, so the shell has to be named explicitly. Job-level so a
+    # step added later inherits it rather than rediscovering this.
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

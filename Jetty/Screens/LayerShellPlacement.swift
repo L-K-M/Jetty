@@ -23,10 +23,17 @@ struct LayerShellPlacement: Equatable {
     /// which is both what the protocol ignores and what makes a stray non-zero value
     /// visible in a test rather than silently discarded on the wire.
     ///
-    /// These are gaps between the frame's side and the same side of the bounds, so
-    /// they carry no handedness: `top` is the distance below the top of the output
-    /// whichever way the caller's y axis runs. The single deliberate y-flip lives at
-    /// the toolkit boundary (JP-24), not here.
+    /// Each is a physical gap between one side of the frame and the same side of the
+    /// bounds, so the *value* carries no handedness — `top` is simply how far the
+    /// frame's top edge sits below the top of the output.
+    ///
+    /// Deciding *which* side of the frame is its top does depend on the caller, and
+    /// `layerShellPlacement` requires **y-up** input: `minY` is the output's bottom
+    /// edge, as everywhere else in `DockLayout`. Hand it a y-down rect and `top` and
+    /// `bottom` silently swap. That is the whole y-flip the port has to get right, and
+    /// it lives here now — in a pure function with tests that pin it — rather than in
+    /// the Wayland binding (JP-24), whose job is to construct the y-up rect and pass
+    /// these values through untouched.
     struct Margins: Equatable {
         var top: Int32 = 0
         var right: Int32 = 0
@@ -67,14 +74,21 @@ extension DockLayout {
     ///
     /// `bounds` is the same rect the frame was laid out against, so the two agree by
     /// construction; JP-24 passes a per-output `CGRect(0, 0, usable.width,
-    /// usable.height)` to both.
+    /// usable.height)` to both. Both must be **y-up** (`minY` = the output's bottom
+    /// edge) — see `Margins`. Constructing that rect from a bare output size, rather
+    /// than flipping a y-down one, is what keeps the convention honest on the Wayland
+    /// side, where a size is all there is anyway.
     ///
     /// The along-edge anchor is always the low side (left for a horizontal dock, top
-    /// for a vertical one) rather than the side the frame happens to sit nearer.
-    /// Choosing by proximity would put a discontinuity in the middle of the screen,
-    /// where a one-point drag flips the anchor and the margin jumps the width of the
-    /// output; a fixed side is stable, and Jetty recomputes placement on every output
-    /// change anyway.
+    /// for a vertical one) rather than the side the frame happens to sit nearer. Both
+    /// choices describe the same rectangle — a right anchor with margin `W - L - w`
+    /// puts the dock exactly where a left anchor with margin `L` does — so this is not
+    /// about where the dock lands. It is about the representation: choosing by
+    /// proximity makes the margin churn by nearly the width of the output when a drag
+    /// crosses the midpoint, which is noise for anything that diffs, logs or animates
+    /// margins. The other difference a fixed side gives up — an anchor that keeps the
+    /// dock glued to its own edge across an output resize — is moot, because Jetty
+    /// recomputes placement on every output change anyway.
     ///
     /// Margins may be **negative**, deliberately: `hiddenFrame` slides the dock off
     /// its edge, and a negative margin is how that reaches the compositor. Clamping

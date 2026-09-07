@@ -80,6 +80,13 @@ final class LayerShellPlacementTests: XCTestCase {
             for (side, value) in byEdge where !p.anchorEdges.contains(side) {
                 XCTAssertEqual(value, 0, "\(edge) dock: margin on unanchored edge \(side)")
             }
+            // Without this half the test passes on an implementation that drops
+            // `offset` and `inset` entirely and returns four zeros — every assertion
+            // above would still hold.
+            for (side, value) in byEdge where p.anchorEdges.contains(side) {
+                XCTAssertGreaterThan(value, 0,
+                                     "\(edge) dock: anchored edge \(side) carries no margin")
+            }
             XCTAssertTrue(p.anchorEdges.contains(edge), "\(edge): dock edge must be anchored")
         }
     }
@@ -147,19 +154,46 @@ final class LayerShellPlacementTests: XCTestCase {
         XCTAssertEqual(p.margins.left, 350)            // 349.5 rounds away from zero
     }
 
+    /// Both axes go through the same sanitiser, so both are driven here: an
+    /// `isFinite` check written against `origin.x` alone would pass a NaN y straight
+    /// into the `Int32` conversion and trap.
+    ///
+    /// `.nan` alone is ambiguous on Linux (`Foundation.CGFloat` and `Swift.Double`
+    /// both offer it); spelling the type keeps this compiling on both platforms.
     func testNonFiniteFrameDoesNotTrap() {
-        // `.nan` alone is ambiguous on Linux (Foundation.CGFloat and Swift.Double both
-        // offer it); spelling the type keeps this compiling on both platforms.
-        let frame = CGRect(x: CGFloat.nan, y: 0, width: 300, height: 70)
-        let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
-        XCTAssertEqual(p.margins.left, 0)
-        XCTAssertEqual(p.margins.bottom, 0)
+        let frames = [CGRect(x: CGFloat.nan, y: 0, width: 300, height: 70),
+                      CGRect(x: 0, y: CGFloat.nan, width: 300, height: 70)]
+        for frame in frames {
+            let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
+            XCTAssertEqual(p.margins.left, 0)
+            XCTAssertEqual(p.margins.bottom, 0)
+        }
     }
 
     func testHugeFrameSaturatesInsteadOfTrapping() {
         let frame = CGRect(x: 1e30, y: 0, width: 300, height: 70)
         let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
         XCTAssertEqual(p.margins.left, Int32.max)
+    }
+
+    /// The input convention, pinned: `layerShellPlacement` reads `minY` as the
+    /// output's **bottom** edge, the y-up convention `DockLayout` uses throughout. The
+    /// same rectangle read y-down would put this dock at the top of the output and
+    /// swap the two margins, so this is the assertion that fails if a future caller
+    /// hands the function a y-down rect — or if someone "fixes" the arithmetic to
+    /// accept one.
+    func testFramesAreReadYUp() {
+        // Flush against y = 0 and 70 tall. Y-up, that is a dock on the bottom edge;
+        // y-down it would be a dock on the top edge.
+        let frame = CGRect(x: 0, y: 0, width: 300, height: 70)
+        let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
+        XCTAssertEqual(p.margins.bottom, 0, "y-up: minY = 0 means flush with the bottom")
+        XCTAssertEqual(p.margins.top, 0, "top is unanchored for a bottom dock")
+
+        // The same frame read as a top dock: its gap to the top is the full remainder,
+        // which is only true if maxY is being read as the frame's top edge.
+        let asTop = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .top)
+        XCTAssertEqual(asTop.margins.top, 730)      // 800 - 70
     }
 
     /// Jetty reserves no screen space on any platform — the one load-bearing design

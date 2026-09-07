@@ -984,15 +984,20 @@ CI action that builds gtk4-layer-shell from source on noble.*
   JP-03's `layerShellPlacement` returns, so the two cannot drift apart, and assert
   the vertical offset in the headless-sway test rather than just the anchoring. A second, panel-local flip feeds
   `pointerOverDockContent`. **Two flip sites, no more.**
-  *(Correction, JP-03: it is now **one** flip site. `layerShellPlacement` shipped
-  emitting all four margins as **gaps** — the distance between a side of the frame and
-  the same side of the bounds — and a gap has no handedness: `margins.top` is the
-  distance below the top of the output whichever way the caller's y axis runs. So the
-  placement flip does not exist to get wrong; there is no y coordinate on the wire at
-  all. JP-24 consumes `margins` and `anchorEdges` as given, and its only flip is the
-  panel-local one feeding `pointerOverDockContent`. Keep the headless-sway assertion:
-  it is what proves the gaps were computed against the rect the compositor actually
-  used.)*
+  *(Correction, JP-03: the placement flip **moved** rather than vanished, and an
+  earlier draft of this note claimed the stronger thing. `layerShellPlacement` emits
+  all four margins as **gaps** — the distance between a side of the frame and the same
+  side of the bounds — so the *values* carry no handedness and no y coordinate reaches
+  the wire. But deciding which side of the frame is its top still does: the function
+  computes `bounds.maxY − frame.maxY`, i.e. exactly the flip this bullet named, and it
+  requires **y-up** input. Hand it a y-down rect and `top` and `bottom` swap silently.
+  What JP-24 gains is that it no longer *computes* the flip — it constructs the y-up
+  `CGRect(0, 0, usable.width, usable.height)` from a bare output size, where a size is
+  all Wayland gives it anyway, and passes `margins`/`anchorEdges` through untouched.
+  The flip is now in a pure function with `testFramesAreReadYUp` pinning it, which a
+  mutation swapping the two gaps fails. Still two flip sites; one of them is now
+  tested. Keep the headless-sway assertion: it is what proves the gaps were computed
+  against the rect the compositor actually used.)*
 - Assert `gtk_layer_is_supported()` **when the layer-shell tier is the active
   backend** and fail with a clear message. Not unconditionally: Mutter implements no
   `zwlr_layer_shell_v1` at all, so an unconditional assert kills `jetty-shell` at

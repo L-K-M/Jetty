@@ -133,6 +133,21 @@ final class DockTileMergeTests: XCTestCase {
         XCTAssertEqual(slots[2].tiles.first?.kind, .clock)  // clock sits AFTER running apps
     }
 
+    /// The sentinel skip must hold for the tile walk as well as the slot walk, or a
+    /// stray "Running Apps" tile could leak through `makeTiles` while `makeSlots` stays
+    /// correct.
+    func testDisabledSentinelLeaksNoTileThroughMakeTiles() {
+        let pinned = [DockItem(kind: .application, displayName: "Finder",
+                               bundleIdentifier: "com.apple.finder"),
+                      DockItem(kind: .runningApps, displayName: "Running Apps")]
+        let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari",
+                                      isActive: true, pid: 2)]
+        XCTAssertEqual(DockTileMerge.makeTiles(pinned: pinned, running: running,
+                                               showRunningApps: false,
+                                               isTrashURL: { _ in false }).map(\.id),
+                       ["app:com.apple.finder"])
+    }
+
     func testRunningAppsSentinelSkippedWhenHidden() {
         let pinned = [finderItem(), DockItem(kind: .runningApps, displayName: "Running Apps")]
         let running = [RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari", isActive: true, pid: 2)]

@@ -34,13 +34,22 @@ final class TrashLocationsTests: XCTestCase {
     }
     #endif
 
-    /// One XDG rule, not two: `DockStore` and `TrashLocations` must agree, or the
-    /// persisted document and the trash would disagree about `$XDG_DATA_HOME`.
-    func testDockStoreAndXDGPathsAgree() {
-        for value in ["/custom/data", "", "relative/path"] as [String?] + [nil] {
-            XCTAssertEqual(DockStore.xdgDataHome(value, home: "/home/u").path,
-                           XDGPaths.dataHome(value, home: "/home/u").path,
-                           "diverged on \(String(describing: value))")
-        }
+    /// The shared XDG rule, pinned against the **spec** rather than against another
+    /// implementation of it.
+    ///
+    /// This replaced an "agree with `DockStore.xdgDataHome`" assertion that could not
+    /// fail: `DockStore` forwards here, so it compared the function with itself. That
+    /// is the same vacuous shape rejected on #78 (a parity test between `NSColor(hex:)`
+    /// and the `RGBA8(hex:)` it delegates to) — written here by the same hand that
+    /// rejected it there, which is why it is spelled out.
+    func testXDGDataHomeFollowsTheSpec() {
+        // Absolute wins verbatim.
+        XCTAssertEqual(XDGPaths.dataHome("/custom/data", home: "/home/u").path, "/custom/data")
+        // Unset falls back to the documented default.
+        XCTAssertEqual(XDGPaths.dataHome(nil, home: "/home/u").path, "/home/u/.local/share")
+        // Empty is "unset", not a path — `URL(fileURLWithPath: "")` is the *cwd*.
+        XCTAssertEqual(XDGPaths.dataHome("", home: "/home/u").path, "/home/u/.local/share")
+        // Relative is invalid per the spec, and must not resolve against cwd or home.
+        XCTAssertEqual(XDGPaths.dataHome("relative/path", home: "/home/u").path, "/home/u/.local/share")
     }
 }

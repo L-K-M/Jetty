@@ -40,13 +40,17 @@ enum DockTileMerge {
         var seenRunningIDs = Set<String>()
         let runningOnly: [DockTile] = running.compactMap { info in
             if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
-            guard seenRunningIDs.insert(info.id).inserted else { return nil }
             // Same rule as `runningByBundle` above, which this deliberately reuses: on a
             // relaunch race the first info can be the inactive one, and keeping it would
             // leave an *unpinned* app's tile without its active dot while the app has
-            // focus — the pinned path's bug, one code path over. Shared ids are
-            // bundle-derived, so `resolved.id == info.id` and the dedup set is untouched.
+            // focus — the pinned path's bug, one code path over.
             let resolved = info.bundleIdentifier.flatMap { runningByBundle[$0] } ?? info
+            // Dedup on the id the tile is *minted from*, not the raw one. They are equal
+            // only while `RunningAppInfo.id` stays bundle-derived, which is a fact about
+            // another file: were it ever pid-derived, two infos sharing a bundle would
+            // both pass a raw-id check and both resolve to the same winner, minting two
+            // tiles with one id — the desync this guard exists to prevent.
+            guard seenRunningIDs.insert(resolved.id).inserted else { return nil }
             return DockTile(id: "app:\(resolved.id)", kind: .application, displayName: resolved.name,
                             bundleIdentifier: resolved.bundleIdentifier, url: nil, itemID: nil,
                             isRunning: true, isActive: resolved.isActive, pid: resolved.pid,

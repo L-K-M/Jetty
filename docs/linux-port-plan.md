@@ -430,8 +430,10 @@ generic in this step.*
   `HotkeyBinding`: its Carbon modifier bits and default key codes are **persisted** in
   `UserDefaults` as JSON, so they are a storage format rather than a Carbon detail —
   the same argument that pulled `RGBA8` out of `NSColor`. They are named constants
-  now (`HotkeyBinding.Modifier`, `.KeyCode`), and a Darwin-gated test asserts each
-  equals the Carbon symbol it mirrors, so a wrong value fails the build's own tests
+  now, in the ported `KeyCode` / `KeyCode.Modifier` (`Jetty/Hotkeys/KeyCodes.swift`,
+  which is the single source of truth — an earlier draft of this step nested a second
+  copy inside `HotkeyBinding` and so forked a persisted format; don't), and a
+  Darwin-gated test asserts each equals the Carbon symbol it mirrors, so a wrong value fails the build's own tests
   instead of silently rewriting every saved hotkey. `AppearancePreset`, by contrast,
   needed nothing: its nine `…ColorHex` matches are field *names*, not colour types.
 - **Acceptance**: `PreferencesTests` green on both platforms with its assertions

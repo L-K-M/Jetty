@@ -1,9 +1,3 @@
-#if canImport(Carbon)
-import Carbon.HIToolbox
-#else
-import Foundation
-#endif
-
 /// Virtual key codes and Carbon modifier flags used by Jetty's optional global
 /// hotkeys (US layout, position-based).
 ///

@@ -26,11 +26,25 @@ final class TrashLocationsTests: XCTestCase {
     }
 
     #if !canImport(Darwin)
-    /// The trash root follows `$XDG_DATA_HOME`, through the same shared rule the
-    /// persisted document location uses.
-    func testUserTrashURLFollowsTheSharedXDGRule() {
-        XCTAssertEqual(TrashLocations.userTrashURL().path,
-                       XDGPaths.dataHome().appendingPathComponent("Trash").path)
+    /// The trash root honours `$XDG_DATA_HOME`, pinned against a **literal** rather than
+    /// against the expression `userTrashURL()` is built from.
+    ///
+    /// The previous version compared `userTrashURL()` with
+    /// `XDGPaths.dataHome().appendingPathComponent("Trash")` — which is its
+    /// implementation, so it could not fail, and with the variable unset (the usual CI
+    /// case) even a regression hardcoding `~/.local/share/Trash` stayed green. That is
+    /// the second time on this PR I wrote the shape the test above rejects, once in the
+    /// very commit that deleted the first one.
+    ///
+    /// `ProcessInfo.processInfo.environment` reads the environment live on
+    /// swift-corelibs-foundation — measured on the pinned toolchain — so `setenv` here
+    /// is observed by `XDGPaths.dataHome()`.
+    func testUserTrashURLHonoursXDGDataHome() {
+        setenv("XDG_DATA_HOME", "/tmp/jetty-xdg-probe", 1)
+        defer { unsetenv("XDG_DATA_HOME") }
+        XCTAssertEqual(TrashLocations.userTrashURL().path, "/tmp/jetty-xdg-probe/Trash")
+        XCTAssertEqual(TrashLocations.trashContentsURLs().map(\.path),
+                       ["/tmp/jetty-xdg-probe/Trash/files"])
     }
     #endif
 

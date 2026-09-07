@@ -28,6 +28,12 @@ enum TrashLocations {
     /// `~/.Trash` and `.Trashes/$uid` on Darwin, `$XDG_DATA_HOME/Trash/files` under XDG.
     /// For the trash *root* — what a user pins, and what `isTrashURL` matches — use
     /// `userTrashURL()`; off Darwin these sit one level below it.
+    ///
+    /// **May be empty off Darwin**, where `Trash/files` is not created until the user's
+    /// first delete. `~/.Trash` exists from login, so this cannot happen on macOS. A
+    /// watch built from this list therefore has to tolerate attaching to nothing and
+    /// re-attach once the directory appears — see the note against the Linux Trash tile
+    /// in docs/linux-port-plan.md.
     static func existingTrashURLs() -> [URL] {
         unique(trashContentsURLs()).filter(isDirectory)
     }

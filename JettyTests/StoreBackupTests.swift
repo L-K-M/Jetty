@@ -90,6 +90,12 @@ final class StoreBackupTests: XCTestCase {
         let store = DockStore(fileURL: fileURL, debounce: 0)
         store.setDisplayDisabled(true, forDisplayUUID: "ONE")
         store.flush()
+        // Stated, because the whole sequence below counts on it: rotation begins only
+        // once a prior primary exists, so the first save mints no backup. If that ever
+        // changed, saves two and three would both take the replace branch while every
+        // assertion here still passed, and this test would silently stop covering the
+        // create branch it exists to sequence.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bakURL.path))
         store.setDisplayDisabled(true, forDisplayUUID: "TWO")   // creates .bak = [ONE]
         store.flush()
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])

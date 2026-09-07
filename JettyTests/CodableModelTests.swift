@@ -96,6 +96,12 @@ final class CodableModelTests: XCTestCase {
         XCTAssertEqual(anchor.inset, 0)
     }
 
+    // TODO(JP-05/JP-06): temporary guard. Un-guard these cases in the same PR that
+    // lands `Preferences` and `AppearancePreset` — see docs/linux-port-plan.md §JP-04,
+    // which makes that those steps' acceptance rather than a hope. (The guard in
+    // ColorHexTests is *not* temporary: its NSColor/Color section is macOS-only for
+    // good, because a colour object is what it tests.)
+    //
     // `AppearancePreset` and `Preferences` are not in the portable target yet — the
     // preset carries `Color`, and `Preferences` is `@Published`/`SMAppService`, both
     // of which land in JP-05/JP-06. Everything above this line is `DockDocument`,

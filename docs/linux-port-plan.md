@@ -376,6 +376,13 @@ move half stays reviewable as a move.*
   replace branch was untested on both platforms.
   `testThirdSaveReplacesAnExistingBackup` covers it now, and fails on Linux without
   the fix.
+- **Follow-up, not fixed here:** `xdgDataHome` builds `home + /.local/share` when the
+  environment variable is unusable, and an **empty** `home` makes that resolve against
+  the *current working directory* — `URL(fileURLWithPath: "")` is the cwd, not `/`,
+  measured. That is exactly what the relative-value rule exists to prevent, one level
+  up. It is only reachable where `NSHomeDirectory()` is empty (a HOME-less container or
+  agent), and deciding what a dock should do with no home at all is a product question
+  rather than a port question, so JP-04 records it instead of inventing an answer.
 - **Three findings this step turned up that the plan did not predict:**
   - `Array.move(fromOffsets:toOffset:)` is **SwiftUI's**, not the standard library's,
     so `DockStore.moveItem` does not compile on Linux. It is left macOS-only rather

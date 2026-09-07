@@ -44,6 +44,14 @@ final class TrashLocationsTests: XCTestCase {
         // the environment this runs in, and `unsetenv` in a defer would clobber it for
         // every test after this one instead of putting it back.
         let saved = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
+        // The unset branch, through the real reader rather than injected parameters —
+        // otherwise a regression that ignores the environment entirely (or reads a
+        // cached snapshot) stays green here, since unset is the usual CI case.
+        unsetenv("XDG_DATA_HOME")
+        XCTAssertEqual(TrashLocations.userTrashURL().path,
+                       URL(fileURLWithPath: NSHomeDirectory())
+                           .appendingPathComponent(".local/share/Trash").path)
+
         setenv("XDG_DATA_HOME", "/tmp/jetty-xdg-probe", 1)
         defer {
             if let saved { setenv("XDG_DATA_HOME", saved, 1) } else { unsetenv("XDG_DATA_HOME") }

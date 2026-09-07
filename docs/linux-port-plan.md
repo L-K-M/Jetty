@@ -448,8 +448,9 @@ generic in this step.*
   Darwin.)*
 
 ### JP-06 · Jetty · Dock model + strip geometry
-**Branch** `claude/jp-06-dock-model` · **Size** M — shipped as two sequential PRs,
-JP-06a then JP-06b, both from the working branch in use for this port
+**Branch** `claude/jp-06-dock-model` · **Size** M — split into two sequential PRs:
+JP-06a from the working branch in use for this port, JP-06b from `main` once JP-06a
+has landed
 
 *Split into two PRs in flight.* **JP-06a** is the model half — the tile/slot merge and
 its value types, which is self-contained and testable on its own. **JP-06b** is the
@@ -489,7 +490,8 @@ sharper review.
   mapping), `DockTileGeometry` (tileWidth, the Fitts'-law padding split),
   `DockTileAccessibility.label(for:)`/`value(for:)`.
 - **(JP-06a) Acceptance**: `DockModelTests` and `DockContextMenuPlacementTests` green,
-  plus new tests for the merge and its value types.
+  plus new tests for the merge, its value types, and the XDG trash layout — items
+  enumerated from `Trash/files`, identity resolved from the trash root.
 - **(JP-06b) Acceptance**: new tests for each extracted type (`DockStripLayout`,
   `DockDragPolicy`, `DockTileGeometry`, `DockTileAccessibility`).
 - **(JP-06b) Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —

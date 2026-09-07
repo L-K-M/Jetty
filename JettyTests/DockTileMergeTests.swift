@@ -268,4 +268,18 @@ final class DockTileMergeTests: XCTestCase {
         XCTAssertEqual(tiles[0].pid, 11)
         XCTAssertEqual(tiles[0].id, "app:com.panic.Transmit", "tile identity must not shift")
     }
+
+    /// Pinned apps get `dedupKey` = `app:<bundleID>`; running-only tiles get
+    /// `app:<RunningAppInfo.id>`. Those align — and the merge of a pin with its running
+    /// instance works at all — only while `id` is the bundle identifier. That is a fact
+    /// about another file, so pin it here rather than leave it to a comment: making it
+    /// pid-derived would silently stop pins merging and reintroduce the F-M1 desync.
+    func testRunningAppInfoIDIsTheBundleIdentifier() {
+        let identified = RunningAppInfo(bundleIdentifier: "com.apple.Safari", name: "Safari",
+                                        isActive: false, pid: 7)
+        XCTAssertEqual(identified.id, "com.apple.Safari")
+        // Only a bundle-less process falls back to the pid, which cannot collide.
+        let anonymous = RunningAppInfo(bundleIdentifier: nil, name: "helper", isActive: false, pid: 7)
+        XCTAssertEqual(anonymous.id, "pid:7")
+    }
 }

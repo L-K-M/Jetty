@@ -79,8 +79,11 @@ extension DockLayout {
     /// than flipping a y-down one, is what keeps the convention honest on the Wayland
     /// side, where a size is all there is anyway.
     ///
-    /// The along-edge anchor is always the low side (left for a horizontal dock, top
-    /// for a vertical one) rather than the side the frame happens to sit nearer. Both
+    /// The along-edge anchor is fixed by the dock's orientation — `left` for a
+    /// horizontal dock, `top` for a vertical one — never the side the frame happens to
+    /// sit nearer. (Deliberately not described as "the low side": in the y-up
+    /// convention above, `top` is the *high*-y edge, and this file exists to stop
+    /// exactly that confusion.) Both
     /// choices describe the same rectangle — a right anchor with margin `W - L - w`
     /// puts the dock exactly where a left anchor with margin `L` does — so this is not
     /// about where the dock lands. It is about the representation: choosing by

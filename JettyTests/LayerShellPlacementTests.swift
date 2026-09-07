@@ -60,6 +60,26 @@ final class LayerShellPlacementTests: XCTestCase {
         XCTAssertEqual(p.margins.left, 0)
     }
 
+    /// The only test that exercises `Equatable`, which the type declares and JP-24
+    /// will lean on: a Wayland binding that re-commits `set_anchor`/`set_margin` on
+    /// every frame wants to skip the ones that changed nothing, and that diff is this
+    /// `==`. Both halves are needed. The equality half alone has almost no teeth —
+    /// both sides carry identical margins, so an `==` comparing only `anchorEdges`
+    /// passes it (measured, not assumed). The inequality half is what fails then.
+    func testWholePlacementEquality() {
+        let p = placement(DockAnchor(edge: .bottom, alignment: .center, inset: 12),
+                          size: CGSize(width: 300, height: 70))
+        let expected = LayerShellPlacement(
+            anchorEdges: [.bottom, .left],
+            margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 350))
+        XCTAssertEqual(p, expected)
+
+        let oneMarginOff = LayerShellPlacement(
+            anchorEdges: [.bottom, .left],
+            margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 351))
+        XCTAssertNotEqual(p, oneMarginOff)
+    }
+
     // MARK: The margin always belongs to an anchored edge
 
     /// The bug this whole type exists to prevent: a margin set on an edge the surface

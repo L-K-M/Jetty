@@ -269,8 +269,9 @@ move half stays reviewable as a move.*
   `(anchorEdges, margins, exclusiveZone)`, unit-tested against the existing
   `DockLayoutTests` fixture (`CGRect(0, 0, 1000, 800)` — already per-output local
   space, so every existing assertion stays valid verbatim). Shipped as a
-  `LayerShellPlacement` struct rather than a tuple, so the tests compare whole
-  placements. Two protocol facts settle its shape, both read from
+  `LayerShellPlacement` struct rather than a tuple, so a test can compare whole
+  placements — and one does, in both directions, which is what covers the `Equatable`
+  a JP-24 binding needs to skip re-committing an unchanged placement. Two protocol facts settle its shape, both read from
   `wlr-layer-shell-unstable-v1.xml`: `set_anchor` resolves *orthogonal* edges to
   "the intersection of the edges", so the anchor is always a corner — the dock's
   edge plus one edge along it — because anchoring the dock's edge alone lets the

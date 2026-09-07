@@ -171,7 +171,15 @@ final class LayerShellPlacementTests: XCTestCase {
         // 301 wide on a 1000-wide output leaves 349.5 either side.
         let p = placement(DockAnchor(edge: .bottom, alignment: .center),
                           size: CGSize(width: 301, height: 70))
-        XCTAssertEqual(p.margins.left, 350)            // 349.5 rounds away from zero
+        XCTAssertEqual(p.margins.left, 350)
+
+        // 349.5 lands on 350 under away-from-zero *and* under nearest-even, since 350
+        // is the even neighbour — so the case above cannot see which mode is in use.
+        // 350.5 can: away-from-zero gives 351, nearest-even gives 350. This is the
+        // assertion that actually pins `rounded()`'s default.
+        let tie = placement(DockAnchor(edge: .bottom, alignment: .center),
+                            size: CGSize(width: 299, height: 70))
+        XCTAssertEqual(tie.margins.left, 351)
     }
 
     /// Both axes go through the same sanitiser, so both are driven here: an
@@ -194,6 +202,13 @@ final class LayerShellPlacementTests: XCTestCase {
         let frame = CGRect(x: 1e30, y: 0, width: 300, height: 70)
         let p = DockLayout.layerShellPlacement(frame: frame, in: bounds, edge: .bottom)
         XCTAssertEqual(p.margins.left, Int32.max)
+
+        // Both ends, and the low one is the reachable half: hidden docks go negative
+        // by design, so a clamp written only against `Int32.max` would trap exactly
+        // where the type deliberately allows negative margins.
+        let farBelow = CGRect(x: 0, y: -1e30, width: 300, height: 70)
+        let q = DockLayout.layerShellPlacement(frame: farBelow, in: bounds, edge: .bottom)
+        XCTAssertEqual(q.margins.bottom, Int32.min)
     }
 
     /// The input convention, pinned: `layerShellPlacement` reads `minY` as the

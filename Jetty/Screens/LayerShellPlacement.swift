@@ -57,6 +57,25 @@ struct LayerShellPlacement: Equatable {
     /// quietly hand out a placement that reserves space.
     let exclusiveZone: Int32 = LayerShellPlacement.exclusiveZone
 
+    /// Enforces what `anchorEdges` documents: exactly two orthogonal edges. Opposite
+    /// edges (`[.left, .right]`) make the compositor stretch the surface between the
+    /// two margins, and a single edge centres it along that edge — both discard the
+    /// size and position this type exists to carry, and neither is an error in Swift.
+    ///
+    /// `assert`, not `precondition`: the only producer is `layerShellPlacement`, whose
+    /// switch is exhaustive over `DockEdge` and cannot build an invalid pair, so this
+    /// can only fire on a future producer's bug. That is worth catching in debug and
+    /// in tests; it is not worth trapping in a release build and taking down the
+    /// user's dock, which is the one thing a dock must never do.
+    init(anchorEdges: Set<DockEdge>, margins: Margins) {
+        assert(anchorEdges.count == 2
+               && anchorEdges.contains(where: { $0.isHorizontal })
+               && anchorEdges.contains(where: { $0.isVertical }),
+               "anchorEdges must be two orthogonal edges, got \(anchorEdges)")
+        self.anchorEdges = anchorEdges
+        self.margins = margins
+    }
+
     /// Reserve nothing. Jetty floats over content and auto-hides — `AGENTS.md`'s one
     /// load-bearing design decision — so a positive zone is out. Zero, not `-1`:
     /// `-1` asks not to be moved for other panels and to be extended to the raw output

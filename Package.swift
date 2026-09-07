@@ -110,6 +110,7 @@ let package = Package(
                 "Screens/DockLayout.swift",
                 "Screens/LayerShellPlacement.swift",
                 "Dock/MagnificationCurve.swift",
+                "Dock/DockTileGeometry.swift",
                 "Dock/DockSlot.swift",
                 "Dock/DockTile.swift",
                 "Dock/DockTileMerge.swift",
@@ -174,6 +175,7 @@ let package = Package(
             sources: [
                 "DockLayoutTests.swift",
                 "DockTileMergeTests.swift",
+                "DockTileGeometryTests.swift",
                 "TrashLocationsTests.swift",
                 "CodableModelTests.swift",
                 "PreferencesTests.swift",

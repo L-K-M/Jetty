@@ -109,21 +109,18 @@ enum DockLayout {
     }
 
     /// A single tile's size split into the dimension *along* the dock and the one
-    /// *across* it, for `edge`. Mirrors `DockTileView`'s per-kind frame: a horizontal
-    /// separator is a thin 12pt gap, the clock tile is `clockWidthFactor` wide (its
-    /// resting 1.6×, or wider when a zoomed face needs the room — horizontal docks
-    /// only), everything else is a `baseSize` square (tile height is always
-    /// `baseSize`). `DockTileView.tileWidth` mirrors this switch and shares its
-    /// numbers (`separatorExtent`, `clockTileWidthFactor`).
+    /// *across* it, for `edge`.
+    ///
+    /// The width itself comes from `DockTileGeometry.frameWidth`, which `DockTileView`
+    /// also calls — so the panel's sizing and the tile's rendering agree by
+    /// construction. This function adds only the axis swap: height is always
+    /// `baseSize`, and which of the two is "along" depends on the edge.
     static func tileExtent(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge,
                            clockWidthFactor: CGFloat = DockItemKind.clock.tileWidthFactor)
         -> (along: CGFloat, across: CGFloat) {
-        let frameWidth: CGFloat
-        switch kind {
-        case .separator: frameWidth = edge.isHorizontal ? separatorExtent : baseSize
-        case .clock where edge.isHorizontal: frameWidth = baseSize * clockWidthFactor
-        default: frameWidth = baseSize * kind.tileWidthFactor
-        }
+        let frameWidth = DockTileGeometry.frameWidth(kind: kind, baseSize: baseSize,
+                                                     edge: edge,
+                                                     clockWidthFactor: clockWidthFactor)
         let frameHeight = baseSize
         // Horizontal dock: along-axis is width. Vertical dock: along-axis is height.
         return edge.isHorizontal ? (along: frameWidth, across: frameHeight)

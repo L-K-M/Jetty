@@ -40,7 +40,10 @@ final class ColorHexTests: XCTestCase {
     func testShorthandRGBExpandsNibbles() {
         // #abc must decode exactly like #aabbcc (L10).
         XCTAssertEqual(RGBA8(hex: "#abc")?.hexString, "#AABBCC")
-        XCTAssertEqual(RGBA8(hex: "#abc"), RGBA8(hex: "#aabbcc"))
+        // Against the concrete expansion, not against the other spelling: two nils
+        // compare equal, so a parser that regressed to returning nil for both forms
+        // would have passed the relative version.
+        XCTAssertEqual(RGBA8(hex: "#abc"), RGBA8(red: 0xAA, green: 0xBB, blue: 0xCC))
     }
 
     func testShorthandRGBAParsesWithAlpha() {

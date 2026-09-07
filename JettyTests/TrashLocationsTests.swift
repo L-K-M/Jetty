@@ -40,8 +40,14 @@ final class TrashLocationsTests: XCTestCase {
     /// swift-corelibs-foundation — measured on the pinned toolchain — so `setenv` here
     /// is observed by `XDGPaths.dataHome()`.
     func testUserTrashURLHonoursXDGDataHome() {
+        // Save and *restore* rather than unset: the variable may legitimately be set in
+        // the environment this runs in, and `unsetenv` in a defer would clobber it for
+        // every test after this one instead of putting it back.
+        let saved = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
         setenv("XDG_DATA_HOME", "/tmp/jetty-xdg-probe", 1)
-        defer { unsetenv("XDG_DATA_HOME") }
+        defer {
+            if let saved { setenv("XDG_DATA_HOME", saved, 1) } else { unsetenv("XDG_DATA_HOME") }
+        }
         XCTAssertEqual(TrashLocations.userTrashURL().path, "/tmp/jetty-xdg-probe/Trash")
         XCTAssertEqual(TrashLocations.trashContentsURLs().map(\.path),
                        ["/tmp/jetty-xdg-probe/Trash/files"])

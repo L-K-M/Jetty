@@ -12,7 +12,7 @@ import PackageDescription
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
 // may build or test this package — a Mac-side `swift test` would compile these 31
-// files and 18 suites and pass, having skipped almost everything. macOS goes through
+// files and 19 suites and pass, having skipped almost everything. macOS goes through
 // the .xcodeproj, always.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
@@ -153,6 +153,7 @@ let package = Package(
                 "CodableModelTests.swift",
                 "ColorHexTests.swift",
                 "BookmarkResolverTests.swift",
+                "XDGDataHomeTests.swift",
                 "StoreBackupTests.swift",
                 "StoreVersionTests.swift",
                 "LayerShellPlacementTests.swift",

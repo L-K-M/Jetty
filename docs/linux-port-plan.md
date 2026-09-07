@@ -335,9 +335,9 @@ move half stays reviewable as a move.*
 - Extract `RGBA8` (`init?(hex:)` / `hexString`, ~45 LOC of pure arithmetic) out of
   the `NSColor` extension in `ColorHex.swift`, keeping the `+` rejection and the
   `#`-prefix rules; `NSColor` keeps a thin macOS-only bridge.
-- **Acceptance**: `StoreBackupTests` and `StoreVersionTests` green on both platforms
-  in full; `CodableModelTests` and `ColorHexTests` green on both with a macOS-only
-  section each.
+- **Acceptance**: `StoreBackupTests`, `StoreVersionTests`, `BookmarkResolverTests` and
+  `XDGDataHomeTests` green on both platforms in full; `CodableModelTests` and
+  `ColorHexTests` green on both with a macOS-only section each.
   *(Correction, JP-04, the same over-claim as JP-02's and JP-03's: neither of those
   two can run whole on Linux yet. 12 of `CodableModelTests`' 21 cases are
   `AppearancePreset` and `Preferences`, which land in JP-05/JP-06; every one of
@@ -393,10 +393,11 @@ move half stays reviewable as a move.*
 ### JP-05 · Jetty · Preferences split
 **Branch** `claude/jp-05-preferences` · **Size** M
 
-*Also carries JP-04's deferred `DocumentStore<T: Codable>` generalisation, which
-belongs here: `PreferencesModel` is its second customer, and a generic settled against
-two real consumers is a design rather than a guess. Do it as its own commit, so the
-store's tested semantics stay reviewable as a refactor.*
+*JP-04 **struck** the `DocumentStore<T: Codable>` generalisation rather than deferring
+it here, and this note used to say the opposite. `PreferencesModel` is key-value shaped
+(`KeyValueStoring`) — no JSON document, no `.bak`, no version gate, no debounced save —
+so it is not a second customer for it. Leave `DockStore` concrete; do not build the
+generic in this step.*
 
 - `Preferences.Default` and `Preferences.Key` are nested inside the
   `ObservableObject` class; lift them out **first**, then introduce

@@ -1,4 +1,7 @@
 import Foundation
+// Off Darwin there is no Combine, and `ObservableObject`/`@Published` below come from
+// `Common/ObservationCompat.swift` — JP-02's shim, which defines them under the
+// mirrored `#if !canImport(Combine)`.
 #if canImport(Combine)
 import Combine
 #endif
@@ -267,12 +270,28 @@ final class DockStore: ObservableObject {
         let fallback = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Application Support")
         #else
-        let fallback = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".local/share")
+        let fallback = xdgDataHome(ProcessInfo.processInfo.environment["XDG_DATA_HOME"],
+                                   home: NSHomeDirectory())
         #endif
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                  appropriateFor: nil, create: true))
             ?? fallback
         return base.appendingPathComponent("Jetty", isDirectory: true).appendingPathComponent("dock.json")
+    }
+
+    /// The XDG base-directory rule for `$XDG_DATA_HOME`, used only by `defaultURL`'s
+    /// Linux fallback — the one branch that picks a path itself rather than asking
+    /// Foundation. It matters precisely because that branch runs when the lookup
+    /// throws, which is when the environment is unusual: hardcoding `~/.local/share`
+    /// there would put `dock.json` somewhere nothing else, including corelibs itself,
+    /// would look.
+    ///
+    /// The spec has two rules beyond "read the variable", and both are here: an unset
+    /// **or empty** value falls back to `$HOME/.local/share`, and a **relative** value
+    /// is invalid and must be ignored rather than resolved against the working
+    /// directory. Pure and unconditional so both platforms test it.
+    static func xdgDataHome(_ value: String?, home: String) -> URL {
+        if let value, value.hasPrefix("/") { return URL(fileURLWithPath: value) }
+        return URL(fileURLWithPath: home).appendingPathComponent(".local/share")
     }
 }

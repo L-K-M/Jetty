@@ -75,6 +75,19 @@ final class ColorHexTests: XCTestCase {
         XCTAssertNotNil(RGBA8(hex: clamped.hexString), "a clamped colour must re-parse")
     }
 
+    /// Non-finite components. NaN is the one value the clamp did not clamp: every
+    /// comparison against it is false, so it passed through `max` and `min` untouched
+    /// and trapped in the `UInt8` conversion — a crash in the persistence path.
+    /// ±infinity is different and must stay different: the clamp already maps it to
+    /// black and white, which is the right answer, so folding it in with NaN would
+    /// turn a blown-out white into black.
+    func testNonFiniteComponentsClampRatherThanTrap() {
+        XCTAssertEqual(RGBA8(clampingRed: .nan, green: 0, blue: 0, alpha: 1),
+                       RGBA8(red: 0, green: 0, blue: 0, alpha: 255))
+        XCTAssertEqual(RGBA8(clampingRed: .infinity, green: -.infinity, blue: 0.5, alpha: .nan),
+                       RGBA8(red: 255, green: 0, blue: 128, alpha: 0))
+    }
+
     // MARK: The NSColor / Color bridge
 
     #if canImport(AppKit)

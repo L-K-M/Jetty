@@ -29,7 +29,15 @@ struct RGBA8: Equatable {
     /// turn a colour silently into `.clear` on the next read.
     init(clampingRed r: Double, green g: Double, blue b: Double, alpha a: Double) {
         func channel(_ v: Double) -> UInt8 {
-            UInt8((Swift.min(Swift.max(v, 0), 1) * 255).rounded())
+            // NaN first, and NaN only. Every comparison against it is false, so it
+            // survives both `max` and `min` unchanged and then traps in the `UInt8`
+            // conversion — the one input class this clamp did not actually clamp.
+            // ±infinity needs no special case and must not get one: `max(-inf, 0)` is
+            // 0 and `min(+inf, 1)` is 1, so the clamp already maps them to black and
+            // white, which is the right answer. Sending them to 0 alongside NaN would
+            // turn a blown-out white into black.
+            guard !v.isNaN else { return 0 }
+            return UInt8((Swift.min(Swift.max(v, 0), 1) * 255).rounded())
         }
         self.init(red: channel(r), green: channel(g), blue: channel(b), alpha: channel(a))
     }

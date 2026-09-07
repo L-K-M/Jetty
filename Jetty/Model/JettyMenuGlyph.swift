@@ -1,4 +1,12 @@
+// Foundation unconditionally, to declare what the file uses: `isValid` trims with
+// `trimmingCharacters(in:)`. This one is legibility rather than a latent break — it
+// compiles without the import (measured), because Swift finds *members* in any module
+// loaded into the compilation and other files here import Foundation. Only top-level
+// names are file-scoped, which is what makes it load-bearing in `HotkeyBinding`.
+import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 /// The configurable icon for the Jetty-Menu dock tile (an SF Symbol name). The
 /// chooser offers a big curated set of attractive symbols, but accepts *any* SF
@@ -29,7 +37,17 @@ enum JettyMenuGlyph {
     static func isValid(_ name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+        #if canImport(AppKit)
         return NSImage(systemSymbolName: trimmed, accessibilityDescription: nil) != nil
+        #else
+        // SF Symbols are Apple's catalogue, so off Darwin there is no system to ask.
+        // Fall back to the curated list rather than accepting anything: this type's
+        // contract is that an unknown name resolves to `fallback` so the tile never
+        // renders blank, and `return true` would break that — `resolved` would hand a
+        // Linux renderer a name it cannot draw. Narrower than the Darwin check (a real
+        // symbol outside `options` is rejected here), which is the safe direction.
+        return options.contains(trimmed)
+        #endif
     }
 
     /// The symbol to actually render: the configured one if valid, else the fallback.

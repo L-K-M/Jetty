@@ -11,9 +11,14 @@ import PackageDescription
 // import Jetty` compiles unmodified under both.
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
-// may build or test this package — a Mac-side `swift test` would compile these 31
-// files and 19 suites and pass, having skipped almost everything. macOS goes through
-// the .xcodeproj, always.
+// may build or test this package. It would not even get as far as skipping things: on
+// macOS `canImport(SwiftUI)` is true, so `Preferences.tintColor` and
+// `DecorationStyle.colors` call `Color(hexString:)` — which lives in ColorHex.swift,
+// a file this target deliberately excludes — and the build fails on an unresolved
+// initialiser. The `sources:` lists below are the *Linux* build; macOS goes through
+// the .xcodeproj, always. They deliberately carry no hand-written file/suite count:
+// two port steps running have left one stale, and the audit step prints the real
+// total on every CI run, so trust `scripts/audit-manifest-coverage.swift` over prose.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
 // target directory that is in neither as "unhandled" and names it, and Linux CI fails
@@ -53,7 +58,12 @@ let package = Package(
                 "Dock/DockTileView.swift",
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
-                "Hotkeys",
+                // A directory excluded wholesale also covers files added to it later.
+                // These two are named individually so `Hotkeys/KeyCodes.swift` could be
+                // ported, and that protection is gone: a new file under Hotkeys/ has to
+                // be listed or excluded by hand or it lands in neither list.
+                "Hotkeys/AccessibilityAuthorizer.swift",
+                "Hotkeys/CarbonHotkey.swift",
                 "Icons",
                 "Menu/AppIndex.swift",
                 "Menu/AppleScriptRunner.swift",
@@ -63,11 +73,7 @@ let package = Package(
                 "Menu/MenuCommand.swift",
                 "Menu/PowerCommands.swift",
                 "Menu/RecentAppsStore.swift",
-                "Model/AppearancePreset.swift",
                 "Model/ColorHex.swift",
-                "Model/HotkeyBinding.swift",
-                "Model/JettyMenuGlyph.swift",
-                "Model/Preferences.swift",
                 "Screens/DisplayRegistry.swift",
                 "Settings",
                 "Stacks",
@@ -99,6 +105,11 @@ let package = Package(
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
                 "Model/RGBA8.swift",
+                "Model/HotkeyBinding.swift",
+                "Hotkeys/KeyCodes.swift",
+                "Model/JettyMenuGlyph.swift",
+                "Model/Preferences.swift",
+                "Model/AppearancePreset.swift",
                 "Store/DockStore.swift",
                 "Store/BookmarkResolver.swift",
                 "Model/DockDocument.swift",
@@ -137,13 +148,10 @@ let package = Package(
                 "DockLayoutGapTests.swift",
                 "DockModelTests.swift",
                 "FolderStackTests.swift",
-                "HotkeyBindingTests.swift",
                 "InfoWidgetTests.swift",
                 "LinkNormalizationTests.swift",
-                "MenuGlyphAndStoreTests.swift",
                 "PomodoroTests.swift",
                 "PowerCommandTests.swift",
-                "PreferencesTests.swift",
                 "RecentsTests.swift",
                 "SystemMonitorPathTests.swift",
                 "TrashIconTests.swift",
@@ -151,6 +159,9 @@ let package = Package(
             sources: [
                 "DockLayoutTests.swift",
                 "CodableModelTests.swift",
+                "PreferencesTests.swift",
+                "HotkeyBindingTests.swift",
+                "MenuGlyphAndStoreTests.swift",
                 "ColorHexTests.swift",
                 "BookmarkResolverTests.swift",
                 "XDGDataHomeTests.swift",

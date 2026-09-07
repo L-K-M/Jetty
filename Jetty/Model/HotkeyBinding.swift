@@ -1,5 +1,16 @@
+// Foundation is unconditional: the persistence half below needs it on every platform,
+// and `JSONEncoder`/`JSONDecoder` are top-level names, so file-scoped lookup really
+// does require it here — without this import they are not in scope (measured).
+// Importing it only as Carbon's `#else` left macOS resolving them through AppKit's
+// re-export, so reshuffling the AppKit guard would have broken the Mac build.
+import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
+// Still genuinely needed where it exists: `label(for:)` maps recorded keys with `kVK_`.
+#if canImport(Carbon)
 import Carbon.HIToolbox
+#endif
 
 /// A user-configurable global hotkey: a virtual key code plus Carbon modifier
 /// flags, an on/off switch, and a human label captured at record time (so the
@@ -21,10 +32,10 @@ struct HotkeyBinding: Codable, Equatable {
     /// The modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
     var modifierSymbols: String {
         var s = ""
-        if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
-        if modifiers & UInt32(optionKey)  != 0 { s += "⌥" }
-        if modifiers & UInt32(shiftKey)   != 0 { s += "⇧" }
-        if modifiers & UInt32(cmdKey)     != 0 { s += "⌘" }
+        if modifiers & KeyCode.Modifier.control != 0 { s += "⌃" }
+        if modifiers & KeyCode.Modifier.option  != 0 { s += "⌥" }
+        if modifiers & KeyCode.Modifier.shift   != 0 { s += "⇧" }
+        if modifiers & KeyCode.Modifier.command != 0 { s += "⌘" }
         return s
     }
 
@@ -32,6 +43,10 @@ struct HotkeyBinding: Codable, Equatable {
     var displayString: String { modifierSymbols + keyLabel }
 
     // MARK: Capture
+
+    // Recording a hotkey means reading an `NSEvent`, so this half is Darwin's. The
+    // stored form above, and the encode/decode below it, are not.
+    #if canImport(AppKit)
 
     /// Builds a binding from a recorded key event (preserving the current `enabled`).
     func updated(from event: NSEvent) -> HotkeyBinding {
@@ -44,10 +59,10 @@ struct HotkeyBinding: Codable, Equatable {
     /// Maps Cocoa modifier flags to Carbon's `RegisterEventHotKey` bits.
     static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
         var carbon: UInt32 = 0
-        if flags.contains(.command) { carbon |= UInt32(cmdKey) }
-        if flags.contains(.option)  { carbon |= UInt32(optionKey) }
-        if flags.contains(.control) { carbon |= UInt32(controlKey) }
-        if flags.contains(.shift)   { carbon |= UInt32(shiftKey) }
+        if flags.contains(.command) { carbon |= KeyCode.Modifier.command }
+        if flags.contains(.option)  { carbon |= KeyCode.Modifier.option }
+        if flags.contains(.control) { carbon |= KeyCode.Modifier.control }
+        if flags.contains(.shift)   { carbon |= KeyCode.Modifier.shift }
         return carbon
     }
 
@@ -78,6 +93,8 @@ struct HotkeyBinding: Codable, Equatable {
         }
     }
 
+    #endif
+
     // MARK: Persistence
 
     /// Decodes a binding from its stored JSON string, or returns `fallback`.
@@ -94,10 +111,11 @@ struct HotkeyBinding: Codable, Equatable {
 
     // MARK: Defaults
 
-    static let defaultToggle = HotkeyBinding(keyCode: UInt32(kVK_ANSI_D),
-                                             modifiers: UInt32(controlKey | optionKey | cmdKey),
+    private static let defaultModifiers =
+        KeyCode.Modifier.control | KeyCode.Modifier.option | KeyCode.Modifier.command
+
+    static let defaultToggle = HotkeyBinding(keyCode: KeyCode.d, modifiers: defaultModifiers,
                                              keyLabel: "D", enabled: true)
-    static let defaultMenu = HotkeyBinding(keyCode: UInt32(kVK_Space),
-                                           modifiers: UInt32(controlKey | optionKey | cmdKey),
+    static let defaultMenu = HotkeyBinding(keyCode: KeyCode.space, modifiers: defaultModifiers,
                                            keyLabel: "Space", enabled: true)
 }

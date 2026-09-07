@@ -415,10 +415,37 @@ generic in this step.*
   (iconSize 24…128, magnification 1…2.5, cornerRadius 0…40, tileSpacing 0…32,
   revealDelayMs 0…1000, …). `UserDefaults` conforms on macOS; Linux gets an
   XDG-backed implementation later.
+  *(**Struck**, like JP-04's `DocumentStore<T>` and for the same reason: it abstracts
+  something that is not missing. `UserDefaults` is fully present in
+  swift-corelibs-foundation — suites, typed accessors, `register(defaults:)` and
+  `removePersistentDomain` all measured working on the pinned toolchain — so there is
+  no second backend to write a protocol for, and `Preferences` ports with guards on
+  the two genuinely Darwin-bound parts instead. Nothing was lifted or renamed either,
+  which is what makes the acceptance's "assertions unchanged" literally true rather
+  than true-after-a-typealias. Revisit only if a Linux build actually needs a
+  different store.)*
+- **The plan missed `Preferences`' own dependencies.** It does not compile without
+  `HotkeyBinding` and `JettyMenuGlyph`, neither of which JP-05 mentions and both of
+  which were excluded. They came along here, and the interesting half is
+  `HotkeyBinding`: its Carbon modifier bits and default key codes are **persisted** in
+  `UserDefaults` as JSON, so they are a storage format rather than a Carbon detail —
+  the same argument that pulled `RGBA8` out of `NSColor`. They are named constants
+  now, in the ported `KeyCode` / `KeyCode.Modifier` (`Jetty/Hotkeys/KeyCodes.swift`,
+  which is the single source of truth — an earlier draft of this step nested a second
+  copy inside `HotkeyBinding` and so forked a persisted format; don't), and a
+  Darwin-gated test asserts each equals the Carbon symbol it mirrors, so a wrong value fails the build's own tests
+  instead of silently rewriting every saved hotkey. `AppearancePreset`, by contrast,
+  needed nothing: its nine `…ColorHex` matches are field *names*, not colour types.
 - **Acceptance**: `PreferencesTests` green on both platforms with its assertions
   unchanged — which means keeping `Preferences.Default` and `Preferences.Key`
   reachable under those qualified names via `typealias` after the lift, or "unchanged"
   is not achievable and the executor quietly edits tests instead.
+  *(Met without a `typealias`, because nothing was lifted. Also **discharges JP-04's
+  deferred obligation**: the 12 guarded `CodableModelTests` cases are un-guarded here,
+  in the same PR that lands `Preferences` and `AppearancePreset`, exactly as the
+  TODO in that file required. `HotkeyBindingTests` joins them, split the way
+  `ColorHexTests` was — the stored format everywhere, the `NSEvent` capture half on
+  Darwin.)*
 
 ### JP-06 · Jetty · Dock model + strip geometry
 **Branch** `claude/jp-06-dock-model` · **Size** M

@@ -53,6 +53,17 @@ for target in targets {
         failures.append("\(path)/\(duplicate) is in BOTH sources: and exclude: for target \(name) — exclude: wins, so it will not build")
     }
 
+    // The commoner form of the same bug: a `sources:` file nested under an excluded
+    // *directory*. `exclude: ["Icons"]` swallows `sources: ["Icons/New.swift"]` with
+    // no diagnostic, and an exact-match check never sees it. This target still carries
+    // eight directory excludes, so it is a live hazard rather than a hypothetical —
+    // it is what forced splitting "Common" into per-file entries for the JP-02 shim.
+    for source in Set(sources).sorted() {
+        for excluded in excludes where source.hasPrefix(excluded + "/") {
+            failures.append("\(path)/\(source) is in sources: but sits under the excluded directory \(excluded) for target \(name) — exclude: wins, so it will not build. Split \(excluded) into per-file excludes.")
+        }
+    }
+
     guard let walker = fm.enumerator(atPath: path) else {
         failures.append("\(name): cannot read directory \(path)")
         continue

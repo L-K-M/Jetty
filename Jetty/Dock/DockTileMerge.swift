@@ -5,8 +5,13 @@ import Foundation
 /// Combine or a windowing stack; `DockModel` forwards to it and keeps the icon
 /// resolution, which is the part that genuinely needs a colour/image framework.
 ///
-/// Everything here is a function of its arguments — no global state, no I/O — which
-/// is what makes the dock's trickiest invariant (unique tile ids) testable at all.
+/// Everything here is a function of its arguments, which is what makes the dock's
+/// trickiest invariant (unique tile ids) testable at all. That claim is only true
+/// because the one impure thing the merge needs — deciding whether a pinned folder
+/// *is* the Trash — is injected. `TrashLocations.isTrashURL` reaches the filesystem
+/// (`mountedVolumeURLs`, `fileExists`, `resolvingSymlinksInPath`) and the environment,
+/// so it stays the default argument rather than a hidden call: production keeps the
+/// real behaviour, and a test that cares about the merge can hand over a constant.
 enum DockTileMerge {
 
     /// Merges pinned items (in authored order) with running apps into reorderable
@@ -14,7 +19,12 @@ enum DockTileMerge {
     /// running-but-not-pinned apps collapse into a single slot at the `.runningApps`
     /// sentinel's position (or, if no sentinel is present, appended at the end as a
     /// non-reorderable group). Icons are left nil.
-    static func makeSlots(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockSlot] {
+    ///
+    /// `isTrashURL` decides whether a pinned folder normalises to the Trash tile. It
+    /// defaults to the real, filesystem-backed check; pass a constant to keep a test
+    /// independent of the machine it runs on.
+    static func makeSlots(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool,
+                          isTrashURL: (URL) -> Bool = TrashLocations.isTrashURL) -> [DockSlot] {
         let runningByBundle: [String: RunningAppInfo] = Dictionary(
             running.compactMap { info in info.bundleIdentifier.map { ($0, info) } },
             uniquingKeysWith: { a, _ in a })
@@ -60,7 +70,7 @@ enum DockTileMerge {
                 tileID = "item:\(item.id.uuidString)"
                 seenTileIDs.insert(tileID)
             }
-            let isTrash = item.kind == .trash || item.url.map(TrashLocations.isTrashURL) == true
+            let isTrash = item.kind == .trash || item.url.map(isTrashURL) == true
             let info = isTrash ? nil : item.bundleIdentifier.flatMap { runningByBundle[$0] }
             let kind: DockItemKind = isTrash ? .trash : item.kind
             let displayName = isTrash ? (item.displayName.isEmpty ? "Trash" : item.displayName) : item.displayName
@@ -82,7 +92,9 @@ enum DockTileMerge {
     }
 
     /// Flat tiles in render order (derived from `makeSlots`). Kept for unit tests.
-    static func makeTiles(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockTile] {
-        makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps).flatMap { $0.tiles }
+    static func makeTiles(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool,
+                         isTrashURL: (URL) -> Bool = TrashLocations.isTrashURL) -> [DockTile] {
+        makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps,
+                  isTrashURL: isTrashURL).flatMap { $0.tiles }
     }
 }

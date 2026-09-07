@@ -19,23 +19,31 @@ enum TrashLocations {
         // files: `$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`), holding
         // `files/` and `info/`. Not a fallback for the Cocoa path — a different
         // location, so `.trashDirectory` would be wrong here even if corelibs had it.
-        return xdgDataHome().appendingPathComponent("Trash", isDirectory: true)
+        return XDGPaths.dataHome().appendingPathComponent("Trash", isDirectory: true)
         #endif
     }
 
-    #if !canImport(Darwin)
-    /// `$XDG_DATA_HOME`, or its specified default. Mirrors `DockStore.xdgDataHome`;
-    /// a relative value is ignored, as the spec requires.
-    static func xdgDataHome() -> URL {
-        let value = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
-        if let value, value.hasPrefix("/") { return URL(fileURLWithPath: value) }
-        return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".local/share")
-    }
-    #endif
+
 
     /// Existing Trash folders that can currently contain this user's discarded items.
     static func existingTrashURLs() -> [URL] {
-        unique(candidateTrashURLs()).filter(isDirectory)
+        unique(trashContentsURLs()).filter(isDirectory)
+    }
+
+    /// The directories whose **children are** discarded items — what an emptiness
+    /// probe enumerates and what a filesystem watch attaches to.
+    ///
+    /// Identical to `candidateTrashURLs()` on Darwin, where `~/.Trash` holds the items
+    /// directly. Under XDG it is one level deeper: the trash directory holds `files/`
+    /// and `info/`, and only `files/` holds items. Probing the root instead would
+    /// report "not empty" forever — `files/` and `info/` survive emptying — and a
+    /// watch on the root would never see an item arrive inside `files/`.
+    static func trashContentsURLs() -> [URL] {
+        #if canImport(Darwin)
+        return candidateTrashURLs()
+        #else
+        return candidateTrashURLs().map { $0.appendingPathComponent("files", isDirectory: true) }
+        #endif
     }
 
     /// All plausible Trash folders for this user. Some may not exist; callers that
@@ -76,8 +84,8 @@ enum TrashLocations {
     }
 
     private static func makeCandidateTrashURLs() -> [URL] {
-        let uid = String(getuid())
         #if canImport(Darwin)
+        let uid = String(getuid())
         let homeTrash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash", isDirectory: true)
         var urls = [userTrashURL(), homeTrash]
         urls.append(URL(fileURLWithPath: "/.Trashes", isDirectory: true)
@@ -95,7 +103,6 @@ enum TrashLocations {
         // volumes needs their real enumeration (`/proc/mounts`), which belongs with
         // the Linux Trash tile rather than with porting the merge, so a removable
         // drive's trash is simply not recognised yet rather than guessed at.
-        _ = uid
         return [userTrashURL()]
         #endif
     }

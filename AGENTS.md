@@ -130,7 +130,8 @@ Mirrors `PLAN.md §11`:
 - Avoid force-unwraps outside tests.
 - Keep the logic backbone **pure** (no global state, no windowing) so it stays
   unit-testable: `DockLayout`, `MagnificationCurve`, `ClockFormatter`, `AppSearch`,
-  `DockTileMerge.makeSlots`/`makeTiles`, `PowerCommand` mapping, `ExpressionEvaluator`,
+  `DockTileMerge.makeSlots`/`makeTiles` (its one impure need, the Trash-URL check,
+  is an injected parameter), `PowerCommand` mapping, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService` parsing, `MenuCommand.match`, `FolderStack`
   geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
   `NowPlayingService.parse`, and `SemanticVersion`.

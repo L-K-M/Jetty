@@ -116,6 +116,7 @@ let package = Package(
                 "Apps/RunningAppInfo.swift",
                 "Apps/TrashLocations.swift",
                 "Common/ObservationCompat.swift",
+                "Common/XDGPaths.swift",
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
                 "Model/RGBA8.swift",
@@ -173,6 +174,7 @@ let package = Package(
             sources: [
                 "DockLayoutTests.swift",
                 "DockTileMergeTests.swift",
+                "TrashLocationsTests.swift",
                 "CodableModelTests.swift",
                 "PreferencesTests.swift",
                 "HotkeyBindingTests.swift",

@@ -147,4 +147,24 @@ final class DockTileMergeTests: XCTestCase {
         let tiles = DockTileMerge.makeTiles(pinned: pinned, running: running, showRunningApps: true)
         XCTAssertEqual(tiles.filter { $0.bundleIdentifier == "com.apple.finder" }.count, 1)
     }
+
+    /// The Trash normalisation is the merge's one impure need, so it is injected. This
+    /// pins the wiring and, unlike the default-argument case above, does not depend on
+    /// the machine the test runs on.
+    func testTrashNormalisationUsesTheInjectedCheck() {
+        let folder = DockItem(kind: .folder, displayName: "Downloads",
+                              url: URL(fileURLWithPath: "/tmp/not-the-trash"),
+                              folderDisplay: .grid, customIconPath: "/tmp/icon.icns")
+
+        let asFolder = DockTileMerge.makeTiles(pinned: [folder], running: [], showRunningApps: true,
+                                               isTrashURL: { _ in false })[0]
+        XCTAssertEqual(asFolder.kind, .folder)
+        XCTAssertNotNil(asFolder.url)
+
+        let asTrash = DockTileMerge.makeTiles(pinned: [folder], running: [], showRunningApps: true,
+                                              isTrashURL: { _ in true })[0]
+        XCTAssertEqual(asTrash.kind, .trash)
+        XCTAssertNil(asTrash.url)
+        XCTAssertNil(asTrash.customIconPath)
+    }
 }

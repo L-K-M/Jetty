@@ -456,10 +456,20 @@ strip-geometry half — the pure types extracted out of the SwiftUI views, inclu
 the `tileWidth`/`tileExtent` single-source-of-truth pitfall below. The halves share no
 code, and the earlier steps showed a smaller diff draws sharper review.
 
-- Move `DockModel.makeSlots`/`makeTiles` (with all three unique-id guards and Trash
-  normalisation), `DockTile`/`DockSlot` value types (retyping `var icon: NSImage?`
-  to PictKit's neutral handle), `DockContextMenuPlacement`, `DockContextAction`,
+- Move `makeSlots`/`makeTiles` (with all three unique-id guards and Trash
+  normalisation) **onto a portable `DockTileMerge`** — they cannot stay on `DockModel`,
+  which is an `NSImage`-resolving `ObservableObject`. Move the `DockTile`/`DockSlot`
+  value types with them: `var icon: NSImage?` is **guarded and defaulted**, not retyped
+  to a PictKit handle — PictKit is a macOS package and is not a dependency of the
+  SwiftPM target at all. Also `DockContextMenuPlacement`, `DockContextAction`,
   `LRUImageCacheByKey` (generic over the image type).
+- The merge's own dependencies, which this step's first draft omitted: `RunningAppInfo`
+  (AppKit-free by design, but stranded in `RunningAppsModel.swift`) and
+  `TrashLocations`. The latter is **not semantically portable** — it encodes Finder's
+  model, while Linux uses the XDG spec, a different location rather than a fallback.
+  Implement the XDG home trash for real, and note that identity (what a user pinned)
+  and contents (what holds the items) are one directory on Darwin and two under XDG,
+  where only `Trash/files` holds items.
 - Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
   (clockWidthFactor, contentOverflows, tileCenters, stackLocalAlong, scale),
   `DockDragPolicy` (slotExtents, the neighbour-shift rule, the index→ordered-itemID
@@ -470,26 +480,9 @@ code, and the earlier steps showed a smaller diff draws sharper review.
 - **Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
   the existing comment says "keep in sync"; extraction is the chance to make that a
   single source of truth instead of a comment.
-- *(JP-06, corrected in flight — three errors in the above.)*
-  1. **"Retyping `var icon: NSImage?` to PictKit's neutral handle" is not available.**
-     PictKit is a macOS package (AppKit/ImageIO/CoreServices, min macOS 13) and is
-     **not a dependency of the SwiftPM target at all** — the library target declares
-     no dependencies. Nor is a handle needed: the merge only ever leaves `icon` nil,
-     and every reader is already Darwin-only, so the field is simply guarded and
-     defaulted. A neutral handle becomes real work when a Linux renderer exists.
-  2. **The dependency list is short**, as in JP-05. The merge also needs
-     `RunningAppInfo` — which was AppKit-free by design but trapped in
-     `RunningAppsModel.swift` — and `TrashLocations`, for its trash normalisation.
-     Both are lifted/guarded here.
-  3. **`TrashLocations` is not semantically portable.** It encodes Finder's model
-     (`/System/Volumes/Data/.Trashes`, `.Trashes/$uid`); Linux uses the XDG spec, a
-     different location rather than a fallback. The home trash is implemented for
-     real (`$XDG_DATA_HOME/Trash`); per-volume `.Trash-$uid` needs `/proc/mounts`
-     enumeration and is deferred to the Linux Trash tile rather than guessed at.
-  Also note `makeSlots`/`makeTiles` moved off `DockModel` onto a portable
-  `DockTileMerge`, since `DockModel` itself is an `NSImage`-resolving
-  `ObservableObject` and cannot follow. `DockModelTests` split the same way: the 12
-  merge assertions are unchanged, they just name the type that owns the logic.
+- *(The three bullets above were corrected in flight during JP-06a — the original
+  text called for a PictKit handle, omitted both dependencies, and did not mention
+  that Finder's Trash model is macOS-specific. See #79 for the reasoning.)*
 
 ### JP-07 · Jetty · Reveal policy extraction
 **Branch** `claude/jp-07-reveal-policy` · **Size** M · **This is the load-bearing one.**

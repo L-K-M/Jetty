@@ -448,13 +448,19 @@ generic in this step.*
   Darwin.)*
 
 ### JP-06 · Jetty · Dock model + strip geometry
-**Branch** `claude/jp-06-dock-model` · **Size** M — shipped as two PRs, JP-06a and JP-06b
+**Branch** `claude/jp-06-dock-model` · **Size** M — shipped as two sequential PRs,
+JP-06a then JP-06b, both from the working branch in use for this port
 
 *Split into two PRs in flight.* **JP-06a** is the model half — the tile/slot merge and
 its value types, which is self-contained and testable on its own. **JP-06b** is the
 strip-geometry half — the pure types extracted out of the SwiftUI views, including
-the `tileWidth`/`tileExtent` single-source-of-truth pitfall below. The halves share no
-code, and the earlier steps showed a smaller diff draws sharper review.
+the `tileWidth`/`tileExtent` single-source-of-truth pitfall below.
+
+They are **sequential, not independent**: `DockView` and `DockTileView` are written
+against `DockSlot`/`DockTile`, so JP-06b's extractions consume exactly the types JP-06a
+moves. JP-06b therefore starts from `main` once JP-06a has landed, rather than running
+beside it. Splitting is still worth it — the earlier steps showed a smaller diff draws
+sharper review.
 
 - **(JP-06a)** Move `makeSlots`/`makeTiles` (with all three unique-id guards and Trash
   normalisation) **onto a portable `DockTileMerge`** — they cannot stay on `DockModel`,
@@ -482,12 +488,14 @@ code, and the earlier steps showed a smaller diff draws sharper review.
   `DockDragPolicy` (slotExtents, the neighbour-shift rule, the index→ordered-itemID
   mapping), `DockTileGeometry` (tileWidth, the Fitts'-law padding split),
   `DockTileAccessibility.label(for:)`/`value(for:)`.
-- **Acceptance**: `DockModelTests`, `DockContextMenuPlacementTests` green; new
-  tests for each extracted type.
+- **(JP-06a) Acceptance**: `DockModelTests` and `DockContextMenuPlacementTests` green,
+  plus new tests for the merge and its value types.
+- **(JP-06b) Acceptance**: new tests for each extracted type (`DockStripLayout`,
+  `DockDragPolicy`, `DockTileGeometry`, `DockTileAccessibility`).
 - **(JP-06b) Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
   the existing comment says "keep in sync"; extraction is the chance to make that a
   single source of truth instead of a comment.
-- *(The three bullets above were corrected in flight during JP-06a — the original
+- *(The two **(JP-06a)** bullets were corrected in flight during that PR — the original
   text called for a PictKit handle, omitted both dependencies, and did not mention
   that Finder's Trash model is macOS-specific. See #79 for the reasoning.)*
 

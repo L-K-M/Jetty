@@ -49,6 +49,12 @@ final class TrashLocationsTests: XCTestCase {
             if let saved { setenv("XDG_DATA_HOME", saved, 1) } else { unsetenv("XDG_DATA_HOME") }
         }
         XCTAssertEqual(TrashLocations.userTrashURL().path, "/tmp/jetty-xdg-probe/Trash")
+        // Exact equality is deliberate and hermetic: off Darwin the candidate list is
+        // *only* the home trash — per-volume `.Trash-$uid` needs mount enumeration and
+        // is explicitly deferred — so extra mounts cannot add entries. If that ever
+        // changes, this fails and the change gets made deliberately rather than
+        // absorbed. (The sibling test uses `allSatisfy` because it also runs on Darwin,
+        // where the list genuinely has many members.)
         XCTAssertEqual(TrashLocations.trashContentsURLs().map(\.path),
                        ["/tmp/jetty-xdg-probe/Trash/files"])
     }

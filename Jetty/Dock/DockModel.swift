@@ -3,36 +3,11 @@ import Combine
 import Darwin
 import PictKit
 
-/// One rendered dock tile: the merge of a pinned item and/or a running app.
-struct DockTile: Identifiable {
-    let id: String
-    var kind: DockItemKind
-    var displayName: String
-    var bundleIdentifier: String?
-    var url: URL?
-    /// The backing pinned item, if this tile came from one (nil for running-only).
-    var itemID: UUID?
-    var isRunning: Bool
-    var isActive: Bool
-    /// Process id for a running-only tile, so a bundle-less app can still be activated
-    /// by PID when there's no bundle id or app URL (ISSUE-1).
-    var pid: pid_t?
-    /// A user-chosen icon override path, carried from the backing item (MF-7).
-    var customIconPath: String?
-    /// For `.folder` tiles, how the stack popover presents its contents (MF-2).
-    var folderDisplay: FolderStackStyle?
-    /// Resolved lazily by `DockModel`; the pure `makeSlots`/`makeTiles` leave it nil.
-    var icon: NSImage?
-
-    /// Icon-cache key: the tile id plus the custom-icon path, so changing (or
-    /// clearing) a custom icon doesn't return the stale cached image (MF-7 / BUG-8).
-    var iconCacheKey: String { customIconPath.map { "\(id)|\($0)" } ?? id }
-}
-
 /// The observable tile/slot list the dock view renders, rebuilt whenever the pinned
-/// items or the running-app set changes. The merge (`makeSlots`) is a **pure**
-/// function over value types, so it's unit-tested without AppKit; icon resolution is
-/// a separate, cached step. See PLAN.md §6–7.
+/// items or the running-app set changes. The merge itself lives in the portable
+/// `DockTileMerge` — a **pure** function over value types, unit-tested without
+/// AppKit — and this class adds the part that genuinely needs a colour/image
+/// framework: cached icon resolution. See PLAN.md §6–7.
 final class DockModel: ObservableObject {
 
     enum TrashState {
@@ -147,7 +122,7 @@ final class DockModel: ObservableObject {
     /// resolves icons (cached, bounded — BUG-8).
     func rebuild(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) {
         let now = Date().timeIntervalSinceReferenceDate
-        let built = Self.makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps)
+        let built = DockTileMerge.makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps)
         slots = built.map { slot in
             DockSlot(id: slot.id, itemID: slot.itemID,
                       tiles: slot.tiles.map { tile in
@@ -165,85 +140,6 @@ final class DockModel: ObservableObject {
                      isRunningGroup: slot.isRunningGroup)
         }
         tiles = slots.flatMap { $0.tiles }
-    }
-
-    // MARK: Pure merge (unit-tested)
-
-    /// Merges pinned items (in authored order) with running apps into reorderable
-    /// slots. A pinned app that is running is shown once (marked running). The
-    /// running-but-not-pinned apps collapse into a single slot at the `.runningApps`
-    /// sentinel's position (or, if no sentinel is present, appended at the end as a
-    /// non-reorderable group). Icons are left nil.
-    static func makeSlots(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockSlot] {
-        let runningByBundle: [String: RunningAppInfo] = Dictionary(
-            running.compactMap { info in info.bundleIdentifier.map { ($0, info) } },
-            uniquingKeysWith: { a, _ in a })
-        let pinnedAppBundleIDs = Set(pinned.compactMap { $0.kind == .application ? $0.bundleIdentifier : nil })
-
-        // Guard the invariant the rendering relies on: **unique tile ids**. Duplicate
-        // ids (e.g. two running infos sharing a bundle id) would break id-keyed
-        // magnification — the trailing icon stops zooming. Keep the first of any id.
-        var seenRunningIDs = Set<String>()
-        let runningOnly: [DockTile] = running.compactMap { info in
-            if let b = info.bundleIdentifier, pinnedAppBundleIDs.contains(b) { return nil }
-            guard seenRunningIDs.insert(info.id).inserted else { return nil }
-            return DockTile(id: "app:\(info.id)", kind: .application, displayName: info.name,
-                            bundleIdentifier: info.bundleIdentifier, url: nil, itemID: nil,
-                            isRunning: true, isActive: info.isActive, pid: info.pid,
-                            customIconPath: nil, folderDisplay: nil, icon: nil)
-        }
-
-        var slots: [DockSlot] = []
-        var emittedRunning = false
-        // The unique-tile-id invariant must hold across pinned items too, not just the
-        // running-only list above: a second pin of the same app would otherwise reuse
-        // `app:<bundleID>` and desync id-keyed magnification / hover / glow. Seed with the
-        // running tile ids so a pin can't collide with a running-only tile either (F-M1).
-        var seenTileIDs = Set(runningOnly.map(\.id))
-
-        for item in pinned {
-            if item.kind == .runningApps {
-                // Emit the running-apps group at most once — a stray second `.runningApps`
-                // sentinel must not re-emit the whole group (duplicating every tile id).
-                if showRunningApps, !emittedRunning, !runningOnly.isEmpty {
-                    slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
-                                          tiles: runningOnly, isRunningGroup: true))
-                }
-                emittedRunning = true
-                continue
-            }
-            // `dedupKey` is `app:<bundleID>` for apps (so a pin merges with its running
-            // instance) else `item:<uuid>`. On a collision, fall back to the always-unique
-            // item id so a duplicate pin can't break rendering (F-M1).
-            var tileID = item.dedupKey
-            if !seenTileIDs.insert(tileID).inserted {
-                tileID = "item:\(item.id.uuidString)"
-                seenTileIDs.insert(tileID)
-            }
-            let isTrash = item.kind == .trash || item.url.map(TrashLocations.isTrashURL) == true
-            let info = isTrash ? nil : item.bundleIdentifier.flatMap { runningByBundle[$0] }
-            let kind: DockItemKind = isTrash ? .trash : item.kind
-            let displayName = isTrash ? (item.displayName.isEmpty ? "Trash" : item.displayName) : item.displayName
-            let customIconPath = (!isTrash && item.kind.supportsCustomIcon)
-                ? item.customIconPath : nil
-            let tile = DockTile(id: tileID, kind: kind, displayName: displayName,
-                                 bundleIdentifier: isTrash ? nil : item.bundleIdentifier,
-                                 url: isTrash ? nil : item.url, itemID: item.id,
-                                  isRunning: info != nil, isActive: info?.isActive ?? false, pid: info?.pid,
-                                 customIconPath: customIconPath, folderDisplay: item.folderDisplay, icon: nil)
-            slots.append(DockSlot(id: "slot:\(item.id.uuidString)", itemID: item.id,
-                                  tiles: [tile], isRunningGroup: false))
-        }
-
-        if showRunningApps && !emittedRunning && !runningOnly.isEmpty {
-            slots.append(DockSlot(id: "running", itemID: nil, tiles: runningOnly, isRunningGroup: true))
-        }
-        return slots
-    }
-
-    /// Flat tiles in render order (derived from `makeSlots`). Kept for unit tests.
-    static func makeTiles(pinned: [DockItem], running: [RunningAppInfo], showRunningApps: Bool) -> [DockTile] {
-        makeSlots(pinned: pinned, running: running, showRunningApps: showRunningApps).flatMap { $0.tiles }
     }
 
     // MARK: Icons (bounded LRU — BUG-8)

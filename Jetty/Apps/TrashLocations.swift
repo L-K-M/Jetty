@@ -1,19 +1,57 @@
 import Foundation
+// Darwin only: `getuid()` is used solely by the Finder-shaped candidate list below.
+// The XDG path needs no libc, so there is deliberately no `#else` import to keep in
+// step with musl or any other non-glibc toolchain.
+#if canImport(Darwin)
 import Darwin
+#endif
 
 /// Finder's Trash can span the user's home Trash plus per-volume Trash folders. Keep
 /// the discovery logic in one place so the icon state and filesystem watch agree.
 enum TrashLocations {
 
     static func userTrashURL() -> URL {
-        (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
-                                      appropriateFor: nil, create: false))
+        #if canImport(Darwin)
+        return (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
+                                             appropriateFor: nil, create: false))
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash", isDirectory: true)
+        #else
+        // The XDG Trash spec, which is where a Linux desktop actually puts deleted
+        // files: `$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`), holding
+        // `files/` and `info/`. Not a fallback for the Cocoa path — a different
+        // location, so `.trashDirectory` would be wrong here even if corelibs had it.
+        return XDGPaths.dataHome().appendingPathComponent("Trash", isDirectory: true)
+        #endif
     }
 
-    /// Existing Trash folders that can currently contain this user's discarded items.
+    /// Existing directories whose **children are** this user's discarded items:
+    /// `~/.Trash` and `.Trashes/$uid` on Darwin, `$XDG_DATA_HOME/Trash/files` under XDG.
+    /// For the trash *root* — what a user pins, and what `isTrashURL` matches — use
+    /// `userTrashURL()`; off Darwin these sit one level below it.
+    ///
+    /// **May be empty off Darwin**, where `Trash/files` is not created until the user's
+    /// first delete. `~/.Trash` exists from login, so this cannot happen on macOS. A
+    /// watch built from this list therefore has to tolerate attaching to nothing and
+    /// re-attach once the directory appears — see the note against the Linux Trash tile
+    /// in docs/linux-port-plan.md.
     static func existingTrashURLs() -> [URL] {
-        unique(candidateTrashURLs()).filter(isDirectory)
+        unique(trashContentsURLs()).filter(isDirectory)
+    }
+
+    /// The directories whose **children are** discarded items — what an emptiness
+    /// probe enumerates and what a filesystem watch attaches to.
+    ///
+    /// Identical to `candidateTrashURLs()` on Darwin, where `~/.Trash` holds the items
+    /// directly. Under XDG it is one level deeper: the trash directory holds `files/`
+    /// and `info/`, and only `files/` holds items. Probing the root instead would
+    /// report "not empty" forever — `files/` and `info/` survive emptying — and a
+    /// watch on the root would never see an item arrive inside `files/`.
+    static func trashContentsURLs() -> [URL] {
+        #if canImport(Darwin)
+        return candidateTrashURLs()
+        #else
+        return candidateTrashURLs().map { $0.appendingPathComponent("files", isDirectory: true) }
+        #endif
     }
 
     /// All plausible Trash folders for this user. Some may not exist; callers that
@@ -54,9 +92,10 @@ enum TrashLocations {
     }
 
     private static func makeCandidateTrashURLs() -> [URL] {
+        #if canImport(Darwin)
+        let uid = String(getuid())
         let homeTrash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash", isDirectory: true)
         var urls = [userTrashURL(), homeTrash]
-        let uid = String(getuid())
         urls.append(URL(fileURLWithPath: "/.Trashes", isDirectory: true)
             .appendingPathComponent(uid, isDirectory: true))
         urls.append(URL(fileURLWithPath: "/System/Volumes/Data/.Trashes", isDirectory: true)
@@ -66,6 +105,14 @@ enum TrashLocations {
                 .appendingPathComponent(uid, isDirectory: true))
         }
         return urls
+        #else
+        // XDG names the per-volume trash `.Trash-$uid` at the mount root, not
+        // `.Trashes/$uid`. Only the home trash is claimed here; wiring up mounted
+        // volumes needs their real enumeration (`/proc/mounts`), which belongs with
+        // the Linux Trash tile rather than with porting the merge, so a removable
+        // drive's trash is simply not recognised yet rather than guessed at.
+        return [userTrashURL()]
+        #endif
     }
 
     private static func mountedVolumes() -> [URL] {

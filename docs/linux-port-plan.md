@@ -448,22 +448,58 @@ generic in this step.*
   Darwin.)*
 
 ### JP-06 · Jetty · Dock model + strip geometry
-**Branch** `claude/jp-06-dock-model` · **Size** M
+**Branch** `claude/jp-06-dock-model` · **Size** M — split into two sequential PRs:
+JP-06a from the working branch in use for this port, JP-06b from `main` once JP-06a
+has landed
 
-- Move `DockModel.makeSlots`/`makeTiles` (with all three unique-id guards and Trash
-  normalisation), `DockTile`/`DockSlot` value types (retyping `var icon: NSImage?`
-  to PictKit's neutral handle), `DockContextMenuPlacement`, `DockContextAction`,
+*Split into two PRs in flight.* **JP-06a** is the model half — the tile/slot merge and
+its value types, which is self-contained and testable on its own. **JP-06b** is the
+strip-geometry half — the pure types extracted out of the SwiftUI views, including
+the `tileWidth`/`tileExtent` single-source-of-truth pitfall below.
+
+They are **sequential, not independent**: `DockView` and `DockTileView` are written
+against `DockSlot`/`DockTile`, so JP-06b's extractions consume exactly the types JP-06a
+moves. JP-06b therefore starts from `main` once JP-06a has landed, rather than running
+beside it. Splitting is still worth it — the earlier steps showed a smaller diff draws
+sharper review.
+
+- **(JP-06a)** Move `makeSlots`/`makeTiles` (with all three unique-id guards and Trash
+  normalisation) **onto a portable `DockTileMerge`** — they cannot stay on `DockModel`,
+  which is an `NSImage`-resolving `ObservableObject`. Move the `DockTile`/`DockSlot`
+  value types with them: `var icon: NSImage?` is **guarded and defaulted**, not retyped
+  to a PictKit handle — PictKit is a macOS package and is not a dependency of the
+  SwiftPM target at all. Also `DockContextMenuPlacement`, `DockContextAction`,
   `LRUImageCacheByKey` (generic over the image type).
-- Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
+- **(JP-06a)** The merge's own dependencies, which this step's first draft omitted: `RunningAppInfo`
+  (AppKit-free by design, but stranded in `RunningAppsModel.swift`) and
+  `TrashLocations`. The latter is **not semantically portable** — it encodes Finder's
+  model, while Linux uses the XDG spec, a different location rather than a fallback.
+  Implement the XDG home trash for real, and note that identity (what a user pinned)
+  and contents (what holds the items) are one directory on Darwin and two under XDG,
+  where only `Trash/files` holds items.
+  - *Deferred to whichever step lands the Linux Trash tile:* `~/.local/share/Trash/files`
+    does **not** exist on a fresh profile, and some implementations remove it again on
+    empty — unlike `~/.Trash`, which is always there. A watch set computed once from
+    `existingTrashURLs()` would therefore start empty and never learn that `files/`
+    appeared, leaving the tile stuck on "empty". That step needs to watch the Trash
+    root as well and rebuild the set when its children change. Raised on #79; no Linux
+    consumer exists yet, so nothing is wired for it here.
+- **(JP-06b)** Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
   (clockWidthFactor, contentOverflows, tileCenters, stackLocalAlong, scale),
   `DockDragPolicy` (slotExtents, the neighbour-shift rule, the index→ordered-itemID
   mapping), `DockTileGeometry` (tileWidth, the Fitts'-law padding split),
   `DockTileAccessibility.label(for:)`/`value(for:)`.
-- **Acceptance**: `DockModelTests`, `DockContextMenuPlacementTests` green; new
-  tests for each extracted type.
-- **Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
+- **(JP-06a) Acceptance**: `DockModelTests` and `DockContextMenuPlacementTests` green,
+  plus new tests for the merge, its value types, and the XDG trash layout — items
+  enumerated from `Trash/files`, identity resolved from the trash root.
+- **(JP-06b) Acceptance**: new tests for each extracted type (`DockStripLayout`,
+  `DockDragPolicy`, `DockTileGeometry`, `DockTileAccessibility`).
+- **(JP-06b) Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
   the existing comment says "keep in sync"; extraction is the chance to make that a
   single source of truth instead of a comment.
+- *(The two **(JP-06a)** bullets were corrected in flight during that PR — the original
+  text called for a PictKit handle, omitted both dependencies, and did not mention
+  that Finder's Trash model is macOS-specific. See #79 for the reasoning.)*
 
 ### JP-07 · Jetty · Reveal policy extraction
 **Branch** `claude/jp-07-reveal-policy` · **Size** M · **This is the load-bearing one.**

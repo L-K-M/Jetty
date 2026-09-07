@@ -90,11 +90,15 @@ Mirrors `PLAN.md §11`:
 - `Screens/` — `DisplayRegistry` (UUID mapping), the pure `DockLayout` math, and
   `LayerShellPlacement` (that math expressed as Wayland layer-shell anchors/margins;
   unused on macOS, see `docs/linux-port-plan.md` §JP-03).
-- `Apps/` — `RunningAppsModel` (NSWorkspace running apps), `AppLauncher`, and
+- `Apps/` — `RunningAppsModel` (NSWorkspace running apps) over the portable
+  `RunningAppInfo` value type, `TrashLocations` (Finder's Trash on Darwin, the XDG
+  trash elsewhere), `AppLauncher`, and
   `TrashMonitor` (DispatchSource watch so the Trash tile reflects empty/full live).
 - `SystemDock/` — `SystemDockController` (hide/re-assert/restore the real Dock).
 - `Dock/` — `DockController` (the brain), `DockPanelController` (per-display
-  auto-hiding panel), `DockModel` (pure tile merge), `DockView`/`DockTileView`,
+  auto-hiding panel), the pure `DockTileMerge` (tile/slot merge) plus `DockModel`
+  (the observable wrapper that adds cached icon resolution), the `DockTile`/
+  `DockSlot` value types, `DockView`/`DockTileView`,
   `MagnificationCurve` (pure), `EdgeHoverMonitor`.
 - `Widgets/` — the live info tiles: `ClockWidgetView` (+ pure `ClockFormatter`),
   `BatteryWidgetView`, `WeatherWidgetView` (+ `WeatherService`), `WorldClockWidgetView`,
@@ -126,7 +130,8 @@ Mirrors `PLAN.md §11`:
 - Avoid force-unwraps outside tests.
 - Keep the logic backbone **pure** (no global state, no windowing) so it stays
   unit-testable: `DockLayout`, `MagnificationCurve`, `ClockFormatter`, `AppSearch`,
-  `DockModel.makeSlots`/`makeTiles`, `PowerCommand` mapping, `ExpressionEvaluator`,
+  `DockTileMerge.makeSlots`/`makeTiles` (its one impure need, the Trash-URL check,
+  is an injected parameter), `PowerCommand` mapping, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService` parsing, `MenuCommand.match`, `FolderStack`
   geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
   `NowPlayingService.parse`, and `SemanticVersion`.
@@ -179,7 +184,7 @@ feature: two tiles pointing at one app are allowed to differ.
 
 ## Testing Notes
 
-- Unit-test the pure logic: `DockLayout` geometry, `DockModel.makeSlots`/`makeTiles`,
+- Unit-test the pure logic: `DockLayout` geometry, `DockTileMerge.makeSlots`/`makeTiles`,
   `MagnificationCurve`, `ClockFormatter`, `AppSearch`, `PowerCommand` mapping,
   `ExpressionEvaluator`, `UnitConverter`, `CurrencyService`, `MenuCommand`,
   `FolderStack`, `SystemStats`/`WeatherService`, `NowPlayingService.parse`,

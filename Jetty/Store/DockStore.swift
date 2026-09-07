@@ -296,7 +296,6 @@ final class DockStore: ObservableObject {
     /// is invalid and must be ignored rather than resolved against the working
     /// directory. Pure and unconditional so both platforms test it.
     static func xdgDataHome(_ value: String?, home: String) -> URL {
-        if let value, value.hasPrefix("/") { return URL(fileURLWithPath: value) }
-        return URL(fileURLWithPath: home).appendingPathComponent(".local/share")
+        XDGPaths.dataHome(value, home: home)
     }
 }

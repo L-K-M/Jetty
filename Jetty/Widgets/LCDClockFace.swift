@@ -19,7 +19,7 @@ struct LCDClockFace: View {
         Canvas { context, size in
             // The resin case: a rounded square (wider than tall) centered in the tile.
             let caseH = size.height - 2
-            let caseW = min(size.width - 2, caseH * 1.35)
+            let caseW = min(size.width - 2, caseH * DockLayout.lcdClockCaseAspect)
             guard caseH > 16, caseW > 24 else { return }
             let caseRect = CGRect(x: (size.width - caseW) / 2, y: (size.height - caseH) / 2,
                                   width: caseW, height: caseH)

@@ -112,6 +112,11 @@ final class StoreBackupTests: XCTestCase {
         // for a one-off. Both branches now run in sequence here.
         store.setDisplayDisabled(true, forDisplayUUID: "FOUR")
         store.flush()
+        // Both sides, because `.bak` alone cannot see the failure this test is named
+        // for: if rotation succeeded and the primary write then silently did nothing,
+        // `.bak` would still correctly hold the pre-save-4 primary and every other
+        // assertion here would pass while `dock.json` sat stale.
+        XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE", "FOUR"])
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
 
         // And nothing is left lying next to the document: rotation writes through a

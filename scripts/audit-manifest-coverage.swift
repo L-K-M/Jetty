@@ -82,7 +82,5 @@ if audited == 0 {
     exit(2)
 }
 
-if true {
-    print("audit: \(audited) .swift files, all accounted for in Package.swift")
-    exit(0)
-}
+print("audit: \(audited) .swift files, all accounted for in Package.swift")
+exit(0)

@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
 
 /// Pure classification of installed and release version strings for update checks.
 enum UpdateVersionComparison: Equatable {

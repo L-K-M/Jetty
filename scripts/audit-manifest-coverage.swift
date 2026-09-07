@@ -27,10 +27,19 @@ var audited = 0
 
 for target in targets {
     let name = target["name"] as? String ?? "?"
-    // Targets without an explicit path fall back to SwiftPM's conventional layout,
-    // which this package does not use; skipping them keeps the audit honest rather
-    // than silently passing a directory it never looked at.
-    guard let path = target["path"] as? String else { continue }
+    // A target without an explicit `path` uses SwiftPM's conventional layout. This
+    // package declares paths for both targets, but resolving the conventional ones
+    // anyway is what keeps the audit fail-closed: skipping such a target would let
+    // it report "all accounted for" over a directory it never opened, which is the
+    // exact failure this script exists to catch. If neither an explicit path nor a
+    // conventional directory resolves, that is a failure, not a skip.
+    let conventional = ["Sources/\(name)", "Tests/\(name)", name]
+    guard let path = (target["path"] as? String)
+        ?? conventional.first(where: { fm.fileExists(atPath: $0) })
+    else {
+        failures.append("\(name): no explicit path and none of \(conventional) exists — cannot audit this target")
+        continue
+    }
 
     let sources = target["sources"] as? [String] ?? []
     let excludes = target["exclude"] as? [String] ?? []
@@ -58,18 +67,22 @@ for target in targets {
     }
 }
 
+// Specific failures first: "target X cannot be audited" is far more useful than
+// the generic "nothing was checked" it would otherwise be reported as.
+if !failures.isEmpty {
+    for failure in failures {
+        print("::error::\(failure)")
+    }
+    FileHandle.standardError.write(Data("audit: \(failures.count) problem(s) across \(audited) file(s). Add each unaccounted file to sources: if it is portable, or to exclude: deliberately.\n".utf8))
+    exit(1)
+}
+
 if audited == 0 {
     FileHandle.standardError.write(Data("audit: found no .swift files to check — the manifest or layout changed\n".utf8))
     exit(2)
 }
 
-if failures.isEmpty {
+if true {
     print("audit: \(audited) .swift files, all accounted for in Package.swift")
     exit(0)
 }
-
-for failure in failures {
-    print("::error::\(failure)")
-}
-FileHandle.standardError.write(Data("audit: \(failures.count) of \(audited) file(s) unaccounted for. Add each to sources: if it is portable, or to exclude: deliberately.\n".utf8))
-exit(1)

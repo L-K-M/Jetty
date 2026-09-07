@@ -1,7 +1,17 @@
 import Foundation
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
+#if canImport(AppKit)
 import AppKit
+#endif
+// Launch-at-login is the one preference backed by a system service rather than by
+// `UserDefaults`, and `SMAppService` is Darwin-only. The property stays on both
+// platforms so call sites compile; only the three sites that talk to the service are
+// guarded. A Linux autostart backend (an XDG `.desktop` entry) is not this step's job.
+#if canImport(ServiceManagement)
 import ServiceManagement
+#endif
 
 /// User-facing settings, backed by `UserDefaults`.
 ///
@@ -317,16 +327,24 @@ final class Preferences: ObservableObject {
         weatherLongitude = Self.clamp(double(Key.weatherLongitude, d.weatherLongitude), -180, 180)
         weatherUseCelsius = bool(Key.weatherUseCelsius, d.weatherUseCelsius)
 
+        #if canImport(ServiceManagement)
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        #else
+        launchAtLogin = false
+        #endif
     }
 
     // MARK: Derived
 
+    // The hex strings are the stored form and are portable; turning one into a live
+    // `Color` is the part that needs SwiftUI. See `RGBA8` / `ColorHex` (JP-04).
+    #if canImport(SwiftUI)
     var tintColor: Color { Color(hexString: tintHex) }
     var gradientColor: Color { Color(hexString: gradientHex) }
     var indicatorColor: Color { Color(hexString: indicatorHex) }
     /// Foreground color for the Jetty-menu dock glyph (separate from the background tint).
     var glyphColor: Color { Color(hexString: glyphHex) }
+    #endif
 
     /// The effective magnification factor (1.0 when disabled).
     var effectiveMagnification: CGFloat { magnificationEnabled ? CGFloat(magnification) : 1.0 }
@@ -396,14 +414,24 @@ final class Preferences: ObservableObject {
     // MARK: Launch at login
 
     func refreshLaunchAtLoginStatus() {
+        #if canImport(ServiceManagement)
         let enabled = (SMAppService.mainApp.status == .enabled)
         if enabled != launchAtLogin {
             // Update the published value without re-triggering registration.
             launchAtLoginSilently(enabled)
         }
+        #endif
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
+        #if !canImport(ServiceManagement)
+        // No login-item service here yet. Snap the flag back rather than leaving the UI
+        // claiming an autostart that nothing registered — an XDG `.desktop` backend is
+        // a later step. `launchAtLoginSilently` no-ops when the value already matches,
+        // so the `didSet` this runs inside settles after one more pass.
+        launchAtLoginSilently(false)
+        return
+        #else
         do {
             if enabled {
                 if SMAppService.mainApp.status != .enabled { try SMAppService.mainApp.register() }
@@ -414,6 +442,7 @@ final class Preferences: ObservableObject {
             NSLog("Jetty: launch-at-login \(enabled ? "register" : "unregister") failed: \(error.localizedDescription)")
             launchAtLoginSilently(SMAppService.mainApp.status == .enabled)
         }
+        #endif
     }
 
     private func launchAtLoginSilently(_ value: Bool) {
@@ -441,6 +470,6 @@ final class Preferences: ObservableObject {
     /// Returns `hex` only if it parses as a color, else `fallback` — so an imported
     /// preset with a malformed hex can't silently paint the dock transparent (M28).
     static func validHex(_ hex: String, fallback: String) -> String {
-        NSColor(hex: hex) != nil ? hex : fallback
+        RGBA8(hex: hex) != nil ? hex : fallback
     }
 }

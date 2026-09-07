@@ -1,4 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#else
+import Foundation
+#endif
 
 /// The configurable icon for the Jetty-Menu dock tile (an SF Symbol name). The
 /// chooser offers a big curated set of attractive symbols, but accepts *any* SF
@@ -29,7 +33,15 @@ enum JettyMenuGlyph {
     static func isValid(_ name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+        #if canImport(AppKit)
         return NSImage(systemSymbolName: trimmed, accessibilityDescription: nil) != nil
+        #else
+        // SF Symbols are Apple's catalogue; off Darwin there is nothing to check a name
+        // against. The name is only ever persisted and handed to a renderer, so accept
+        // any non-empty string here rather than rejecting every glyph — a Linux dock
+        // will validate against whatever icon theme it draws with.
+        return true
+        #endif
     }
 
     /// The symbol to actually render: the configured one if valid, else the fallback.

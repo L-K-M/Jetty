@@ -1,5 +1,11 @@
+#if canImport(AppKit)
 import AppKit
+#endif
+#if canImport(Carbon)
 import Carbon.HIToolbox
+#else
+import Foundation
+#endif
 
 /// A user-configurable global hotkey: a virtual key code plus Carbon modifier
 /// flags, an on/off switch, and a human label captured at record time (so the
@@ -18,13 +24,37 @@ struct HotkeyBinding: Codable, Equatable {
     /// key would steal that key system-wide.
     var isValid: Bool { enabled && modifiers != 0 }
 
+    // MARK: The stored bit values
+
+    /// The Carbon modifier bits, named. These are not a Carbon detail to look up at
+    /// the call site: `modifiers` is **persisted** as JSON in `UserDefaults`, so the
+    /// numbers are part of a storage format every build has to agree on — the same
+    /// argument that pulled `RGBA8` out of `NSColor` in JP-04. Naming them here is
+    /// also what lets this type exist off Darwin, where `Carbon.HIToolbox` does not.
+    ///
+    /// `HotkeyBindingTests` asserts on Darwin that each equals the Carbon symbol it
+    /// mirrors, so a wrong value fails the build's own tests rather than silently
+    /// rewriting users' stored hotkeys.
+    enum Modifier {
+        static let command: UInt32 = 0x0100
+        static let shift: UInt32 = 0x0200
+        static let option: UInt32 = 0x0800
+        static let control: UInt32 = 0x1000
+    }
+
+    /// Virtual key codes for the shipped defaults, for the same reason.
+    enum KeyCode {
+        static let d: UInt32 = 0x02
+        static let space: UInt32 = 0x31
+    }
+
     /// The modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
     var modifierSymbols: String {
         var s = ""
-        if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
-        if modifiers & UInt32(optionKey)  != 0 { s += "⌥" }
-        if modifiers & UInt32(shiftKey)   != 0 { s += "⇧" }
-        if modifiers & UInt32(cmdKey)     != 0 { s += "⌘" }
+        if modifiers & Modifier.control != 0 { s += "⌃" }
+        if modifiers & Modifier.option  != 0 { s += "⌥" }
+        if modifiers & Modifier.shift   != 0 { s += "⇧" }
+        if modifiers & Modifier.command != 0 { s += "⌘" }
         return s
     }
 
@@ -32,6 +62,10 @@ struct HotkeyBinding: Codable, Equatable {
     var displayString: String { modifierSymbols + keyLabel }
 
     // MARK: Capture
+
+    // Recording a hotkey means reading an `NSEvent`, so this half is Darwin's. The
+    // stored form above, and the encode/decode below it, are not.
+    #if canImport(AppKit)
 
     /// Builds a binding from a recorded key event (preserving the current `enabled`).
     func updated(from event: NSEvent) -> HotkeyBinding {
@@ -78,6 +112,8 @@ struct HotkeyBinding: Codable, Equatable {
         }
     }
 
+    #endif
+
     // MARK: Persistence
 
     /// Decodes a binding from its stored JSON string, or returns `fallback`.
@@ -94,10 +130,10 @@ struct HotkeyBinding: Codable, Equatable {
 
     // MARK: Defaults
 
-    static let defaultToggle = HotkeyBinding(keyCode: UInt32(kVK_ANSI_D),
-                                             modifiers: UInt32(controlKey | optionKey | cmdKey),
+    static let defaultToggle = HotkeyBinding(keyCode: KeyCode.d,
+                                             modifiers: Modifier.control | Modifier.option | Modifier.command,
                                              keyLabel: "D", enabled: true)
-    static let defaultMenu = HotkeyBinding(keyCode: UInt32(kVK_Space),
-                                           modifiers: UInt32(controlKey | optionKey | cmdKey),
+    static let defaultMenu = HotkeyBinding(keyCode: KeyCode.space,
+                                           modifiers: Modifier.control | Modifier.option | Modifier.command,
                                            keyLabel: "Space", enabled: true)
 }

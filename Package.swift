@@ -11,8 +11,8 @@ import PackageDescription
 // import Jetty` compiles unmodified under both.
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
-// may build or test this package — a Mac-side `swift test` would compile these 31
-// files and 19 suites and pass, having skipped almost everything. macOS goes through
+// may build or test this package — a Mac-side `swift test` would compile these 35
+// files and 21 suites and pass, having skipped almost everything. macOS goes through
 // the .xcodeproj, always.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
@@ -63,11 +63,7 @@ let package = Package(
                 "Menu/MenuCommand.swift",
                 "Menu/PowerCommands.swift",
                 "Menu/RecentAppsStore.swift",
-                "Model/AppearancePreset.swift",
                 "Model/ColorHex.swift",
-                "Model/HotkeyBinding.swift",
-                "Model/JettyMenuGlyph.swift",
-                "Model/Preferences.swift",
                 "Screens/DisplayRegistry.swift",
                 "Settings",
                 "Stacks",
@@ -99,6 +95,10 @@ let package = Package(
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
                 "Model/RGBA8.swift",
+                "Model/HotkeyBinding.swift",
+                "Model/JettyMenuGlyph.swift",
+                "Model/Preferences.swift",
+                "Model/AppearancePreset.swift",
                 "Store/DockStore.swift",
                 "Store/BookmarkResolver.swift",
                 "Model/DockDocument.swift",
@@ -137,13 +137,11 @@ let package = Package(
                 "DockLayoutGapTests.swift",
                 "DockModelTests.swift",
                 "FolderStackTests.swift",
-                "HotkeyBindingTests.swift",
                 "InfoWidgetTests.swift",
                 "LinkNormalizationTests.swift",
                 "MenuGlyphAndStoreTests.swift",
                 "PomodoroTests.swift",
                 "PowerCommandTests.swift",
-                "PreferencesTests.swift",
                 "RecentsTests.swift",
                 "SystemMonitorPathTests.swift",
                 "TrashIconTests.swift",
@@ -151,6 +149,8 @@ let package = Package(
             sources: [
                 "DockLayoutTests.swift",
                 "CodableModelTests.swift",
+                "PreferencesTests.swift",
+                "HotkeyBindingTests.swift",
                 "ColorHexTests.swift",
                 "BookmarkResolverTests.swift",
                 "XDGDataHomeTests.swift",

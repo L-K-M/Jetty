@@ -137,10 +137,23 @@ final class LayerShellPlacementTests: XCTestCase {
 
     func testLeadingAndTrailingBottomDocksDifferOnlyInTheLeftMargin() {
         let size = CGSize(width: 300, height: 70)
-        let leading = placement(DockAnchor(edge: .bottom, alignment: .leading), size: size)
-        let trailing = placement(DockAnchor(edge: .bottom, alignment: .trailing), size: size)
+        // Both inset, for two reasons: the cross-edge margin the name calls unchanged
+        // then carries a value, where `0 == 0` would have asserted nothing; and this
+        // is the suite's only `.trailing` × non-zero-inset case (the all-edges test
+        // uses `.leading`, the per-edge ones `.center`).
+        let leading = placement(DockAnchor(edge: .bottom, alignment: .leading, inset: 12),
+                                size: size)
+        let trailing = placement(DockAnchor(edge: .bottom, alignment: .trailing, inset: 12),
+                                 size: size)
         XCTAssertEqual(leading.margins.left, 0)
         XCTAssertEqual(trailing.margins.left, 700)     // 1000 - 300
+
+        // The "only" in the name, asserted rather than implied: the inset belongs to
+        // the dock's own edge and must not move with the alignment.
+        XCTAssertEqual(leading.margins.bottom, 12)
+        XCTAssertEqual(trailing.margins.bottom, leading.margins.bottom)
+        XCTAssertEqual(trailing.margins.top, leading.margins.top)
+        XCTAssertEqual(trailing.margins.right, leading.margins.right)
         XCTAssertEqual(leading.anchorEdges, trailing.anchorEdges)
     }
 

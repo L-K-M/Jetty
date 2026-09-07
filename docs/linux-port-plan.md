@@ -261,21 +261,46 @@ move half stays reviewable as a move.*
 
 - `DockLayout`, `MagnificationCurve`, `DockEdge` and `DockAnchor` are **already** in
   the curated set from JP-01, so under Part 0's definition there is nothing here to
-  move — add the straggler `DockAlignment` and treat this as the additive PR it is.
-  All 362 LOC already have zero platform API.
+  move; this is a purely additive PR. All 362 LOC already have zero platform API.
+  *(Correction, JP-03: `DockAlignment` was listed as a straggler to add. It is not one
+  — it is declared in `Model/DockEdge.swift`, not a file of its own, so JP-01 already
+  carried it. Nothing to move.)*
 - Add a **new pure** `DockLayout.layerShellPlacement(frame:in:edge:)` →
   `(anchorEdges, margins, exclusiveZone)`, unit-tested against the existing
   `DockLayoutTests` fixture (`CGRect(0, 0, 1000, 800)` — already per-output local
-  space, so every existing assertion stays valid verbatim).
+  space, so every existing assertion stays valid verbatim). Shipped as a
+  `LayerShellPlacement` struct rather than a tuple, so a test can compare whole
+  placements — and one does, in both directions, which is what covers the `Equatable`
+  a JP-24 binding needs to skip re-committing an unchanged placement. Two protocol facts settle its shape, both read from
+  `wlr-layer-shell-unstable-v1.xml`: `set_anchor` resolves *orthogonal* edges to
+  "the intersection of the edges", so the anchor is always a corner — the dock's
+  edge plus one edge along it — because anchoring the dock's edge alone lets the
+  compositor centre the surface and discards `alignment`/`offset` entirely; and
+  `set_size` assigns a dimension only when passed `0`, so Jetty's explicit
+  `contentSize` is honoured and the surface is never stretched. The along-edge
+  anchor is the **low** side always (left for horizontal, top for vertical), never
+  the nearer side — choosing by proximity puts a discontinuity mid-screen where a
+  one-point drag flips the anchor and the margin jumps the width of the output.
 - `DockLayout` carries **six** "keep in sync" markers (lines 59, 80, 108, 119, 293,
   306): `DockTileView.tileWidth`, the LCD's `caseH * 1.35`, `ClockWidgetView`'s edge
   padding, the hover-capsule ~16pt, `DockView.scale`'s 2.2 influence factor, and
   `clockZoomHeadroom`. Make each a named `JettyCore` constant rather than a literal
   duplicated across files with a comment asking the next reader to keep them aligned.
-- **Acceptance**: `DockLayoutTests`, `DockLayoutGapTests`, `MagnificationCurveTests`
-  green on both platforms, unchanged — **plus new `layerShellPlacement` tests covering
-  every `DockEdge`**. It is the one piece of genuinely new geometry here; leaving it
-  out of acceptance is how it reaches JP-24 untested.
+  *(Delivered as **seven** constants, not six: markers 3 and 6 are the same `0.04`
+  written twice, and marker 2's sentence covers the analog dials' `0.92` as well as
+  the LCD's `1.35`. Naming them also has to update the macOS call sites — otherwise
+  the literal is still duplicated, just with a nicer name on one side.)*
+- **Acceptance**: `DockLayoutTests`, `KeepRevealedFrameTests`,
+  `PointerOverDockContentTests` and `MagnificationCurveTests` green on both platforms,
+  unchanged — **plus new `layerShellPlacement` tests covering every `DockEdge`**. It is
+  the one piece of genuinely new geometry here; leaving it out of acceptance is how it
+  reaches JP-24 untested.
+  *(Correction, JP-03: this listed `DockLayoutGapTests`, which cannot run on Linux
+  until JP-05 — half of it constructs `Preferences` to test `effectiveClockZoom`, and
+  `Preferences` is `@Published`/`SwiftUI.Color`/`SMAppService` and stays macOS-only
+  through JP-04. Same class of over-claim as JP-02's. The two suites named in its place
+  are the ones that were portable all along and were merely left excluded by JP-01:
+  both cover `DockLayout` and neither imports anything beyond XCTest.)*
 - **Pitfalls**: `DockLayout` is Cocoa bottom-left-origin y-up throughout. Do **not**
   flip it here. The single deliberate flip belongs at the toolkit boundary (JP-24).
 
@@ -960,6 +985,22 @@ CI action that builds gtk4-layer-shell from source on noble.*
   JP-03's `layerShellPlacement` returns, so the two cannot drift apart, and assert
   the vertical offset in the headless-sway test rather than just the anchoring. A second, panel-local flip feeds
   `pointerOverDockContent`. **Two flip sites, no more.**
+  *(Correction, JP-03: the placement flip **moved** rather than vanished, and an
+  earlier draft of this note claimed the stronger thing. `layerShellPlacement` emits
+  the margin on each **anchored** edge as a **gap** — the distance between that side of
+  the frame and the same side of the bounds — so the *values* carry no handedness and
+  no y coordinate reaches the wire. The other two stay 0, because `set_margin` on an
+  unanchored edge is a documented no-op and a non-zero value there would be a silent
+  lie; the tests pin that. But deciding which side of the frame is its top still does: the function
+  computes `bounds.maxY − frame.maxY`, i.e. exactly the flip this bullet named, and it
+  requires **y-up** input. Hand it a y-down rect and `top` and `bottom` swap silently.
+  What JP-24 gains is that it no longer *computes* the flip — it constructs the y-up
+  `CGRect(0, 0, usable.width, usable.height)` from a bare output size, where a size is
+  all Wayland gives it anyway, and passes `margins`/`anchorEdges` through untouched.
+  The flip is now in a pure function with `testFramesAreReadYUp` pinning it, which a
+  mutation swapping the two gaps fails. Still two flip sites; one of them is now
+  tested. Keep the headless-sway assertion: it is what proves the gaps were computed
+  against the rect the compositor actually used.)*
 - Assert `gtk_layer_is_supported()` **when the layer-shell tier is the active
   backend** and fail with a clear message. Not unconditionally: Mutter implements no
   `zwlr_layer_shell_v1` at all, so an unconditional assert kills `jetty-shell` at

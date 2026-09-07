@@ -17,6 +17,59 @@ enum DockLayout {
     /// visible sliver, so no pixels of the dock show while hidden.
     static let edgeReveal: CGFloat = 0
 
+    // MARK: Shared metrics
+
+    // Numbers that geometry here and a SwiftUI view elsewhere both have to agree on.
+    // Each of these used to be a literal in two or three files under a comment asking
+    // the next reader to keep them aligned; the comments were the only thing holding
+    // them together. Naming them here — in the one file both the macOS app and the
+    // portable core build — is what actually holds them together. See
+    // docs/linux-port-plan.md §JP-03.
+
+    /// A separator's along-edge extent on a horizontal dock, in points: a thin gap,
+    /// not a tile-sized square (on a vertical dock it spans the dock's width instead).
+    /// Read by `tileExtent` and by `DockTileView.tileWidth`.
+    static let separatorExtent: CGFloat = 12
+
+    /// The LCD watch face's landscape case aspect — `LCDClockFace` sizes its case
+    /// `caseW = caseH * this`, and `clockTileWidthFactor` budgets the tile width from
+    /// it so a zoomed LCD widens the tile instead of squashing inside it.
+    static let lcdClockCaseAspect: CGFloat = 1.35
+
+    /// The square analog dials' extent as a fraction of the tile height at 1× zoom;
+    /// `ClockWidgetView` frames the face at `height * this * zoom`.
+    static let analogClockFaceFactor: CGFloat = 0.92
+
+    /// The gap a zoomed watch face keeps to the dock's edge-facing side, as a fraction
+    /// of the tile height (`ClockWidgetView.edgeInsets`). Both `clockZoomHeadroom` and
+    /// `pointerOverDockContent` budget for it, which is why it is one constant rather
+    /// than three copies of `0.04`.
+    static let clockFaceEdgePadding: CGFloat = 0.04
+
+    /// How far the hover label floats off its tile, toward screen center, as a
+    /// fraction of the icon size (`DockTileView.labelOffset`).
+    static let hoverLabelOffsetFactor: CGFloat = 0.75
+
+    /// The hover label capsule's own across-axis extent, in points — a `caption2` line
+    /// plus its capsule padding. An estimate, and deliberately generous: it only buys
+    /// window headroom in `labelHeadroom`, where being short clips the label and being
+    /// long costs nothing visible.
+    static let hoverLabelCapsuleExtent: CGFloat = 16
+
+    /// Slack between a zoomed watch face's width and the width of the tile budgeted
+    /// for it, as a fraction of the tile height, so the face never runs flush into its
+    /// neighbours. Numerically twice `clockFaceEdgePadding`, and **not derived from
+    /// it**: that one pads a single edge-facing side on the *across* axis
+    /// (`ClockWidgetView.edgeInsets`), while this is along-axis breathing room on both
+    /// ends. Changing either should not drag the other along.
+    static let clockTileWidthSlack: CGFloat = 0.08
+
+    /// How far a tile's magnification reaches along the dock, as a multiple of the
+    /// tile pitch (`iconSize + spacing`). `DockView.scale` renders with it and
+    /// `pointerOverDockContent` hit-tests with it: if they disagree, the dock reacts
+    /// to a pointer over a tile that isn't drawn there.
+    static let magnificationInfluenceFactor: CGFloat = 2.2
+
     // MARK: Content size
 
     /// The dock's content size for `tileCount` **uniform** (`iconSize`-square) tiles
@@ -60,13 +113,14 @@ enum DockLayout {
     /// separator is a thin 12pt gap, the clock tile is `clockWidthFactor` wide (its
     /// resting 1.6×, or wider when a zoomed face needs the room — horizontal docks
     /// only), everything else is a `baseSize` square (tile height is always
-    /// `baseSize`). **Keep in sync with `DockTileView.tileWidth`.**
+    /// `baseSize`). `DockTileView.tileWidth` mirrors this switch and shares its
+    /// numbers (`separatorExtent`, `clockTileWidthFactor`).
     static func tileExtent(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge,
                            clockWidthFactor: CGFloat = DockItemKind.clock.tileWidthFactor)
         -> (along: CGFloat, across: CGFloat) {
         let frameWidth: CGFloat
         switch kind {
-        case .separator: frameWidth = edge.isHorizontal ? 12 : baseSize
+        case .separator: frameWidth = edge.isHorizontal ? separatorExtent : baseSize
         case .clock where edge.isHorizontal: frameWidth = baseSize * clockWidthFactor
         default: frameWidth = baseSize * kind.tileWidthFactor
         }
@@ -81,11 +135,11 @@ enum DockLayout {
     /// enough to hold the face so it never overlaps neighboring tiles — or, for
     /// the LCD, squashes. The square analog dials are 0.92 × zoom of the icon
     /// size; the LCD's landscape resin case is 1.35 × its `zoom`-scaled height
-    /// (`LCDClockFace`'s `caseH * 1.35` — keep in sync). Pure, unit-tested.
+    /// (`LCDClockFace`'s `caseH * lcdClockCaseAspect`). Pure, unit-tested.
     /// **Keep `DockTileView.tileWidth` and `ClockWidgetView` driven by this.**
     static func clockTileWidthFactor(zoom: CGFloat, face: ClockFaceStyle = .classic) -> CGFloat {
-        let faceWidth = face == .lcd ? 1.35 * zoom : 0.92 * zoom
-        return max(DockItemKind.clock.tileWidthFactor, faceWidth + 0.08)
+        let faceWidth = face == .lcd ? lcdClockCaseAspect * zoom : analogClockFaceFactor * zoom
+        return max(DockItemKind.clock.tileWidthFactor, faceWidth + clockTileWidthSlack)
     }
 
     /// The widest tile's along-edge width factor among `kinds` (the clock uses
@@ -108,23 +162,24 @@ enum DockLayout {
     /// Extra across-axis window headroom needed for a zoomed clock face
     /// (Widgets ▸ Clock ▸ Face size). The zoomed face box is at most
     /// `iconSize * zoom` across (the LCD; analog dials are 0.92× of that), sits
-    /// `0.04 * iconSize` off the edge-facing side of the tile
-    /// (`ClockWidgetView`'s edge padding — keep in sync), scales by the hover
+    /// `clockFaceEdgePadding * iconSize` off the edge-facing side of the tile
+    /// (`ClockWidgetView.edgeInsets` uses the same constant), scales by the hover
     /// `magnification` about the edge anchor, and the resting strip is
     /// `iconSize + 2 * padding` — whatever pokes past the strip needs window
     /// room so it isn't clipped at the panel bounds. Pure, unit-tested.
     static func clockZoomHeadroom(iconSize: CGFloat, padding: CGFloat, zoom: CGFloat,
                                   magnification: CGFloat = 1) -> CGFloat {
-        max(0, iconSize * (zoom + 0.04) * max(magnification, 1) - (iconSize + padding))
+        max(0, iconSize * (zoom + clockFaceEdgePadding) * max(magnification, 1) - (iconSize + padding))
     }
 
     /// Across-axis window headroom so a hover label floating toward screen center
-    /// stays inside the panel: `DockTileView` offsets the capsule `0.75 × iconSize`
-    /// out from the tile — keep in sync — and the capsule itself needs ~16pt.
+    /// stays inside the panel: `DockTileView` offsets the capsule
+    /// `hoverLabelOffsetFactor × iconSize` out from the tile — the same constant it
+    /// renders with — and the capsule itself needs `hoverLabelCapsuleExtent`.
     /// Without this the clipped container shaves the label at high magnification
     /// and hides it entirely when magnification is off. Pure, unit-tested.
     static func labelHeadroom(iconSize: CGFloat) -> CGFloat {
-        iconSize * 0.75 + 16
+        iconSize * hoverLabelOffsetFactor + hoverLabelCapsuleExtent
     }
 
     // MARK: Revealed frame
@@ -294,7 +349,7 @@ enum DockLayout {
         // pointer's position in stack space — mirrors `DockView.stackLocalAlong`.
         let stackLead = (panelAlong - contentAlong) / 2 + padding
         let hoverAlong = along - stackLead
-        let influence = (iconSize + spacing) * 2.2   // keep in sync with DockView.scale
+        let influence = (iconSize + spacing) * magnificationInfluenceFactor
 
         var cursor: CGFloat = 0
         for kind in kinds {
@@ -307,10 +362,11 @@ enum DockLayout {
             // Tiles scale about the edge anchor (`DockTileView.scaleAnchor`): along
             // grows half per side about the resting center, across grows away from
             // the edge. A zoomed clock face fills up to `iconSize × (zoom + 0.04)`
-            // across (`clockZoomHeadroom` — keep in sync), likewise magnified.
+            // across (the same `clockFaceEdgePadding` `clockZoomHeadroom` budgets
+            // for), likewise magnified.
             var tileAcross = extent.across * s
             if kind == .clock, edge.isHorizontal {
-                tileAcross = max(tileAcross, iconSize * (clockZoom + 0.04) * s)
+                tileAcross = max(tileAcross, iconSize * (clockZoom + clockFaceEdgePadding) * s)
             }
             if abs(hoverAlong - center) <= extent.along * s / 2 + slop,
                across <= tileAcross + slop {

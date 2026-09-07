@@ -84,7 +84,9 @@ Mirrors `PLAN.md §11`:
 - `Model/` — Codable model (`DockDocument`, `DockItem`, `DockAnchor`, `DockEdge`/
   `DockAlignment`, `AppearancePreset`), `Preferences`, `ColorHex`, the UI enums.
 - `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`.
-- `Screens/` — `DisplayRegistry` (UUID mapping) and the pure `DockLayout` math.
+- `Screens/` — `DisplayRegistry` (UUID mapping), the pure `DockLayout` math, and
+  `LayerShellPlacement` (that math expressed as Wayland layer-shell anchors/margins;
+  unused on macOS, see `docs/linux-port-plan.md` §JP-03).
 - `Apps/` — `RunningAppsModel` (NSWorkspace running apps), `AppLauncher`, and
   `TrashMonitor` (DispatchSource watch so the Trash tile reflects empty/full live).
 - `SystemDock/` — `SystemDockController` (hide/re-assert/restore the real Dock).

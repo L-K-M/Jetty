@@ -280,7 +280,7 @@ struct DockTileView: View {
     }
 
     private var labelOffset: CGSize {
-        let d = baseSize * 0.75
+        let d = baseSize * DockLayout.hoverLabelOffsetFactor
         switch edge {
         case .bottom: return CGSize(width: 0, height: -d)
         case .top: return CGSize(width: 0, height: d)
@@ -364,7 +364,7 @@ struct DockTileView: View {
 
     private var tileWidth: CGFloat {
         switch tile.kind {
-        case .separator: return edge.isHorizontal ? 12 : baseSize
+        case .separator: return edge.isHorizontal ? DockLayout.separatorExtent : baseSize
         case .clock where edge.isHorizontal:
             // Widens with a zoomed watch face — keep in sync with
             // `DockLayout.tileExtent` so panel sizing and rendering agree. In the

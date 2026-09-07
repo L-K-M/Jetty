@@ -36,7 +36,8 @@ struct ClockWidgetView: View {
                 // The LCD's box tracks the (zoom-widened) tile width; its case
                 // sizes itself inside, so it grows with the face but never
                 // outgrows the tile. The face-aware factor budgets the case's
-                // 1.35:1 landscape aspect so zooming never squashes it.
+                // landscape aspect (`DockLayout.lcdClockCaseAspect`) so zooming
+                // never squashes it.
                 faceBox(LCDClockFace(date: context.date,
                                      use24Hour: preferences.clockUse24Hour,
                                      showSeconds: preferences.clockShowSeconds),
@@ -47,7 +48,8 @@ struct ClockWidgetView: View {
                                         style: face,
                                         showSeconds: preferences.clockShowSeconds,
                                         tint: preferences.tintColor),
-                        width: height * 0.92 * zoom, faceHeight: height * 0.92 * zoom)
+                        width: height * DockLayout.analogClockFaceFactor * zoom,
+                        faceHeight: height * DockLayout.analogClockFaceFactor * zoom)
             }
         }
     }
@@ -63,7 +65,8 @@ struct ClockWidgetView: View {
     /// Frames a watch face and, when zoomed, pins it to the dock's edge side so
     /// the extra size grows inward over the glass strip instead of spilling
     /// off-screen. **Keep the geometry in sync with
-    /// `DockLayout.clockZoomHeadroom`** (edge padding = 0.04 × height, face box
+    /// `DockLayout.clockZoomHeadroom`** (edge padding = `clockFaceEdgePadding` ×
+    /// height, face box
     /// ≤ height × zoom across). Unzoomed faces keep the old centered layout.
     @ViewBuilder
     private func faceBox<Face: View>(_ face: Face, width: CGFloat, faceHeight: CGFloat) -> some View {
@@ -84,7 +87,7 @@ struct ClockWidgetView: View {
     /// Padding on the edge-facing side only, so the zoomed face keeps the same
     /// small gap to the screen edge the unzoomed (centered) face has.
     private var edgeInsets: EdgeInsets {
-        let pad = height * 0.04
+        let pad = height * DockLayout.clockFaceEdgePadding
         switch edge {
         case .bottom: return EdgeInsets(top: 0, leading: 0, bottom: pad, trailing: 0)
         case .top:    return EdgeInsets(top: pad, leading: 0, bottom: 0, trailing: 0)

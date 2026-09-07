@@ -11,8 +11,8 @@ import PackageDescription
 // import Jetty` compiles unmodified under both.
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
-// may build or test this package — a Mac-side `swift test` would compile these 24
-// files and 9 suites and pass, having skipped almost everything. macOS goes through
+// may build or test this package — a Mac-side `swift test` would compile these 28
+// files and 13 suites and pass, having skipped almost everything. macOS goes through
 // the .xcodeproj, always.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
@@ -94,6 +94,7 @@ let package = Package(
             ],
             sources: [
                 "Screens/DockLayout.swift",
+                "Screens/LayerShellPlacement.swift",
                 "Dock/MagnificationCurve.swift",
                 "Common/ObservationCompat.swift",
                 "Model/DockEdge.swift",
@@ -138,10 +139,8 @@ let package = Package(
                 "FolderStackTests.swift",
                 "HotkeyBindingTests.swift",
                 "InfoWidgetTests.swift",
-                "KeepRevealedFrameTests.swift",
                 "LinkNormalizationTests.swift",
                 "MenuGlyphAndStoreTests.swift",
-                "PointerOverDockContentTests.swift",
                 "PomodoroTests.swift",
                 "PowerCommandTests.swift",
                 "PreferencesTests.swift",
@@ -153,6 +152,9 @@ let package = Package(
             ],
             sources: [
                 "DockLayoutTests.swift",
+                "LayerShellPlacementTests.swift",
+                "KeepRevealedFrameTests.swift",
+                "PointerOverDockContentTests.swift",
                 "MagnificationCurveTests.swift",
                 "ClockFormatterTests.swift",
                 "ClockGeometrySecondsTests.swift",

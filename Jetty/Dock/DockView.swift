@@ -437,7 +437,8 @@ struct DockView: View {
         guard preferences.magnificationEnabled, draggingSlotID == nil,
               let hoverAlong, let center else { return 1 }
         let distance = abs(hoverAlong - center)
-        return MagnificationCurve.scale(distance: distance, influence: (base + spacing) * 2.2,
+        return MagnificationCurve.scale(distance: distance,
+                                        influence: (base + spacing) * DockLayout.magnificationInfluenceFactor,
                                         maxScale: preferences.effectiveMagnification)
     }
 

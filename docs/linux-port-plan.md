@@ -470,6 +470,13 @@ code, and the earlier steps showed a smaller diff draws sharper review.
   Implement the XDG home trash for real, and note that identity (what a user pinned)
   and contents (what holds the items) are one directory on Darwin and two under XDG,
   where only `Trash/files` holds items.
+  - *Deferred to whichever step lands the Linux Trash tile:* `~/.local/share/Trash/files`
+    does **not** exist on a fresh profile, and some implementations remove it again on
+    empty — unlike `~/.Trash`, which is always there. A watch set computed once from
+    `existingTrashURLs()` would therefore start empty and never learn that `files/`
+    appeared, leaving the tile stuck on "empty". That step needs to watch the Trash
+    root as well and rebuild the set when its children change. Raised on #79; no Linux
+    consumer exists yet, so nothing is wired for it here.
 - Extract **new** pure types out of the SwiftUI views: `DockStripLayout`
   (clockWidthFactor, contentOverflows, tileCenters, stackLocalAlong, scale),
   `DockDragPolicy` (slotExtents, the neighbour-shift rule, the index→ordered-itemID

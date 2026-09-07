@@ -223,12 +223,33 @@ final class DockTileMergeTests: XCTestCase {
     /// URL it has already answered.
     func testTrashCheckIsAskedOncePerDistinctURL() {
         var asked: [URL] = []
-        let url = URL(fileURLWithPath: "/tmp/same-folder")
-        let items = (0..<3).map { _ in
-            DockItem(kind: .folder, displayName: "F", url: url, folderDisplay: .grid)
+        let repeated = URL(fileURLWithPath: "/tmp/same-folder")
+        let distinct = URL(fileURLWithPath: "/tmp/other-folder")
+        let items = [repeated, repeated, repeated, distinct].map {
+            DockItem(kind: .folder, displayName: "F", url: $0, folderDisplay: .grid)
         }
         _ = DockTileMerge.makeTiles(pinned: items, running: [], showRunningApps: true,
                                     isTrashURL: { asked.append($0); return false })
-        XCTAssertEqual(asked.count, 1, "the same URL was probed \(asked.count) times in one merge")
+        // A second, distinct URL is what makes this test able to fail: asserting only a
+        // count with one URL would also pass for a cache that answers *every* URL from
+        // the first verdict, which would misclassify every later folder in the merge.
+        XCTAssertEqual(asked, [repeated, distinct],
+                       "each distinct URL must be probed exactly once; got \(asked)")
+    }
+
+    /// The active-instance rule has to hold for the running-apps *group* as well as for
+    /// pinned tiles: an unpinned app in a relaunch race would otherwise show no active
+    /// dot while it has focus.
+    func testUnpinnedDuplicateRunningInfosPreferTheActiveInstance() {
+        let running = [
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: false, pid: 10),
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: true, pid: 11),
+        ]
+        let tiles = DockTileMerge.makeTiles(pinned: [], running: running, showRunningApps: true,
+                                            isTrashURL: { _ in false })
+        XCTAssertEqual(tiles.count, 1)
+        XCTAssertTrue(tiles[0].isActive)
+        XCTAssertEqual(tiles[0].pid, 11)
+        XCTAssertEqual(tiles[0].id, "app:com.panic.Transmit", "tile identity must not shift")
     }
 }

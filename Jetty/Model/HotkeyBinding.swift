@@ -24,37 +24,13 @@ struct HotkeyBinding: Codable, Equatable {
     /// key would steal that key system-wide.
     var isValid: Bool { enabled && modifiers != 0 }
 
-    // MARK: The stored bit values
-
-    /// The Carbon modifier bits, named. These are not a Carbon detail to look up at
-    /// the call site: `modifiers` is **persisted** as JSON in `UserDefaults`, so the
-    /// numbers are part of a storage format every build has to agree on — the same
-    /// argument that pulled `RGBA8` out of `NSColor` in JP-04. Naming them here is
-    /// also what lets this type exist off Darwin, where `Carbon.HIToolbox` does not.
-    ///
-    /// `HotkeyBindingTests` asserts on Darwin that each equals the Carbon symbol it
-    /// mirrors, so a wrong value fails the build's own tests rather than silently
-    /// rewriting users' stored hotkeys.
-    enum Modifier {
-        static let command: UInt32 = 0x0100
-        static let shift: UInt32 = 0x0200
-        static let option: UInt32 = 0x0800
-        static let control: UInt32 = 0x1000
-    }
-
-    /// Virtual key codes for the shipped defaults, for the same reason.
-    enum KeyCode {
-        static let d: UInt32 = 0x02
-        static let space: UInt32 = 0x31
-    }
-
     /// The modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
     var modifierSymbols: String {
         var s = ""
-        if modifiers & Modifier.control != 0 { s += "⌃" }
-        if modifiers & Modifier.option  != 0 { s += "⌥" }
-        if modifiers & Modifier.shift   != 0 { s += "⇧" }
-        if modifiers & Modifier.command != 0 { s += "⌘" }
+        if modifiers & KeyCode.Modifier.control != 0 { s += "⌃" }
+        if modifiers & KeyCode.Modifier.option  != 0 { s += "⌥" }
+        if modifiers & KeyCode.Modifier.shift   != 0 { s += "⇧" }
+        if modifiers & KeyCode.Modifier.command != 0 { s += "⌘" }
         return s
     }
 
@@ -78,10 +54,10 @@ struct HotkeyBinding: Codable, Equatable {
     /// Maps Cocoa modifier flags to Carbon's `RegisterEventHotKey` bits.
     static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
         var carbon: UInt32 = 0
-        if flags.contains(.command) { carbon |= UInt32(cmdKey) }
-        if flags.contains(.option)  { carbon |= UInt32(optionKey) }
-        if flags.contains(.control) { carbon |= UInt32(controlKey) }
-        if flags.contains(.shift)   { carbon |= UInt32(shiftKey) }
+        if flags.contains(.command) { carbon |= KeyCode.Modifier.command }
+        if flags.contains(.option)  { carbon |= KeyCode.Modifier.option }
+        if flags.contains(.control) { carbon |= KeyCode.Modifier.control }
+        if flags.contains(.shift)   { carbon |= KeyCode.Modifier.shift }
         return carbon
     }
 
@@ -130,10 +106,11 @@ struct HotkeyBinding: Codable, Equatable {
 
     // MARK: Defaults
 
-    static let defaultToggle = HotkeyBinding(keyCode: KeyCode.d,
-                                             modifiers: Modifier.control | Modifier.option | Modifier.command,
+    private static let defaultModifiers =
+        KeyCode.Modifier.control | KeyCode.Modifier.option | KeyCode.Modifier.command
+
+    static let defaultToggle = HotkeyBinding(keyCode: KeyCode.d, modifiers: defaultModifiers,
                                              keyLabel: "D", enabled: true)
-    static let defaultMenu = HotkeyBinding(keyCode: KeyCode.space,
-                                           modifiers: Modifier.control | Modifier.option | Modifier.command,
+    static let defaultMenu = HotkeyBinding(keyCode: KeyCode.space, modifiers: defaultModifiers,
                                            keyLabel: "Space", enabled: true)
 }

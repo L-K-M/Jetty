@@ -2,9 +2,6 @@ import Foundation
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
-#if canImport(AppKit)
-import AppKit
-#endif
 // Launch-at-login is the one preference backed by a system service rather than by
 // `UserDefaults`, and `SMAppService` is Darwin-only. The property stays on both
 // platforms so call sites compile; only the three sites that talk to the service are
@@ -413,6 +410,8 @@ final class Preferences: ObservableObject {
 
     // MARK: Launch at login
 
+    /// Re-reads the live service status. A no-op off Darwin, where there is no service
+    /// to read and `launchAtLogin` is always false — see `applyLaunchAtLogin`.
     func refreshLaunchAtLoginStatus() {
         #if canImport(ServiceManagement)
         let enabled = (SMAppService.mainApp.status == .enabled)
@@ -424,14 +423,7 @@ final class Preferences: ObservableObject {
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
-        #if !canImport(ServiceManagement)
-        // No login-item service here yet. Snap the flag back rather than leaving the UI
-        // claiming an autostart that nothing registered — an XDG `.desktop` backend is
-        // a later step. `launchAtLoginSilently` no-ops when the value already matches,
-        // so the `didSet` this runs inside settles after one more pass.
-        launchAtLoginSilently(false)
-        return
-        #else
+        #if canImport(ServiceManagement)
         do {
             if enabled {
                 if SMAppService.mainApp.status != .enabled { try SMAppService.mainApp.register() }
@@ -442,6 +434,17 @@ final class Preferences: ObservableObject {
             NSLog("Jetty: launch-at-login \(enabled ? "register" : "unregister") failed: \(error.localizedDescription)")
             launchAtLoginSilently(SMAppService.mainApp.status == .enabled)
         }
+        #else
+        // No login-item service here yet, so snap the flag back rather than leave the
+        // UI claiming an autostart that nothing registered — an XDG `.desktop` backend
+        // is a later step. Say so: the Darwin failure path logs, and a setting that
+        // silently reverts is worse than one that reverts with a reason.
+        // `launchAtLoginSilently` no-ops when the value already matches, so the `didSet`
+        // this runs inside settles after one more pass.
+        if enabled {
+            NSLog("Jetty: launch at login is not implemented on this platform yet; leaving it off.")
+        }
+        launchAtLoginSilently(false)
         #endif
     }
 

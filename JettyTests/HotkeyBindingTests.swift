@@ -4,7 +4,7 @@ import Carbon.HIToolbox
 #endif
 @testable import Jetty
 
-private typealias Mod = HotkeyBinding.Modifier
+private typealias Mod = KeyCode.Modifier
 
 final class HotkeyBindingTests: XCTestCase {
 
@@ -45,17 +45,20 @@ final class HotkeyBindingTests: XCTestCase {
     /// diverged, every saved hotkey would decode to the wrong chord. Asserted where
     /// Carbon exists, which is the only place the two can be compared.
     #if canImport(Carbon)
-    func testPortableModifierBitsMatchCarbon() {
+    func testPortableKeyCodesMatchCarbon() {
         XCTAssertEqual(Mod.command, UInt32(cmdKey))
         XCTAssertEqual(Mod.shift, UInt32(shiftKey))
         XCTAssertEqual(Mod.option, UInt32(optionKey))
         XCTAssertEqual(Mod.control, UInt32(controlKey))
-        XCTAssertEqual(HotkeyBinding.KeyCode.d, UInt32(kVK_ANSI_D))
-        XCTAssertEqual(HotkeyBinding.KeyCode.space, UInt32(kVK_Space))
+        XCTAssertEqual(KeyCode.escape, UInt32(kVK_Escape))
+        XCTAssertEqual(KeyCode.space, UInt32(kVK_Space))
+        XCTAssertEqual(KeyCode.return, UInt32(kVK_Return))
+        XCTAssertEqual(KeyCode.d, UInt32(kVK_ANSI_D))
+        XCTAssertEqual(KeyCode.j, UInt32(kVK_ANSI_J))
     }
     #endif
 
-    #if canImport(AppKit)
+    #if canImport(AppKit) && canImport(Carbon)
     func testCarbonModifiersMapping() {
         let mods = HotkeyBinding.carbonModifiers(from: [.command, .shift])
         XCTAssertEqual(mods & UInt32(cmdKey), UInt32(cmdKey))

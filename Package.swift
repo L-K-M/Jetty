@@ -11,9 +11,12 @@ import PackageDescription
 // import Jetty` compiles unmodified under both.
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
-// may build or test this package — a Mac-side `swift test` would compile these 35
-// files and 21 suites and pass, having skipped almost everything. macOS goes through
-// the .xcodeproj, always.
+// may build or test this package. It would not even get as far as skipping things: on
+// macOS `canImport(SwiftUI)` is true, so `Preferences.tintColor` and
+// `DecorationStyle.colors` call `Color(hexString:)` — which lives in ColorHex.swift,
+// a file this target deliberately excludes — and the build fails on an unresolved
+// initialiser. The 35 files and 21 suites below are the *Linux* build. macOS goes
+// through the .xcodeproj, always.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
 // target directory that is in neither as "unhandled" and names it, and Linux CI fails
@@ -53,7 +56,8 @@ let package = Package(
                 "Dock/DockTileView.swift",
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
-                "Hotkeys",
+                "Hotkeys/AccessibilityAuthorizer.swift",
+                "Hotkeys/CarbonHotkey.swift",
                 "Icons",
                 "Menu/AppIndex.swift",
                 "Menu/AppleScriptRunner.swift",
@@ -96,6 +100,7 @@ let package = Package(
                 "Model/DockAnchor.swift",
                 "Model/RGBA8.swift",
                 "Model/HotkeyBinding.swift",
+                "Hotkeys/KeyCodes.swift",
                 "Model/JettyMenuGlyph.swift",
                 "Model/Preferences.swift",
                 "Model/AppearancePreset.swift",
@@ -139,7 +144,6 @@ let package = Package(
                 "FolderStackTests.swift",
                 "InfoWidgetTests.swift",
                 "LinkNormalizationTests.swift",
-                "MenuGlyphAndStoreTests.swift",
                 "PomodoroTests.swift",
                 "PowerCommandTests.swift",
                 "RecentsTests.swift",
@@ -151,6 +155,7 @@ let package = Package(
                 "CodableModelTests.swift",
                 "PreferencesTests.swift",
                 "HotkeyBindingTests.swift",
+                "MenuGlyphAndStoreTests.swift",
                 "ColorHexTests.swift",
                 "BookmarkResolverTests.swift",
                 "XDGDataHomeTests.swift",

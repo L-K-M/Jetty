@@ -36,11 +36,13 @@ enum JettyMenuGlyph {
         #if canImport(AppKit)
         return NSImage(systemSymbolName: trimmed, accessibilityDescription: nil) != nil
         #else
-        // SF Symbols are Apple's catalogue; off Darwin there is nothing to check a name
-        // against. The name is only ever persisted and handed to a renderer, so accept
-        // any non-empty string here rather than rejecting every glyph — a Linux dock
-        // will validate against whatever icon theme it draws with.
-        return true
+        // SF Symbols are Apple's catalogue, so off Darwin there is no system to ask.
+        // Fall back to the curated list rather than accepting anything: this type's
+        // contract is that an unknown name resolves to `fallback` so the tile never
+        // renders blank, and `return true` would break that — `resolved` would hand a
+        // Linux renderer a name it cannot draw. Narrower than the Darwin check (a real
+        // symbol outside `options` is rejected here), which is the safe direction.
+        return options.contains(trimmed)
         #endif
     }
 

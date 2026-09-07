@@ -72,6 +72,15 @@ struct LayerShellPlacement: Equatable {
                && anchorEdges.contains(where: { $0.isHorizontal })
                && anchorEdges.contains(where: { $0.isVertical }),
                "anchorEdges must be two orthogonal edges, got \(anchorEdges)")
+        // The other half of the same contract, and the one `Margins` leans on: a
+        // margin on an unanchored edge is discarded by the compositor without an
+        // error, so a producer that sets one has a bug that is invisible everywhere
+        // else. Asserted here for the same reason and on the same terms as above —
+        // debug only, because the shipped producer cannot do it.
+        assert(anchorEdges.contains(.top) || margins.top == 0, "top margin without a top anchor")
+        assert(anchorEdges.contains(.right) || margins.right == 0, "right margin without a right anchor")
+        assert(anchorEdges.contains(.bottom) || margins.bottom == 0, "bottom margin without a bottom anchor")
+        assert(anchorEdges.contains(.left) || margins.left == 0, "left margin without a left anchor")
         self.anchorEdges = anchorEdges
         self.margins = margins
     }

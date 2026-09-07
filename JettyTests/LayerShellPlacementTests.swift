@@ -82,10 +82,16 @@ final class LayerShellPlacementTests: XCTestCase {
             margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 351))
         XCTAssertNotEqual(p, oneMarginOff)
 
-        let oneAnchorOff = LayerShellPlacement(
-            anchorEdges: [.bottom, .right],
-            margins: LayerShellPlacement.Margins(top: 0, right: 0, bottom: 12, left: 350))
-        XCTAssertNotEqual(p, oneAnchorOff)
+        // Differing by an anchor takes a little care, because margins live only on
+        // anchored edges: "same margins, different anchors" is representable *only*
+        // when the margins are all zero. Two such placements exist and are both
+        // legal — a dock flush into the bottom-left corner, and one flush into the
+        // top-left — and an `==` that ignores `anchorEdges` conflates them.
+        let flushBottomLeft = LayerShellPlacement(anchorEdges: [.bottom, .left],
+                                                  margins: LayerShellPlacement.Margins())
+        let flushTopLeft = LayerShellPlacement(anchorEdges: [.top, .left],
+                                               margins: LayerShellPlacement.Margins())
+        XCTAssertNotEqual(flushBottomLeft, flushTopLeft)
     }
 
     // MARK: The margin always belongs to an anchored edge

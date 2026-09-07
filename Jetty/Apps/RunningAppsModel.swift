@@ -1,19 +1,6 @@
 import AppKit
 import Combine
 
-/// A lightweight, value-type snapshot of a running application — enough to build a
-/// dock tile and dedup against pinned items, with no AppKit references so the tile
-/// merge stays pure and testable.
-struct RunningAppInfo: Equatable, Identifiable {
-    var bundleIdentifier: String?
-    var name: String
-    var isActive: Bool
-    var pid: pid_t
-    var launchDate: Date? = nil
-
-    var id: String { bundleIdentifier ?? "pid:\(pid)" }
-}
-
 /// Tracks the set of "ordinary" running apps (the ones a Dock shows) and keeps it
 /// live via `NSWorkspace` notifications. Permission-free — this is the backbone of
 /// Jetty's running-app tiles and indicators. See PLAN.md §7.

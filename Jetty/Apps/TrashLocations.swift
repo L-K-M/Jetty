@@ -1,15 +1,37 @@
 import Foundation
+#if canImport(Darwin)
 import Darwin
+#else
+import Glibc
+#endif
 
 /// Finder's Trash can span the user's home Trash plus per-volume Trash folders. Keep
 /// the discovery logic in one place so the icon state and filesystem watch agree.
 enum TrashLocations {
 
     static func userTrashURL() -> URL {
-        (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
-                                      appropriateFor: nil, create: false))
+        #if canImport(Darwin)
+        return (try? FileManager.default.url(for: .trashDirectory, in: .userDomainMask,
+                                             appropriateFor: nil, create: false))
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash", isDirectory: true)
+        #else
+        // The XDG Trash spec, which is where a Linux desktop actually puts deleted
+        // files: `$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`), holding
+        // `files/` and `info/`. Not a fallback for the Cocoa path — a different
+        // location, so `.trashDirectory` would be wrong here even if corelibs had it.
+        return xdgDataHome().appendingPathComponent("Trash", isDirectory: true)
+        #endif
     }
+
+    #if !canImport(Darwin)
+    /// `$XDG_DATA_HOME`, or its specified default. Mirrors `DockStore.xdgDataHome`;
+    /// a relative value is ignored, as the spec requires.
+    static func xdgDataHome() -> URL {
+        let value = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
+        if let value, value.hasPrefix("/") { return URL(fileURLWithPath: value) }
+        return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".local/share")
+    }
+    #endif
 
     /// Existing Trash folders that can currently contain this user's discarded items.
     static func existingTrashURLs() -> [URL] {
@@ -54,9 +76,10 @@ enum TrashLocations {
     }
 
     private static func makeCandidateTrashURLs() -> [URL] {
+        let uid = String(getuid())
+        #if canImport(Darwin)
         let homeTrash = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash", isDirectory: true)
         var urls = [userTrashURL(), homeTrash]
-        let uid = String(getuid())
         urls.append(URL(fileURLWithPath: "/.Trashes", isDirectory: true)
             .appendingPathComponent(uid, isDirectory: true))
         urls.append(URL(fileURLWithPath: "/System/Volumes/Data/.Trashes", isDirectory: true)
@@ -66,6 +89,15 @@ enum TrashLocations {
                 .appendingPathComponent(uid, isDirectory: true))
         }
         return urls
+        #else
+        // XDG names the per-volume trash `.Trash-$uid` at the mount root, not
+        // `.Trashes/$uid`. Only the home trash is claimed here; wiring up mounted
+        // volumes needs their real enumeration (`/proc/mounts`), which belongs with
+        // the Linux Trash tile rather than with porting the merge, so a removable
+        // drive's trash is simply not recognised yet rather than guessed at.
+        _ = uid
+        return [userTrashURL()]
+        #endif
     }
 
     private static func mountedVolumes() -> [URL] {

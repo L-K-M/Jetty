@@ -450,6 +450,12 @@ generic in this step.*
 ### JP-06 · Jetty · Dock model + strip geometry
 **Branch** `claude/jp-06-dock-model` · **Size** M
 
+*Split into two PRs in flight.* **JP-06a** is the model half — the tile/slot merge and
+its value types, which is self-contained and testable on its own. **JP-06b** is the
+strip-geometry half — the pure types extracted out of the SwiftUI views, including
+the `tileWidth`/`tileExtent` single-source-of-truth pitfall below. The halves share no
+code, and the earlier steps showed a smaller diff draws sharper review.
+
 - Move `DockModel.makeSlots`/`makeTiles` (with all three unique-id guards and Trash
   normalisation), `DockTile`/`DockSlot` value types (retyping `var icon: NSImage?`
   to PictKit's neutral handle), `DockContextMenuPlacement`, `DockContextAction`,
@@ -464,6 +470,26 @@ generic in this step.*
 - **Pitfalls**: `DockTileGeometry.tileWidth` and `DockLayout.tileExtent` must agree —
   the existing comment says "keep in sync"; extraction is the chance to make that a
   single source of truth instead of a comment.
+- *(JP-06, corrected in flight — three errors in the above.)*
+  1. **"Retyping `var icon: NSImage?` to PictKit's neutral handle" is not available.**
+     PictKit is a macOS package (AppKit/ImageIO/CoreServices, min macOS 13) and is
+     **not a dependency of the SwiftPM target at all** — the library target declares
+     no dependencies. Nor is a handle needed: the merge only ever leaves `icon` nil,
+     and every reader is already Darwin-only, so the field is simply guarded and
+     defaulted. A neutral handle becomes real work when a Linux renderer exists.
+  2. **The dependency list is short**, as in JP-05. The merge also needs
+     `RunningAppInfo` — which was AppKit-free by design but trapped in
+     `RunningAppsModel.swift` — and `TrashLocations`, for its trash normalisation.
+     Both are lifted/guarded here.
+  3. **`TrashLocations` is not semantically portable.** It encodes Finder's model
+     (`/System/Volumes/Data/.Trashes`, `.Trashes/$uid`); Linux uses the XDG spec, a
+     different location rather than a fallback. The home trash is implemented for
+     real (`$XDG_DATA_HOME/Trash`); per-volume `.Trash-$uid` needs `/proc/mounts`
+     enumeration and is deferred to the Linux Trash tile rather than guessed at.
+  Also note `makeSlots`/`makeTiles` moved off `DockModel` onto a portable
+  `DockTileMerge`, since `DockModel` itself is an `NSImage`-resolving
+  `ObservableObject` and cannot follow. `DockModelTests` split the same way: the 12
+  merge assertions are unchanged, they just name the type that owns the logic.
 
 ### JP-07 · Jetty · Reveal policy extraction
 **Branch** `claude/jp-07-reveal-policy` · **Size** M · **This is the load-bearing one.**

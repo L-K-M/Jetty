@@ -37,7 +37,17 @@ let package = Package(
                 "Jetty.entitlements",
                 "AppDelegate.swift",
                 "JettyApp.swift",
-                "Apps",
+                // `Apps` is no longer excluded wholesale — `RunningAppInfo` and
+                // `TrashLocations` are portable and sit in `sources:`. As with
+                // `Hotkeys`, that means a NEW file under Apps/ is covered by neither
+                // list until someone adds it here or there.
+                "Apps/AppLauncher.swift",
+                "Apps/AppResponsivenessMonitor.swift",
+                "Apps/FinderAutomation.swift",
+                "Apps/RunningAppsModel.swift",
+                "Apps/TrashIconProvider.swift",
+                "Apps/TrashMonitor.swift",
+                "Apps/TrashStateResolver.swift",
                 "Common/ActivationPolicy.swift",
                 "Common/BoingBallDecoration.swift",
                 "Common/CRTScreenOverlay.swift",
@@ -54,7 +64,6 @@ let package = Package(
                 "Dock/DockController.swift",
                 "Dock/DockModel.swift",
                 "Dock/DockPanelController.swift",
-                "Dock/DockSlot.swift",
                 "Dock/DockTileView.swift",
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
@@ -101,6 +110,11 @@ let package = Package(
                 "Screens/DockLayout.swift",
                 "Screens/LayerShellPlacement.swift",
                 "Dock/MagnificationCurve.swift",
+                "Dock/DockSlot.swift",
+                "Dock/DockTile.swift",
+                "Dock/DockTileMerge.swift",
+                "Apps/RunningAppInfo.swift",
+                "Apps/TrashLocations.swift",
                 "Common/ObservationCompat.swift",
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
@@ -158,6 +172,7 @@ let package = Package(
             ],
             sources: [
                 "DockLayoutTests.swift",
+                "DockTileMergeTests.swift",
                 "CodableModelTests.swift",
                 "PreferencesTests.swift",
                 "HotkeyBindingTests.swift",

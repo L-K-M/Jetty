@@ -1,10 +1,15 @@
+// Foundation is unconditional: the persistence half below needs it on every platform,
+// and `JSONEncoder`/`JSONDecoder` are top-level names, so file-scoped lookup really
+// does require it here — without this import they are not in scope (measured).
+// Importing it only as Carbon's `#else` left macOS resolving them through AppKit's
+// re-export, so reshuffling the AppKit guard would have broken the Mac build.
+import Foundation
 #if canImport(AppKit)
 import AppKit
 #endif
+// Still genuinely needed where it exists: `label(for:)` maps recorded keys with `kVK_`.
 #if canImport(Carbon)
 import Carbon.HIToolbox
-#else
-import Foundation
 #endif
 
 /// A user-configurable global hotkey: a virtual key code plus Carbon modifier

@@ -1,7 +1,11 @@
+// Foundation unconditionally, to declare what the file uses: `isValid` trims with
+// `trimmingCharacters(in:)`. This one is legibility rather than a latent break — it
+// compiles without the import (measured), because Swift finds *members* in any module
+// loaded into the compilation and other files here import Foundation. Only top-level
+// names are file-scoped, which is what makes it load-bearing in `HotkeyBinding`.
+import Foundation
 #if canImport(AppKit)
 import AppKit
-#else
-import Foundation
 #endif
 
 /// The configurable icon for the Jetty-Menu dock tile (an SF Symbol name). The

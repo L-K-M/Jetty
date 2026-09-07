@@ -15,6 +15,10 @@ import ServiceManagement
 /// An `ObservableObject` so SwiftUI settings views (and the dock) update live. A
 /// custom `UserDefaults` can be injected for tests. Numeric values are clamped on
 /// write so corrupted storage can't break the UI. Mirrors Zap's `Preferences`.
+///
+/// Off Darwin, `ObservableObject` and `@Published` resolve to the in-module shim in
+/// `Common/ObservationCompat.swift` (JP-02), not Combine — which is why the
+/// conformance below needs no platform guard.
 final class Preferences: ObservableObject {
 
     static let shared = Preferences()

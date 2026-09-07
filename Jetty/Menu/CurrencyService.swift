@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Live currency conversion for the Jetty Menu command bar (ND-9). Fetches rates
 /// (base USD) from Frankfurter (frankfurter.app — free, no key, ECB data), caches

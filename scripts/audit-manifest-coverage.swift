@@ -45,6 +45,14 @@ for target in targets {
     let excludes = target["exclude"] as? [String] ?? []
     let listed = Set(sources + excludes)
 
+    // A file in BOTH lists is worse than one in neither: `exclude:` silently wins, so
+    // the file is dropped from the build with no diagnostic anywhere, and the symptom
+    // surfaces far away as "cannot find X in scope". Caught exactly this way while
+    // adding WeatherService in JP-02.
+    for duplicate in Set(sources).intersection(excludes).sorted() {
+        failures.append("\(path)/\(duplicate) is in BOTH sources: and exclude: for target \(name) — exclude: wins, so it will not build")
+    }
+
     guard let walker = fm.enumerator(atPath: path) else {
         failures.append("\(name): cannot read directory \(path)")
         continue

@@ -46,6 +46,10 @@ final class HotkeyBindingTests: XCTestCase {
     /// Carbon exists, which is the only place the two can be compared.
     #if canImport(Carbon)
     func testPortableKeyCodesMatchCarbon() {
+        // Exhaustive by construction: every constant `KeyCodes.swift` defines is pinned
+        // below. Keep it that way — a constant that can reach `UserDefaults` without an
+        // assertion here is unprotected, and nothing detects that it is missing: Linux
+        // cannot compare against Carbon, and Darwin only checks what is written down.
         XCTAssertEqual(Mod.command, UInt32(cmdKey))
         XCTAssertEqual(Mod.shift, UInt32(shiftKey))
         XCTAssertEqual(Mod.option, UInt32(optionKey))

@@ -15,8 +15,10 @@ import PackageDescription
 // macOS `canImport(SwiftUI)` is true, so `Preferences.tintColor` and
 // `DecorationStyle.colors` call `Color(hexString:)` — which lives in ColorHex.swift,
 // a file this target deliberately excludes — and the build fails on an unresolved
-// initialiser. The 35 files and 21 suites below are the *Linux* build. macOS goes
-// through the .xcodeproj, always.
+// initialiser. The `sources:` lists below are the *Linux* build; macOS goes through
+// the .xcodeproj, always. They deliberately carry no hand-written file/suite count:
+// two port steps running have left one stale, and the audit step prints the real
+// total on every CI run, so trust `scripts/audit-manifest-coverage.swift` over prose.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
 // target directory that is in neither as "unhandled" and names it, and Linux CI fails
@@ -56,6 +58,10 @@ let package = Package(
                 "Dock/DockTileView.swift",
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
+                // A directory excluded wholesale also covers files added to it later.
+                // These two are named individually so `Hotkeys/KeyCodes.swift` could be
+                // ported, and that protection is gone: a new file under Hotkeys/ has to
+                // be listed or excluded by hand or it lands in neither list.
                 "Hotkeys/AccessibilityAuthorizer.swift",
                 "Hotkeys/CarbonHotkey.swift",
                 "Icons",

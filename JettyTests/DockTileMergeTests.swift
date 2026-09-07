@@ -167,4 +167,68 @@ final class DockTileMergeTests: XCTestCase {
         XCTAssertNil(asTrash.url)
         XCTAssertNil(asTrash.customIconPath)
     }
+
+    /// The fallback id is only unique while *item* ids are, and nothing upstream
+    /// enforces that — a hand-edited or corrupted document can repeat one. For a
+    /// non-application item `dedupKey` is already `item:<uuid>`, so the fallback used
+    /// to reproduce the very id that had just collided, and the guard silently failed
+    /// at its one job. Slot ids carried the same exposure.
+    func testRepeatedItemIDStillYieldsUniqueTileAndSlotIDs() {
+        let shared = UUID()
+        let a = DockItem(id: shared, kind: .separator)
+        let b = DockItem(id: shared, kind: .separator)
+        let c = DockItem(id: shared, kind: .separator)
+
+        let slots = DockTileMerge.makeSlots(pinned: [a, b, c], running: [], showRunningApps: true,
+                                            isTrashURL: { _ in false })
+        let tileIDs = slots.flatMap { $0.tiles }.map(\.id)
+        let slotIDs = slots.map(\.id)
+
+        XCTAssertEqual(tileIDs.count, 3)
+        XCTAssertEqual(Set(tileIDs).count, 3, "duplicate tile ids desync id-keyed magnification (F-M1)")
+        XCTAssertEqual(Set(slotIDs).count, 3, "ForEach over duplicate slot ids is undefined")
+        XCTAssertEqual(tileIDs.first, "item:\(shared.uuidString)", "the first id must be unchanged")
+    }
+
+    /// Only one instance can be frontmost, so when two running infos share a bundle id
+    /// the merge must not keep an inactive one and leave the tile's active dot off.
+    func testDuplicateRunningInfosPreferTheActiveInstance() {
+        let pinned = [DockItem(kind: .application, displayName: "Transmit",
+                               bundleIdentifier: "com.panic.Transmit")]
+        let running = [
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: false, pid: 10),
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: true, pid: 11),
+        ]
+        let tile = DockTileMerge.makeTiles(pinned: pinned, running: running, showRunningApps: true,
+                                           isTrashURL: { _ in false })[0]
+        XCTAssertTrue(tile.isActive)
+        XCTAssertEqual(tile.pid, 11)
+    }
+
+    /// Neither instance active: first-wins, as before — the prefer-active rule must not
+    /// quietly reorder the ordinary case.
+    func testDuplicateRunningInfosKeepTheFirstWhenNeitherIsActive() {
+        let pinned = [DockItem(kind: .application, displayName: "Transmit",
+                               bundleIdentifier: "com.panic.Transmit")]
+        let running = [
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: false, pid: 10),
+            RunningAppInfo(bundleIdentifier: "com.panic.Transmit", name: "Transmit", isActive: false, pid: 11),
+        ]
+        let tile = DockTileMerge.makeTiles(pinned: pinned, running: running, showRunningApps: true,
+                                           isTrashURL: { _ in false })[0]
+        XCTAssertEqual(tile.pid, 10)
+    }
+
+    /// The memo must wrap the injected check, not replace it, and must not re-ask for a
+    /// URL it has already answered.
+    func testTrashCheckIsAskedOncePerDistinctURL() {
+        var asked: [URL] = []
+        let url = URL(fileURLWithPath: "/tmp/same-folder")
+        let items = (0..<3).map { _ in
+            DockItem(kind: .folder, displayName: "F", url: url, folderDisplay: .grid)
+        }
+        _ = DockTileMerge.makeTiles(pinned: items, running: [], showRunningApps: true,
+                                    isTrashURL: { asked.append($0); return false })
+        XCTAssertEqual(asked.count, 1, "the same URL was probed \(asked.count) times in one merge")
+    }
 }

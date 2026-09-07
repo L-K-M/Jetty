@@ -15,6 +15,11 @@ final class TrashLocationsTests: XCTestCase {
         #else
         XCTAssertTrue(contents.allSatisfy { $0.lastPathComponent == "files" },
                       "XDG items live in Trash/files, not at the Trash root")
+        // Shape alone would pass on *any* files/ directory; pin that the home trash's
+        // own is actually among them, so dropping it can't ship green.
+        XCTAssertTrue(contents.map(\.path)
+                        .contains(TrashLocations.userTrashURL().appendingPathComponent("files").path),
+                      "the home trash's files/ must be among the probed contents")
         XCTAssertFalse(contents.map(\.path).contains(TrashLocations.userTrashURL().path),
                        "the Trash root must not be probed for contents")
         #endif

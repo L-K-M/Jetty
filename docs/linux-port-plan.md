@@ -448,7 +448,7 @@ generic in this step.*
   Darwin.)*
 
 ### JP-06 · Jetty · Dock model + strip geometry
-**Branch** `claude/jp-06-dock-model` · **Size** M
+**Branch** `claude/jp-06-dock-model` · **Size** M — shipped as two PRs, JP-06a and JP-06b
 
 *Split into two PRs in flight.* **JP-06a** is the model half — the tile/slot merge and
 its value types, which is self-contained and testable on its own. **JP-06b** is the

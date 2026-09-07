@@ -1,8 +1,9 @@
 import Foundation
+// Darwin only: `getuid()` is used solely by the Finder-shaped candidate list below.
+// The XDG path needs no libc, so there is deliberately no `#else` import to keep in
+// step with musl or any other non-glibc toolchain.
 #if canImport(Darwin)
 import Darwin
-#else
-import Glibc
 #endif
 
 /// Finder's Trash can span the user's home Trash plus per-volume Trash folders. Keep

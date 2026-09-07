@@ -45,6 +45,25 @@ for target in targets {
     let excludes = target["exclude"] as? [String] ?? []
     let listed = Set(sources + excludes)
 
+    // A file in BOTH lists is worse than one in neither: `exclude:` silently wins, so
+    // the file is dropped from the build with no diagnostic anywhere, and the symptom
+    // surfaces far away as "cannot find X in scope". Caught exactly this way while
+    // adding WeatherService in JP-02.
+    for duplicate in Set(sources).intersection(excludes).sorted() {
+        failures.append("\(path)/\(duplicate) is in BOTH sources: and exclude: for target \(name) — exclude: wins, so it will not build")
+    }
+
+    // The commoner form of the same bug: a `sources:` file nested under an excluded
+    // *directory*. `exclude: ["Icons"]` swallows `sources: ["Icons/New.swift"]` with
+    // no diagnostic, and an exact-match check never sees it. This target still carries
+    // eight directory excludes, so it is a live hazard rather than a hypothetical —
+    // it is what forced splitting "Common" into per-file entries for the JP-02 shim.
+    for source in Set(sources).sorted() {
+        for excluded in excludes where source.hasPrefix(excluded + "/") {
+            failures.append("\(path)/\(source) is in sources: but sits under the excluded directory \(excluded) for target \(name) — exclude: wins, so it will not build. Split \(excluded) into per-file excludes.")
+        }
+    }
+
     guard let walker = fm.enumerator(atPath: path) else {
         failures.append("\(name): cannot read directory \(path)")
         continue

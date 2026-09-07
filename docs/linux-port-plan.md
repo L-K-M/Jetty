@@ -209,8 +209,21 @@ watcher and against sharing `IconStoreWatcher`.
   excluded is **silently dropped, with no error**, which I confirmed by building it.
   Skip this and the shim simply is not compiled on Linux, and `Preferences` fails
   with a confusing missing-symbol error rather than anything pointing at the manifest.
-- Bring `Model/Preferences.swift`, `Widgets/WeatherService.swift` and the other
-  `ObservableObject` types that are otherwise portable into the `sources:` list.
+- Bring the `ObservableObject` types that are **otherwise portable** into the
+  `sources:` list. Measured against the tree at implementation time, that is
+  `Widgets/WeatherService.swift` and `Menu/CurrencyService.swift` — both
+  Foundation-only, both needing the `FoundationNetworking` guard, since without it
+  `HTTPURLResponse` resolves to `AnyObject` and `.statusCode` does not exist.
+- **`Preferences` is not one of them, and an earlier draft of this item was wrong to
+  say so.** It imports SwiftUI, AppKit and ServiceManagement: `SMAppService` drives
+  launch-at-login in five places with no Linux analogue, and four computed properties
+  return SwiftUI `Color` through `ColorHex`, whose portable `RGBA8` half **JP-04**
+  extracts. It has 53 `@Published` properties, so this is not a small guard job
+  either. Sequence it after JP-04 rather than pulling that work forward here.
+- Also not portable, for the record, so the next reader does not re-derive it:
+  `DockStore` (calls the Darwin-only `BookmarkResolver` — JP-04 stubs it),
+  `PomodoroTimer` (AppKit, and a `$`-projected publisher the shim does not shim),
+  and `UpdateChecker` (AppKit throughout).
 - **Decline the full `@Observable` migration** and record why in the PR body:
   Jetty has 96 `@Published` / 15 `ObservableObject` but only **6** `.sink` chains
   (in `DockController`, `JettyMenuModel` and `PomodoroTimer`, plus
@@ -223,8 +236,11 @@ watcher and against sharing `IconStoreWatcher`.
   macOS-only at this stage, so they do not block JP-02; fix them when JP-08 moves
   `DockController`'s policies, and say so in the PR body rather than discovering it
   there.
-- **Acceptance**: `Preferences` and `WeatherService` compile and test on Linux;
-  macOS diff is additive only.
+- **Acceptance**: `WeatherService` and `CurrencyService` compile on Linux and
+  `WeatherRetryTests` runs there; macOS diff is additive only. Prove the shim is
+  load-bearing rather than incidentally satisfied — drop it from `sources:` and the
+  build must fail with `cannot find type 'ObservableObject' in scope`.
+  `Preferences` moves to **JP-05**, after JP-04 supplies `RGBA8`.
 
 ---
 

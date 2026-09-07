@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// A current-conditions snapshot for the weather tile.
 struct WeatherSnapshot: Equatable {

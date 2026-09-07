@@ -83,8 +83,13 @@ watcher and against sharing `IconStoreWatcher`.
   `path: "Jetty"` and test target **`JettyTests`** at `path: "JettyTests"`, each with
   a curated `sources:` list, so the existing `@testable import Jetty` files compile
   unmodified.
-- **Both targets need an `exclude:` list, not just the library one** — the gate below
-  is per-target, and a test target with 24 unlisted files fails it just as loudly.
+- **`sources:` and `exclude:` are not alternatives here; the gate needs both.**
+  `sources:` says what to compile, `exclude:` says what is deliberately *not*
+  compiled, and SwiftPM calls anything in the target directory that is in neither
+  "unhandled" and names it. That third category is the gate: a new macOS file lands
+  in it and fails Linux CI until someone either ports it or excludes it. Measured, not
+  assumed. **Both targets need the `exclude:` list**, not just the library one — the
+  gate is per-target, and a test target with 24 unlisted files fails it just as loudly.
   Built and measured against the tree as it stands: **57 entries** on `Jetty`
   (`Resources`, `MediaRemote`, `Jetty.entitlements`, `AppDelegate.swift`,
   `JettyApp.swift`, the nine wholly-macOS directories — `Apps`, `Common`, `Hotkeys`,
@@ -114,7 +119,10 @@ watcher and against sharing `IconStoreWatcher`.
 - Guards needed, and no others — each one verified as necessary and sufficient by
   compiling:
   - `#if canImport(CoreGraphics) … #else import Foundation #endif` on the four files
-    that import CoreGraphics for its value types: `DockLayout`,
+    that import CoreGraphics for its value types — and the `#else` really is live:
+    `canImport(CoreGraphics)` is **false** on swift:6.3-noble (measured; some
+    toolchains do ship a corelibs CoreGraphics, so re-check on digest rotation) —
+    `DockLayout`,
     `MagnificationCurve`, `DockItemKind`, `ClockGeometry` (plus the same in
     `DockLayoutTests`).
   - `#if canImport(FoundationNetworking)` in `GitHubReleaseClient`,
@@ -148,7 +156,11 @@ watcher and against sharing `IconStoreWatcher`.
   whole `exclude:` apparatus exists to arm.
 - **Acceptance**: Linux job green with the seeded suites running; macOS CI untouched
   and green; zero diff to macOS-compiled semantics (guards only); `.xcodeproj`
-  untouched.
+  untouched. Write down the invariant that makes this safe, in `Package.swift` next
+  to the curated list as well as here: **nothing on macOS builds or tests this
+  package through SwiftPM.** Target membership is platform-unconditional, so a
+  Mac-side `swift test` would compile 24 files and 9 suites and pass, having skipped
+  almost everything. macOS goes through `Jetty.xcodeproj`, always.
 - **Pitfalls**: don't reformat while adding guards. Do **not** add
   `Model/Preferences.swift` or `Model/ColorHex.swift` yet (they are `ObservableObject`
   / `NSColor` — JP-02 and JP-04).
@@ -214,11 +226,14 @@ watcher and against sharing `IconStoreWatcher`.
 
 ## Part 2 — Core extraction (macOS-improving; validated by macOS CI)
 
-*Each item is a **pure move** into `JettyCore` with its tests — a `sources:`
-addition, not a new target; see Part 0. Land them in order; each is small enough to
+*Each item is a **behaviour-preserving move or extraction** into `JettyCore` with its
+tests — a `sources:` addition, not a new target; see Part 0. Several items extract new
+types rather than relocating files (JP-06, JP-07, JP-08), which is why "move" is the
+review standard, not the literal operation. Land them in order; each is small enough to
 review as a move. Where an item bundles a deliberate change beyond the move —
-JP-06's `NSImage` retype and generic cache, JP-09's rename, `scientificString` fold
-and `decide(_:)` extraction — land that as its own commit, per JP-09's rule, so the
+JP-06's `NSImage` retype and generic cache; JP-09's `bundleID`/`url` rename, its
+`confirmationPrompt` rewording, the `scientificString` fold and the `decide(_:)`
+extraction — land that as its own commit, per JP-09's rule, so the
 move half stays reviewable as a move.*
 
 ### JP-03 · Jetty · Geometry core: `DockLayout` + `MagnificationCurve`
@@ -236,7 +251,9 @@ move half stays reviewable as a move.*
   `clockZoomHeadroom`. Make each a named `JettyCore` constant rather than a literal
   duplicated across files with a comment asking the next reader to keep them aligned.
 - **Acceptance**: `DockLayoutTests`, `DockLayoutGapTests`, `MagnificationCurveTests`
-  green on both platforms, unchanged.
+  green on both platforms, unchanged — **plus new `layerShellPlacement` tests covering
+  every `DockEdge`**. It is the one piece of genuinely new geometry here; leaving it
+  out of acceptance is how it reaches JP-24 untested.
 - **Pitfalls**: `DockLayout` is Cocoa bottom-left-origin y-up throughout. Do **not**
   flip it here. The single deliberate flip belongs at the toolkit boundary (JP-24).
 
@@ -408,8 +425,12 @@ move half stays reviewable as a move.*
   trust `$XDG_DATA_DIRS` alone. Apply the XDG defaults (`$XDG_DATA_HOME` →
   `~/.local/share`, `$XDG_DATA_DIRS` → `/usr/local/share:/usr/share`) and pin the
   precedence order — `$XDG_DATA_HOME`, then `$XDG_DATA_DIRS` left to right, then
-  Flatpak user and system exports, then snapd — because "first-wins" is meaningless
-  without it, and scanning system dirs first lets a system entry shadow a user's
+  Flatpak user and system exports, then snapd — over a **canonicalised (realpath)
+  and deduped** directory list, because stock sessions already append the snapd and
+  Flatpak export dirs to `$XDG_DATA_DIRS` themselves. Without the dedupe those dirs
+  are discovered at the data-dirs rank and the pinned order silently becomes
+  session-dependent, which is exactly what pinning it was for. "First-wins" is
+  meaningless without an order, and scanning system dirs first lets a system entry shadow a user's
   override.
 - **Derive the desktop-file ID per the menu spec**: the path relative to the
   applications directory with `/` replaced by `-`, so
@@ -456,7 +477,8 @@ move half stays reviewable as a move.*
 
 - This is the corpus's **LP-24a**, which Jetty now has a second reason to want.
   Implement the Linux `BundleArtworkProvider` replacement: resolve a desktop entry's
-  `Icon=` through the freedesktop Icon Theme spec (index.theme inheritance,
+  `Icon=` — short-circuiting the lookup when it is an absolute path, which the spec
+  allows and hand-installed apps use — through the freedesktop Icon Theme spec (index.theme inheritance,
   size/scale matching, the mandatory `hicolor` fallback), returning a `PixelImage`.
 - SVG-only theme icons go through `rsvg-convert` using the corpus's verified
   fresh-empty-temp-dir sandbox recipe. (Probe the shipped `rsvg-convert --help` for
@@ -576,7 +598,11 @@ before any tier decision.*
   `PrepareForSleep(true)` is a *pre*-sleep inhibitor-gated signal, not
   `willSleep`-then-`didWake`; document the difference where the Pomodoro timer reads
   it. A `delay` inhibitor must be taken **before** suspension begins — it cannot
-  usefully be acquired inside the handler — and the handler must return promptly or
+  usefully be acquired inside the handler. And the handler does **not** hold up the
+  suspend: logind waits on delay inhibitors *before* emitting `PrepareForSleep(true)`
+  and then suspends, so a slow handler is not stalling anything — it is racing, and
+  can simply be frozen mid-flight. Keep it quick, and put work that needs guaranteed
+  time under an inhibitor taken when that work starts — and the handler must return promptly or
   it stalls the suspend.
 - `NSSound(named: "Glass")` → GSound playing the freedesktop `complete` event.
 - These are the only two AppKit touches in `PomodoroTimer.swift`; removing them makes
@@ -601,8 +627,12 @@ before any tier decision.*
   can both codegen. Claim the name by calling `org.freedesktop.DBus.RequestName`
   yourself — the library has no helper.
 - `linux/systemd/jettyd.service` (user unit), and the Linux CI job builds it.
-  **`After=` and `PartOf=graphical-session.target`, and refuse to start without
-  `WAYLAND_DISPLAY`/`DISPLAY`.** JP-20's launch argument is that a `--scope` inherits
+  **`After=` and `PartOf=graphical-session.target` *plus* `[Install]
+  WantedBy=graphical-session.target`, and refuse to start without
+  `WAYLAND_DISPLAY`/`DISPLAY`.** The `WantedBy` is not optional: `After=` only orders
+  and `PartOf=` only propagates stop/restart, so neither starts anything. Hang it off
+  `default.target` instead and it starts before the session imports its environment —
+  the very failure this ordering exists to prevent. JP-20's launch argument is that a `--scope` inherits
   `jettyd`'s environment — which is only worth anything if `jettyd`'s environment is
   the session's. A user unit started before the session imported its variables holds
   the manager's pre-session environment and hands that to every app it launches, with
@@ -764,8 +794,13 @@ before any tier decision.*
   `tEXt::Thumb::MTime` matches the file's current mtime, otherwise it is stale and
   must not be shown.
 - **The URI must be escaped glib's way, not `URL.absoluteString`'s.** GIO hashes a
-  canonical URI built with `g_escape_uri_string(…, UNSAFE_PATH)` — RFC 2396
-  unreserved plus `/&=:@+$,` — so any path containing a semicolon, in the filename
+  canonical URI built by `g_file_get_uri()` → `g_filename_to_uri()` →
+  `g_escape_file_uri()`, which escapes the path with GLib's `UNSAFE_PATH` set: RFC
+  2396 unreserved plus `/&=:@+$,`. Cite that public chain rather than the internal
+  helper, and note what it is *not*: `g_uri_escape_string` with
+  `G_URI_RESERVED_CHARS_ALLOWED_IN_PATH` leaves `;` bare, so reaching for it yields a
+  different hash. Under `UNSAFE_PATH`, decoded from glib's `acceptable[]` table, `;`
+  is escaped — so any path containing a semicolon, in the filename
   *or any parent directory*, hashes differently under Foundation's escaping and
   silently misses the cache for every file beneath it. Reimplement that character
   set and unit-test it against **golden vectors captured from a real GIO run** — path
@@ -950,7 +985,10 @@ CI action that builds gtk4-layer-shell from source on noble.*
 - A second 1–2 px layer surface per display; its `GtkEventControllerMotion` enter
   event is the reveal trigger, consuming JP-07's `DockRevealPolicy` unchanged.
 - **Correction, load-bearing**: put the sliver on **`OVERLAY`, not `TOP`**. The
-  protocol guarantees only `OVERLAY` above fullscreen; KWin places TOP *below* an
+  protocol orders only its own four layers and says nothing about fullscreen
+  toplevels at all, so `OVERLAY` above fullscreen is observed behaviour on today's
+  KWin and sway rather than a guarantee — assert it in JP-24's headless-sway job and
+  in the manual over-fullscreen checks. KWin places TOP *below* an
   active fullscreen window, and sway's TOP-vs-fullscreen ordering is **[U]** pending a
   check at the ship-target version. Either answer would
   silently kill reveal exactly where Jetty advertises it. Since ordering *within* a
@@ -1131,9 +1169,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   `.deb`** (the AppImage is a follow-up issue, not scope — see "Done means done"), the
   install path runs the same version comparison and asset-integrity checks and then
   **hands the downloaded `.deb` to the package system** rather than installing it
-  itself: PackageKit's `InstallFiles`, where polkit prompts for the privileged step
-  and `jettyd` never elevates — but **probe for `org.freedesktop.PackageKit` first and
-  fall back to `xdg-open` on the `.deb`**, because Ubuntu desktop images ship App
+  itself: PackageKit's `InstallPackageFiles` on `org.freedesktop.PackageKit.Modify`
+  (`InstallFiles` is the deprecated alias), where polkit prompts for the privileged
+  step and `jettyd` never elevates — but **probe the session bus for a provider of
+  that interface first, not the system-bus daemon name, which can be running with no
+  session helper behind it, and fall back to `xdg-open` on the `.deb`**, because Ubuntu desktop images ship App
   Center over snapd and may carry no PackageKit at all. Add `packagekit` to JP-34's
   Recommends. Without the probe this is another "the call succeeds and nothing
   happens" on exactly the population the `.deb` is for. Verify a release-key signature over the

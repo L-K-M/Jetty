@@ -22,7 +22,9 @@ plainly: Jetty's hardest-won macOS invariants are, on Wayland, single protocol
 values.** "Never reserve screen space" is `set_exclusive_zone(0)`. "Float over
 content, on every Space" is `layer = OVERLAY`. "A tile click must never steal focus"
 is `keyboard_interactivity = NONE`. "Anchor to an edge with an alignment, an offset
-and an inset, per display" is `set_anchor` + `set_margin` + `set_monitor`. Roughly
+and an inset, per display" is `set_anchor` + `set_margin` + the `wl_output` handed to `get_layer_surface`
+(there is no `set_monitor` request — that is gtk4-layer-shell's convenience wrapper;
+the output is bound at surface creation). Roughly
 200 lines of the subtlest code in the app — `DockPanelController`'s reveal-zone,
 hard-edge and display-seam pointer heuristics — are **deleted rather than ported**,
 because a per-output sliver surface's pointer-enter event is authoritative where a
@@ -163,7 +165,7 @@ Every row is `AGENTS.md`'s "Critical Constraints" section restated as protocol.
 | Float over content, all Spaces, over fullscreen | `level = .popUpMenu` + `collectionBehavior` | `layer = OVERLAY` — layer surfaces are output-scoped, not workspace-scoped |
 | Panels must stay non-activating | `.nonactivatingPanel` + `becomesKeyOnlyIfNeeded` + `acceptsFirstMouse` override | `keyboard_interactivity = NONE` (keyboard focus only — see below) |
 | Jetty Menu's deliberate focus hand-off | briefly activates, hands back on close | its **own** layer surface with `keyboard_interactivity = ON_DEMAND` (a keyboard mode, not a layer); dock stays `NONE`. On-demand is optional in the protocol — verify per compositor, as with `NONE` |
-| Placement is edge × alignment × offset/inset, per display | `DockLayout.revealedFrame` against `visibleFrame` | `set_anchor` + `set_margin` + `set_monitor` |
+| Placement is edge × alignment × offset/inset, per display | `DockLayout.revealedFrame` against `visibleFrame` | `set_anchor` + `set_margin` + the `wl_output` passed to `get_layer_surface` |
 | Reveal on pointer at the screen edge | global mouse monitor + reveal-zone heuristics | a 1–2 px sliver surface; its `enter` event *is* the trigger |
 | Liquid Glass, honouring Reduce Transparency | `NSGlassEffectView` / `NSVisualEffectView` | translucent flat colour; optional KWin blur — see below |
 
@@ -254,8 +256,9 @@ already does exactly this, pinned to upstream `v1.3.0`) or vendor it into the `.
   the tail** (`app-jetty-<prefix>-<hash>.scope`) rather than clipping mid-ID: GNOME
   parses the app ID back out of the scope name, so a truncated ID is a *wrong* ID and
   the dot silently misidentifies the app — and two long IDs sharing a prefix would
-  collide. Spawn that `systemd-run` **detached** (`setsid`, stdio to `/dev/null` or
-  the journal, never awaited): `--scope` is synchronous, so systemd-run stays in the
+  collide. Spawn that `systemd-run` **detached** (`setsid`, stdio to the journal —
+  not `/dev/null`, since with `--quiet` and no wait its refusals would otherwise be
+  unobservable anywhere — and never awaited): `--scope` is synchronous, so systemd-run stays in the
   foreground as the app's parent for its whole lifetime.
   Boring, never invokes `sh`, keeps launched apps alive when the dock stops, and —
   because the scope name carries the app ID — makes the stock-GNOME running dot
@@ -322,8 +325,12 @@ rather than re-walking the path, or the swap simply happens between the check an
 delete. Count with one
 `readdir`; empty by deleting `files/` + `info/` contents; open via
 `org.freedesktop.FileManager1.ShowFolders(["trash:///"])`). Keep `TrashLocations`'
-shape — candidates / existing / watchable, with per-volume dirs watched via their
-parents — and change only the path formulas.
+shape — candidates / existing / watchable — and change only the path formulas. One
+substantive change though: watch each can's `files/` and `info/` **directly**, using
+the parent watch only to catch those directories appearing or vanishing. inotify does
+not propagate a subdirectory's events to a watch on its parent, and trashed items land
+*inside* `files/`, so the macOS watch-the-parent shape would leave the tile
+permanently stale.
 
 Note `FileManager.trashItem(at:)` **does not exist on Linux** (compile error, not a
 stub) and `.trashDirectory` maps to `~/.Trash`, not the spec location. **[V]**
@@ -587,7 +594,7 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
 
 See [`linux-port-plan.md`](linux-port-plan.md) for the work items. In brief:
 
-1. **`JettyCore` + Linux CI** — extract the pure backbone, run the existing tests on
+1. **The portable `Jetty` subset + Linux CI** — extract the pure backbone, run the existing tests on
    Linux. Zero product risk, immediate regression net, macOS strictly better factored.
 2. **The tile data seams** — battery, system stats, now-playing, sleep/wake. Fully
    testable, independent of the desktop wall.

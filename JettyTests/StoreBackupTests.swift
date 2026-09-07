@@ -81,6 +81,51 @@ final class StoreBackupTests: XCTestCase {
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])
     }
 
+    /// The **third** save, which is where rotation first has to replace a `.bak` that
+    /// already exists. The round-trip test above stops at the second save, where the
+    /// backup is still absent and rotation takes its create branch — so this branch was
+    /// uncovered on both platforms, and it is the one that behaves differently on
+    /// Linux. See `docs/linux-port-plan.md` §JP-04.
+    func testThirdSaveReplacesAnExistingBackup() throws {
+        let store = DockStore(fileURL: fileURL, debounce: 0)
+        store.setDisplayDisabled(true, forDisplayUUID: "ONE")
+        store.flush()
+        // Stated, because the whole sequence below counts on it: rotation begins only
+        // once a prior primary exists, so the first save mints no backup. If that ever
+        // changed, saves two and three would both take the replace branch while every
+        // assertion here still passed, and this test would silently stop covering the
+        // create branch it exists to sequence.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bakURL.path))
+        store.setDisplayDisabled(true, forDisplayUUID: "TWO")   // creates .bak = [ONE]
+        store.flush()
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])
+
+        store.setDisplayDisabled(true, forDisplayUUID: "THREE") // must replace .bak
+        store.flush()
+        XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO"],
+                       "the prior good primary must rotate over the existing backup")
+
+        // A fourth save, because the pre-fix failure was self-concealing: the throw
+        // deleted `.bak`, so the *next* save found none and took the create branch and
+        // succeeded. Losses alternated rather than persisting, which is easy to mistake
+        // for a one-off. Both branches now run in sequence here.
+        store.setDisplayDisabled(true, forDisplayUUID: "FOUR")
+        store.flush()
+        // Both sides, because `.bak` alone cannot see the failure this test is named
+        // for: if rotation succeeded and the primary write then silently did nothing,
+        // `.bak` would still correctly hold the pre-save-4 primary and every other
+        // assertion here would pass while `dock.json` sat stale.
+        XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE", "FOUR"])
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
+
+        // And nothing is left lying next to the document: rotation writes through a
+        // temp snapshot, which `rotateBackup`'s `defer` removes on every path.
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted(),
+                       [fileURL.lastPathComponent, bakURL.lastPathComponent].sorted(),
+                       "the directory holds the document and its backup, and nothing else")
+    }
+
     func testBackupCopyFailurePreservesPrimaryAndPriorBackup() throws {
         let primary = DockDocument(disabledDisplayUUIDs: ["PRIMARY"])
         let backup = DockDocument(disabledDisplayUUIDs: ["BACKUP"])

@@ -8,19 +8,31 @@ enum BookmarkResolver {
     /// Creates bookmark `Data` for `url` (non-security-scoped; Jetty isn't sandboxed
     /// in v1, so plain bookmarks suffice — the App-Store path would switch to
     /// `.withSecurityScope`).
+    ///
+    /// Bookmarks are a Darwin filesystem feature: `URL.bookmarkData` does not exist in
+    /// swift-corelibs-foundation, verified against the pinned toolchain. Returning nil
+    /// elsewhere is not a stub — it is the same answer this function already gives for
+    /// an unbookmarkable URL, and `resolve` already falls through to the stored
+    /// absolute path, which is what a Linux `dock.json` carries.
     static func bookmark(for url: URL) -> Data? {
-        try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+        #if canImport(Darwin)
+        return try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+        #else
+        return nil
+        #endif
     }
 
     /// Resolves an item to a current URL. Prefers the bookmark (tracks moves), and
     /// falls back to the stored `url`. `isStale` is reported so the caller can refresh.
     static func resolve(_ item: DockItem) -> (url: URL, isStale: Bool)? {
+        #if canImport(Darwin)
         if let data = item.bookmark {
             var stale = false
             if let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale) {
                 return (url, stale)
             }
         }
+        #endif
         if let url = item.url { return (url, false) }
         return nil
     }

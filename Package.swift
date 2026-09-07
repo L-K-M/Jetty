@@ -11,8 +11,8 @@ import PackageDescription
 // import Jetty` compiles unmodified under both.
 //
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
-// may build or test this package — a Mac-side `swift test` would compile these 28
-// files and 13 suites and pass, having skipped almost everything. macOS goes through
+// may build or test this package — a Mac-side `swift test` would compile these 31
+// files and 19 suites and pass, having skipped almost everything. macOS goes through
 // the .xcodeproj, always.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
@@ -71,7 +71,6 @@ let package = Package(
                 "Screens/DisplayRegistry.swift",
                 "Settings",
                 "Stacks",
-                "Store",
                 "SystemDock",
                 "Updates/UpdateChecker.swift",
                 "Widgets/AnalogClockFace.swift",
@@ -99,6 +98,9 @@ let package = Package(
                 "Common/ObservationCompat.swift",
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
+                "Model/RGBA8.swift",
+                "Store/DockStore.swift",
+                "Store/BookmarkResolver.swift",
                 "Model/DockDocument.swift",
                 "Model/DockItem.swift",
                 "Model/DockItemKind.swift",
@@ -130,8 +132,6 @@ let package = Package(
             exclude: [
                 "AppResponsivenessTests.swift",
                 "ClockFaceTests.swift",
-                "CodableModelTests.swift",
-                "ColorHexTests.swift",
                 "CommandBarTests.swift",
                 "DockContextMenuPlacementTests.swift",
                 "DockLayoutGapTests.swift",
@@ -145,13 +145,17 @@ let package = Package(
                 "PowerCommandTests.swift",
                 "PreferencesTests.swift",
                 "RecentsTests.swift",
-                "StoreBackupTests.swift",
-                "StoreVersionTests.swift",
                 "SystemMonitorPathTests.swift",
                 "TrashIconTests.swift",
             ],
             sources: [
                 "DockLayoutTests.swift",
+                "CodableModelTests.swift",
+                "ColorHexTests.swift",
+                "BookmarkResolverTests.swift",
+                "XDGDataHomeTests.swift",
+                "StoreBackupTests.swift",
+                "StoreVersionTests.swift",
                 "LayerShellPlacementTests.swift",
                 "KeepRevealedFrameTests.swift",
                 "PointerOverDockContentTests.swift",

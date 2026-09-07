@@ -311,23 +311,103 @@ move half stays reviewable as a move.*
   Codable half + `dedupKey` (separated from its three classifier factories).
   `clampOffset`/`clampInset` are **not** listed here: they are static members of
   `DockAnchor` in `Model/DockAnchor.swift`, which JP-03 already moves whole.
+  *(Correction, JP-04: nothing to move. `DockDocument.swift` and `DockItem.swift`
+  were both already in JP-01's curated set — `DockItem`'s classifier factories were
+  separated there, by the `#if canImport(AppKit)` that ends above `fromLink`. This is
+  the third plan bullet to describe work an earlier step had already done; the pattern
+  is that Part 0's curated set was drawn wider than the per-step bullets assumed.)*
 - Generalise `DockStore`'s engine into `DocumentStore<T: Codable>`: load → decode →
   `.bak` fallback → newer-version read-only gate → debounced atomic save. **Preserve
   the semantics exactly** — they are tested and load-bearing, and a debounced
   autosave that loses the gate can destroy a user document.
+  *(**Struck**, not deferred, and the first draft of this note got it wrong twice.
+  It said the generalisation should move to JP-05 because `Preferences` would be its
+  second customer. `Preferences` is not a customer at all: JP-05 builds
+  `PreferencesModel` over a `KeyValueStoring` protocol — key-value, `UserDefaults`-
+  shaped, with no JSON document, no `.bak`, no version gate and no debounced save.
+  Nothing else in this plan persists a Codable document that way either, so
+  `DocumentStore<T: Codable>` would be a generic with exactly one customer, which is
+  a guess dressed as a design. Leave `DockStore` concrete. Revisit only if a genuine
+  second document store appears — and if none ever does, that is the answer.*
+  *The other half of the first draft — that the engine "ported without being touched"
+  because the APIs "all exist" — was the wrong bar, and cost a real bug; see the
+  Pitfalls entry below.)*
 - Extract `RGBA8` (`init?(hex:)` / `hexString`, ~45 LOC of pure arithmetic) out of
   the `NSColor` extension in `ColorHex.swift`, keeping the `+` rejection and the
   `#`-prefix rules; `NSColor` keeps a thin macOS-only bridge.
-- **Acceptance**: `CodableModelTests`, `StoreBackupTests`, `StoreVersionTests`,
-  `ColorHexTests` green on both platforms.
+- **Acceptance**: `StoreBackupTests`, `StoreVersionTests`, `BookmarkResolverTests` and
+  `XDGDataHomeTests` green on both platforms in full; `CodableModelTests` and
+  `ColorHexTests` green on both with a macOS-only section each.
+  *(Correction, JP-04, the same over-claim as JP-02's and JP-03's: neither of those
+  two can run whole on Linux yet. 12 of `CodableModelTests`' 21 cases are
+  `AppearancePreset` and `Preferences`, which land in JP-05/JP-06; every one of
+  `ColorHexTests`' cases went through `NSColor`. Rather than exclude both files, each
+  now guards the part that needs a framework — which made `ColorHexTests` a better
+  suite, because the hex rules are a **storage contract** and belonged against
+  `RGBA8`, not against a colour object. 9 + 11 cases now run on Linux. **The guards
+  are temporary and JP-05 and JP-06 own removing them**: whichever step lands
+  `Preferences` and `AppearancePreset` must un-guard the 12 deferred
+  `CodableModelTests` cases in the same PR, or a guard meant to be temporary becomes a
+  permanent hole in the acceptance this correction just narrowed.)*
 - **Pitfalls**: `BookmarkResolver` is Darwin-only — guard its two functions with
-  `#if os(macOS)` around the Darwin bodies **plus an `#else` branch returning `nil`**
+  `#if canImport(Darwin)` around the Darwin bodies **plus an `#else` branch returning `nil`**
   — the guard alone deletes the functions on Linux and breaks every call site; every
   read path already falls back to
-  the sibling absolute path.
+  the sibling absolute path. *(Confirmed: `URL.bookmarkData` and
+  `URL(resolvingBookmarkData:)` are both absent from swift-corelibs-foundation.
+  `canImport(Darwin)` is the guard used, matching the rest of the port.)*
+- **`FileManager.replaceItemAt` is unusable on Linux, and "the symbol exists" is the
+  wrong bar for anything in the save path.** In swift-corelibs-foundation it throws
+  *and deletes the destination*. `DockStore.rotateBackup` called it whenever a `.bak`
+  already existed, and the throw propagates into `saveNow`'s do-block — so on Linux
+  **alternate** saves from the **third** onward destroyed `dock.json.bak` and then
+  silently persisted nothing at all, leaving only an `NSLog` line behind. Alternate,
+  not every: the failure deletes `.bak`, so the next save finds none, takes the create
+  branch, and succeeds — then the one after that fails again. That self-concealing
+  rhythm is part of why it was easy to miss, and the first draft of this entry said
+  "every save" before checking. Promote the verified snapshot with
+  `Data.write(to:options:.atomic)` instead: measured to be a temp-file-plus-rename on
+  both platforms by watching the destination inode change, which is the only property
+  `replaceItemAt` was there for, and it creates or replaces alike so the two branches
+  collapse into one. **`Data.write(.atomic)` is safe; `replaceItemAt` is not** — do not
+  reach for the latter elsewhere in the port.
+  The existing suite could not have caught this: its round-trip test stops at the
+  **second** save, where rotation *creates* `.bak` rather than replacing it, so the
+  replace branch was untested on both platforms.
+  `testThirdSaveReplacesAnExistingBackup` covers it now, and fails on Linux without
+  the fix.
+- **Follow-up, not fixed here:** `xdgDataHome` builds `home + /.local/share` when the
+  environment variable is unusable, and an **empty** `home` makes that resolve against
+  the *current working directory* — `URL(fileURLWithPath: "")` is the cwd, not `/`,
+  measured. That is exactly what the relative-value rule exists to prevent, one level
+  up. It is only reachable where `NSHomeDirectory()` is empty (a HOME-less container or
+  agent), and deciding what a dock should do with no home at all is a product question
+  rather than a port question, so JP-04 records it instead of inventing an answer.
+- **Three findings this step turned up that the plan did not predict:**
+  - `Array.move(fromOffsets:toOffset:)` is **SwiftUI's**, not the standard library's,
+    so `DockStore.moveItem` does not compile on Linux. It is left macOS-only rather
+    than reimplemented: its only caller is `ItemsView`'s `.onMove`, the portable way
+    to reorder is to hand `setItems` an explicit order (which
+    `DockController.reorder(to:)` already does), and copying Apple's offset semantics
+    by hand would risk a silent change to drag behaviour that no test covers.
+  - `.applicationSupportDirectory` needs **no** platform branch:
+    swift-corelibs-foundation already maps it onto `$XDG_DATA_HOME` (default
+    `~/.local/share`), so `dock.json` lands in the right place on both platforms from
+    the same line. Only the throw-fallback beneath it was macOS-shaped and is now
+    guarded.
+  - The `RGBA8` split is worth more than the LOC suggests. The hex format is read by
+    three apps across separate release cadences, and its rules — the `+` rejection,
+    the shorthand expansion, the H19 clamp — were only ever exercised through
+    `NSColor`, i.e. only on macOS. They are now pure, and tested as a format.
 
 ### JP-05 · Jetty · Preferences split
 **Branch** `claude/jp-05-preferences` · **Size** M
+
+*JP-04 **struck** the `DocumentStore<T: Codable>` generalisation rather than deferring
+it here, and this note used to say the opposite. `PreferencesModel` is key-value shaped
+(`KeyValueStoring`) — no JSON document, no `.bak`, no version gate, no debounced save —
+so it is not a second customer for it. Leave `DockStore` concrete; do not build the
+generic in this step.*
 
 - `Preferences.Default` and `Preferences.Key` are nested inside the
   `ObservableObject` class; lift them out **first**, then introduce

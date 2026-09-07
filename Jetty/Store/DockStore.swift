@@ -1,5 +1,15 @@
 import Foundation
+// Off Darwin there is no Combine, and `ObservableObject`/`@Published` below come from
+// `Common/ObservationCompat.swift` — JP-02's shim, which defines them under the
+// mirrored `#if !canImport(Combine)`.
+#if canImport(Combine)
 import Combine
+#endif
+// `moveItem` below calls SwiftUI's `move(fromOffsets:toOffset:)`, so this file needs
+// SwiftUI under exactly the condition that call is gated on.
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 
 /// Loads and saves the `DockDocument` (pinned items + per-display anchors) as JSON
 /// in Application Support. Writes are **atomic** and **debounced**, keeping one
@@ -121,10 +131,21 @@ final class DockStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Reorders via SwiftUI list offsets, for `ItemsView`'s `.onMove`.
+    ///
+    /// macOS-only, and deliberately not ported: `move(fromOffsets:toOffset:)` is
+    /// SwiftUI's, not the standard library's, so it does not exist on Linux. The
+    /// portable move is to hand `setItems` an explicit order, which is what
+    /// `DockController.reorder(to:)` — the dock's own drag-to-reorder — already does,
+    /// and what a Linux settings UI would do too. Re-implementing Apple's offset
+    /// semantics here would buy nothing for that caller while risking a silent change
+    /// to shipped drag behaviour that no test covers.
+    #if canImport(SwiftUI)
     func moveItem(fromOffsets source: IndexSet, toOffset destination: Int) {
         document.items.move(fromOffsets: source, toOffset: destination)
         scheduleSave()
     }
+    #endif
 
     func setAnchor(_ anchor: DockAnchor, forDisplayUUID uuid: String) {
         document.anchorsByDisplayUUID[uuid] = anchor
@@ -204,11 +225,22 @@ final class DockStore: ObservableObject {
         guard Self.fileDecodes(candidateURL) else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        if fileManager.fileExists(atPath: backupURL.path) {
-            _ = try fileManager.replaceItemAt(backupURL, withItemAt: candidateURL)
-        } else {
-            try fileManager.moveItem(at: candidateURL, to: backupURL)
-        }
+        // Promote the verified snapshot with an atomic write, not `replaceItemAt`.
+        //
+        // `replaceItemAt` is unusable in swift-corelibs-foundation: it throws *and*
+        // deletes the destination. Since this call sits inside `saveNow`'s do-block,
+        // the throw also skipped the primary write below it — so on Linux every save
+        // from the **third** onward (the first with an existing `.bak` to replace)
+        // destroyed the backup and silently persisted nothing at all. The suite missed
+        // it because its round-trip test stops at the second save, where this branch
+        // creates `.bak` instead of replacing it; `testThirdSaveReplacesAnExistingBackup`
+        // covers it now.
+        //
+        // `Data.write(options: .atomic)` is a temp-file-plus-rename on both platforms —
+        // measured, by watching the destination's inode change — which is the only
+        // property `replaceItemAt` was here for, and it creates or replaces alike, so
+        // the two branches collapse into one.
+        try Data(contentsOf: candidateURL).write(to: backupURL, options: .atomic)
     }
 
     // MARK: Loading
@@ -230,10 +262,41 @@ final class DockStore: ObservableObject {
         return (try? JSONDecoder().decode(DockDocument.self, from: data)) != nil
     }
 
+    /// `~/Library/Application Support/Jetty/dock.json` on macOS, and
+    /// `$XDG_DATA_HOME/Jetty/dock.json` (default `~/.local/share`) on Linux — with no
+    /// branch needed for the common path, because swift-corelibs-foundation already
+    /// maps `.applicationSupportDirectory` onto XDG. Measured on the pinned toolchain.
+    ///
+    /// Only the fallback, for when that lookup throws, has to know where it is: the
+    /// hardcoded `Library/Application Support` would put a Linux dock file in a
+    /// macOS-shaped path that nothing else would ever look in.
     static var defaultURL: URL {
+        #if canImport(Darwin)
+        let fallback = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support")
+        #else
+        let fallback = xdgDataHome(ProcessInfo.processInfo.environment["XDG_DATA_HOME"],
+                                   home: NSHomeDirectory())
+        #endif
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                  appropriateFor: nil, create: true))
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+            ?? fallback
         return base.appendingPathComponent("Jetty", isDirectory: true).appendingPathComponent("dock.json")
+    }
+
+    /// The XDG base-directory rule for `$XDG_DATA_HOME`, used only by `defaultURL`'s
+    /// Linux fallback — the one branch that picks a path itself rather than asking
+    /// Foundation. It matters precisely because that branch runs when the lookup
+    /// throws, which is when the environment is unusual: hardcoding `~/.local/share`
+    /// there would put `dock.json` somewhere nothing else, including corelibs itself,
+    /// would look.
+    ///
+    /// The spec has two rules beyond "read the variable", and both are here: an unset
+    /// **or empty** value falls back to `$HOME/.local/share`, and a **relative** value
+    /// is invalid and must be ignored rather than resolved against the working
+    /// directory. Pure and unconditional so both platforms test it.
+    static func xdgDataHome(_ value: String?, home: String) -> URL {
+        if let value, value.hasPrefix("/") { return URL(fileURLWithPath: value) }
+        return URL(fileURLWithPath: home).appendingPathComponent(".local/share")
     }
 }

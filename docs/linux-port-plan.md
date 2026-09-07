@@ -320,15 +320,18 @@ move half stays reviewable as a move.*
   `.bak` fallback → newer-version read-only gate → debounced atomic save. **Preserve
   the semantics exactly** — they are tested and load-bearing, and a debounced
   autosave that loses the gate can destroy a user document.
-  *(Deferred to JP-05, deliberately. The generalisation buys **no** portability:
-  `DockStore` ported without touching its engine at all — `replaceItemAt`, `NSLog`,
-  `CocoaError(.fileReadCorruptFile)` and `DispatchQueue.main.asyncAfter` all exist in
-  swift-corelibs-foundation, measured on the pinned toolchain. So it is a refactor,
-  and this bullet's own warning is the argument for not bundling it with a port: the
-  semantics it says must be preserved exactly are the ones a reviewer would have to
-  re-verify through an unrelated diff. It also has exactly one customer today, and a
-  generic written against one customer is a guess; JP-05's `Preferences` is the second
-  one, which is where the shape gets decided against something real.)*
+  *(**Struck**, not deferred, and the first draft of this note got it wrong twice.
+  It said the generalisation should move to JP-05 because `Preferences` would be its
+  second customer. `Preferences` is not a customer at all: JP-05 builds
+  `PreferencesModel` over a `KeyValueStoring` protocol — key-value, `UserDefaults`-
+  shaped, with no JSON document, no `.bak`, no version gate and no debounced save.
+  Nothing else in this plan persists a Codable document that way either, so
+  `DocumentStore<T: Codable>` would be a generic with exactly one customer, which is
+  a guess dressed as a design. Leave `DockStore` concrete. Revisit only if a genuine
+  second document store appears — and if none ever does, that is the answer.*
+  *The other half of the first draft — that the engine "ported without being touched"
+  because the APIs "all exist" — was the wrong bar, and cost a real bug; see the
+  Pitfalls entry below.)*
 - Extract `RGBA8` (`init?(hex:)` / `hexString`, ~45 LOC of pure arithmetic) out of
   the `NSColor` extension in `ColorHex.swift`, keeping the `+` rejection and the
   `#`-prefix rules; `NSColor` keeps a thin macOS-only bridge.
@@ -341,14 +344,35 @@ move half stays reviewable as a move.*
   `ColorHexTests`' cases went through `NSColor`. Rather than exclude both files, each
   now guards the part that needs a framework — which made `ColorHexTests` a better
   suite, because the hex rules are a **storage contract** and belonged against
-  `RGBA8`, not against a colour object. 9 + 10 cases now run on Linux.)*
+  `RGBA8`, not against a colour object. 9 + 10 cases now run on Linux. **The guards
+  are temporary and JP-05 and JP-06 own removing them**: whichever step lands
+  `Preferences` and `AppearancePreset` must un-guard the 12 deferred
+  `CodableModelTests` cases in the same PR, or a guard meant to be temporary becomes a
+  permanent hole in the acceptance this correction just narrowed.)*
 - **Pitfalls**: `BookmarkResolver` is Darwin-only — guard its two functions with
-  `#if os(macOS)` around the Darwin bodies **plus an `#else` branch returning `nil`**
+  `#if canImport(Darwin)` around the Darwin bodies **plus an `#else` branch returning `nil`**
   — the guard alone deletes the functions on Linux and breaks every call site; every
   read path already falls back to
   the sibling absolute path. *(Confirmed: `URL.bookmarkData` and
   `URL(resolvingBookmarkData:)` are both absent from swift-corelibs-foundation.
   `canImport(Darwin)` is the guard used, matching the rest of the port.)*
+- **`FileManager.replaceItemAt` is unusable on Linux, and "the symbol exists" is the
+  wrong bar for anything in the save path.** In swift-corelibs-foundation it throws
+  *and deletes the destination*. `DockStore.rotateBackup` called it whenever a `.bak`
+  already existed, and the throw propagates into `saveNow`'s do-block — so on Linux
+  every save from the **third** onward (the first with a backup to replace) destroyed
+  `dock.json.bak` and then silently persisted nothing at all, leaving only an `NSLog`
+  line behind. Promote the verified snapshot with
+  `Data.write(to:options:.atomic)` instead: measured to be a temp-file-plus-rename on
+  both platforms by watching the destination inode change, which is the only property
+  `replaceItemAt` was there for, and it creates or replaces alike so the two branches
+  collapse into one. **`Data.write(.atomic)` is safe; `replaceItemAt` is not** — do not
+  reach for the latter elsewhere in the port.
+  The existing suite could not have caught this: its round-trip test stops at the
+  **second** save, where rotation *creates* `.bak` rather than replacing it, so the
+  replace branch was untested on both platforms.
+  `testThirdSaveReplacesAnExistingBackup` covers it now, and fails on Linux without
+  the fix.
 - **Three findings this step turned up that the plan did not predict:**
   - `Array.move(fromOffsets:toOffset:)` is **SwiftUI's**, not the standard library's,
     so `DockStore.moveItem` does not compile on Linux. It is left macOS-only rather

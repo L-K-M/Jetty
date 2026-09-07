@@ -217,11 +217,22 @@ final class DockStore: ObservableObject {
         guard Self.fileDecodes(candidateURL) else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        if fileManager.fileExists(atPath: backupURL.path) {
-            _ = try fileManager.replaceItemAt(backupURL, withItemAt: candidateURL)
-        } else {
-            try fileManager.moveItem(at: candidateURL, to: backupURL)
-        }
+        // Promote the verified snapshot with an atomic write, not `replaceItemAt`.
+        //
+        // `replaceItemAt` is unusable in swift-corelibs-foundation: it throws *and*
+        // deletes the destination. Since this call sits inside `saveNow`'s do-block,
+        // the throw also skipped the primary write below it — so on Linux every save
+        // from the **third** onward (the first with an existing `.bak` to replace)
+        // destroyed the backup and silently persisted nothing at all. The suite missed
+        // it because its round-trip test stops at the second save, where this branch
+        // creates `.bak` instead of replacing it; `testThirdSaveReplacesAnExistingBackup`
+        // covers it now.
+        //
+        // `Data.write(options: .atomic)` is a temp-file-plus-rename on both platforms —
+        // measured, by watching the destination's inode change — which is the only
+        // property `replaceItemAt` was here for, and it creates or replaces alike, so
+        // the two branches collapse into one.
+        try Data(contentsOf: candidateURL).write(to: backupURL, options: .atomic)
     }
 
     // MARK: Loading

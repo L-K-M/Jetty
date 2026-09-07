@@ -81,6 +81,26 @@ final class StoreBackupTests: XCTestCase {
         XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])
     }
 
+    /// The **third** save, which is where rotation first has to replace a `.bak` that
+    /// already exists. The round-trip test above stops at the second save, where the
+    /// backup is still absent and rotation takes its create branch — so this branch was
+    /// uncovered on both platforms, and it is the one that behaves differently on
+    /// Linux. See `docs/linux-port-plan.md` §JP-04.
+    func testThirdSaveReplacesAnExistingBackup() throws {
+        let store = DockStore(fileURL: fileURL, debounce: 0)
+        store.setDisplayDisabled(true, forDisplayUUID: "ONE")
+        store.flush()
+        store.setDisplayDisabled(true, forDisplayUUID: "TWO")   // creates .bak = [ONE]
+        store.flush()
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE"])
+
+        store.setDisplayDisabled(true, forDisplayUUID: "THREE") // must replace .bak
+        store.flush()
+        XCTAssertEqual(try decode(fileURL).disabledDisplayUUIDs, ["ONE", "TWO", "THREE"])
+        XCTAssertEqual(try decode(bakURL).disabledDisplayUUIDs, ["ONE", "TWO"],
+                       "the prior good primary must rotate over the existing backup")
+    }
+
     func testBackupCopyFailurePreservesPrimaryAndPriorBackup() throws {
         let primary = DockDocument(disabledDisplayUUIDs: ["PRIMARY"])
         let backup = DockDocument(disabledDisplayUUIDs: ["BACKUP"])

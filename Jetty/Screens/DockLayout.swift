@@ -1,4 +1,8 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 
 /// Pure geometry: turns a `DockAnchor` (edge × alignment × offset × inset) plus the
 /// dock's content size into the on-screen frame for both the **revealed** and the

@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 /// One pinned entry in the dock. Identity is a `UUID` so items survive rename and
 /// reorder. File/folder/app targets are held as security-scoped-ready **bookmarks**
@@ -60,6 +62,8 @@ struct DockItem: Codable, Identifiable, Equatable {
 
     // MARK: Factories
 
+#if canImport(AppKit)
+
     /// A pinned application from its on-disk URL (`/Applications/Safari.app`).
     static func application(at url: URL, name: String? = nil, bundleIdentifier: String? = nil) -> DockItem {
         DockItem(kind: .application,
@@ -83,7 +87,10 @@ struct DockItem: Codable, Identifiable, Equatable {
                         folderDisplay: kind == .folder ? .grid : nil)
     }
 
-    /// A pinned web/deeplink tile.
+#endif
+
+    /// A pinned web/deeplink tile. Portable: `URL` and `String` only, no AppKit —
+    /// so it stays available to the Linux build and its tests.
     static func fromLink(_ url: URL, name: String? = nil) -> DockItem {
         DockItem(kind: .url, displayName: name ?? url.host ?? url.absoluteString, url: url)
     }

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Downloads a release asset into the user's Downloads folder, picking a
 /// non-colliding filename. Reusable across apps — depends only on Foundation.

@@ -56,6 +56,14 @@ enum DockLayout {
     /// long costs nothing visible.
     static let hoverLabelCapsuleExtent: CGFloat = 16
 
+    /// Slack between a zoomed watch face's width and the width of the tile budgeted
+    /// for it, as a fraction of the tile height, so the face never runs flush into its
+    /// neighbours. Numerically twice `clockFaceEdgePadding`, and **not derived from
+    /// it**: that one pads a single edge-facing side on the *across* axis
+    /// (`ClockWidgetView.edgeInsets`), while this is along-axis breathing room on both
+    /// ends. Changing either should not drag the other along.
+    static let clockTileWidthSlack: CGFloat = 0.08
+
     /// How far a tile's magnification reaches along the dock, as a multiple of the
     /// tile pitch (`iconSize + spacing`). `DockView.scale` renders with it and
     /// `pointerOverDockContent` hit-tests with it: if they disagree, the dock reacts
@@ -131,7 +139,7 @@ enum DockLayout {
     /// **Keep `DockTileView.tileWidth` and `ClockWidgetView` driven by this.**
     static func clockTileWidthFactor(zoom: CGFloat, face: ClockFaceStyle = .classic) -> CGFloat {
         let faceWidth = face == .lcd ? lcdClockCaseAspect * zoom : analogClockFaceFactor * zoom
-        return max(DockItemKind.clock.tileWidthFactor, faceWidth + 0.08)
+        return max(DockItemKind.clock.tileWidthFactor, faceWidth + clockTileWidthSlack)
     }
 
     /// The widest tile's along-edge width factor among `kinds` (the clock uses

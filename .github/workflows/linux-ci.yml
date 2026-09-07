@@ -66,13 +66,22 @@ jobs:
       # digest above is rotated.
       - name: Build (with the unhandled-file gate)
         run: |
-          set -o pipefail
+          set -euo pipefail
           swift build --build-tests 2>&1 | tee build.log
           if grep -q 'which are unhandled' build.log; then
             echo "::error::Files under Jetty/ or JettyTests/ are in neither sources: nor exclude: in Package.swift. Port them (add to sources:) or exclude them deliberately."
             grep -A100 'which are unhandled' build.log
             exit 1
           fi
+
+      # The gate above is a negative check: it greps for a warning, so "passed" and
+      # "stopped firing" look the same. If SwiftPM rewords or drops that diagnostic
+      # the grep silently matches nothing and CI stays green while unlisted files
+      # accumulate. This asks the manifest directly instead, and fails closed.
+      - name: Audit manifest coverage
+        run: |
+          set -euo pipefail
+          swift package dump-package | swift scripts/audit-manifest-coverage.swift
 
       - name: Test
         run: swift test

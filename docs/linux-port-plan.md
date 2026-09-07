@@ -180,7 +180,11 @@ watcher and against sharing `IconStoreWatcher`.
   Measured: with one test file dropped from the list, plain `swift build` printed 0
   unhandled warnings and `--build-tests` printed 1. The gate also greps SwiftPM's
   exact diagnostic wording, so re-verify the pattern whenever the container digest is
-  rotated — **`pipefail` is not optional**: a
+  rotated. Better still, pair it with a check that cannot fail open, since
+  "unhandled" is this plan's concept rather than SwiftPM's: `swift package
+  dump-package` exposes each target's `sources` and `exclude`, so assert that every
+  `.swift` under `Jetty/` and `JettyTests/` appears in exactly one of them. That
+  fails closed however the diagnostic is worded — **`pipefail` is not optional**: a
   pipeline's status is `tee`'s, so without it a *failing* build returns 0, prints no
   unhandled-file warning, and the gate reports green on a broken build. Verified both
   ways. GitHub Actions' default `bash -e` does not set it, so set it in the step —
@@ -239,8 +243,10 @@ move half stays reviewable as a move.*
 ### JP-03 · Jetty · Geometry core: `DockLayout` + `MagnificationCurve`
 **Branch** `claude/jp-03-geometry-core` · **Size** S-M
 
-- Move all 362 LOC of `DockLayout` and `MagnificationCurve` with `DockEdge`,
-  `DockAlignment`, `DockAnchor`. They already have zero platform API.
+- `DockLayout`, `MagnificationCurve`, `DockEdge` and `DockAnchor` are **already** in
+  the curated set from JP-01, so under Part 0's definition there is nothing here to
+  move — add the straggler `DockAlignment` and treat this as the additive PR it is.
+  All 362 LOC already have zero platform API.
 - Add a **new pure** `DockLayout.layerShellPlacement(frame:in:edge:)` →
   `(anchorEdges, margins, exclusiveZone)`, unit-tested against the existing
   `DockLayoutTests` fixture (`CGRect(0, 0, 1000, 800)` — already per-output local
@@ -535,13 +541,17 @@ before any tier decision.*
   walk. `isCountedInterface`'s exclusion list is Darwin-specific — rewrite it for
   Linux, and make it **type-aware rather than prefix-only**: drop interfaces whose
   `/sys/class/net/<if>/type` is `ARPHRD_LOOPBACK` (772) or `ARPHRD_NONE` (65534),
-  then apply **one** prefix list, grouped by why each entry is in it rather than by
+  then apply **one** prefix list, matched **longest-prefix-first** — `gre*` (keep)
+  would otherwise shadow `gretap*` (drop) and resurrect `gretap0`, which is the
+  mirror image of the `gre0` omission this list was rewritten to fix. Fixture
+  `gretap0` next to `gre0`. Grouped by why each entry is in it rather than by
   two overlapping lists: `ARPHRD_ETHER` virtuals the type check cannot catch
   (`docker*`, `veth*`, `br-*`, `virbr*`, `ovs*`, `tap*`, `vnet*`, `zt*`, `gretap*`,
   `erspan*`); tunnel types it does **not** drop and which are therefore load-bearing
   here (`gre*`, `sit*`, `ip6tnl*`, `ip_vti*`, `ppp*`); and belt-and-braces entries it
   does already drop (`tun*`, `wg*`, `tailscale*`). Note the trade-off deliberately:
-  excluding `wg*`/`tun*` means an always-on-WireGuard host reads zero on the network
+  excluding `wg*`/`tun*`/`tap*`/`zt*`/`vnet*` means an always-on-VPN host (WireGuard,
+  OpenVPN in either mode, ZeroTier) or a libvirt VM host reads zero on the network
   tile. That is macOS parity, not a bug — say so here so the report is triaged rather
   than "fixed". Note `gre*`/`gretap*`/`erspan*` and libvirt's `vnet*` have to be in
   that list explicitly: the type filter only drops loopback and none, so `gre0`
@@ -602,8 +612,7 @@ before any tier decision.*
   suspend: logind waits on delay inhibitors *before* emitting `PrepareForSleep(true)`
   and then suspends, so a slow handler is not stalling anything — it is racing, and
   can simply be frozen mid-flight. Keep it quick, and put work that needs guaranteed
-  time under an inhibitor taken when that work starts — and the handler must return promptly or
-  it stalls the suspend.
+  time under an inhibitor taken when that work starts.
 - `NSSound(named: "Glass")` → GSound playing the freedesktop `complete` event.
 - These are the only two AppKit touches in `PomodoroTimer.swift`; removing them makes
   all 201 lines portable.
@@ -706,7 +715,8 @@ before any tier decision.*
 - Icon names are spec'd: `user-trash` / `user-trash-full`.
 - **Acceptance**: `TrashIconTests` green; new tests over a fixture trash tree
   including a per-volume `.Trash-$uid`, plus one that is a symlink and one owned by
-  another uid, both of which must be skipped for counting and for emptying.
+  another uid (that one needs `CAP_CHOWN`, so run it in a rootful CI step and skip it
+  when unprivileged rather than letting it silently not run), both of which must be skipped for counting and for emptying.
 
 ### JP-20 · Jetty · App model — index, launch, running state
 **Branch** `claude/jp-20-app-model` · **Size** L (split if it grows past ~600 lines)
@@ -718,7 +728,9 @@ before any tier decision.*
   parser — the spec grammar (quotes, backslash escapes, field codes), never
   whitespace splitting, and never a shell string. Honour `Path=` with
   `--working-directory=`.
-  **Pass `--expand-environment=no`.** `systemd-run` defaults
+  **Pass `--expand-environment=no`** — gated on `systemd-run --version`, since it is a
+  newer-systemd option and an unrecognised long option aborts *every* launch rather
+  than degrading. Below the floor, drop the flag and accept `$` expansion. `systemd-run` defaults
   `arg_expand_environment = true` and runs `replace_env_argv()` on the command line
   immediately before `execvpe`, so a desktop `Exec=` containing a literal `$` is
   silently rewritten. This is a correctness bug, not a nicety — add a test with a
@@ -733,8 +745,12 @@ before any tier decision.*
   it and every launch pins a worker until the user quits the app; inherit its stdio
   and the app's GTK warnings land in the dock's journal, with a pipe that never EOFs.
   `setsid`, stdio to `/dev/null` or the journal — and reap *without blocking*: set
-  `SIGCHLD` to `SIG_IGN`, or install a handler looping `waitpid(-1, …, WNOHANG)`, or
-  double-fork so the scope is reparented to init. "Never wait" alone is the other
+  a `SIGCHLD` handler looping `waitpid(-1, …, WNOHANG)`, or double-fork so the scope
+  is reparented to init. **Not `SIGCHLD = SIG_IGN`**, which an earlier draft of this
+  bullet offered: it is process-global, auto-reaps every child, and leaves `waitpid`
+  returning `ECHILD` — breaking `Foundation.Process.waitUntilExit()` and GLib's
+  `g_child_watch`, which the `gio trash` / `gio launch` / `rsvg-convert` calls in
+  JP-13, JP-19 and this item all depend on. "Never wait" alone is the other
   half of the waitpid contract and leaks a zombie per app quit, precisely because the
   scope parent outlives the launch by the app's whole lifetime.
   **`--scope` is load-bearing, not a style choice**, and a later reviewer will try to
@@ -784,15 +800,20 @@ before any tier decision.*
 - Directory read behind the JP-11 pure sort/cap; entry icons via shared-mime-info
   (`globs2`, `generic-icons`, `aliases`) into the icon-theme lookup from JP-13;
   thumbnails read (not generated) from the freedesktop cache at
-  `$XDG_CACHE_HOME/thumbnails/{normal,large}/<md5>.png` — `normal` is ≤128px, `large`
+  `$XDG_CACHE_HOME/thumbnails/{normal,large}/<md5>.png`, defaulting to
+  `~/.cache/thumbnails` when the variable is unset, which is the usual case —
+  `normal` is ≤128px, `large`
   ≤256px, pick by requested size, and **never read `fail/`**, whose entries record
   failed generation rather than artwork. The name is the MD5 of the canonical
   percent-encoded absolute URI, so take `Crypto.Insecure.MD5` behind the standard
   `#if canImport(CryptoKit)` idiom — which means declaring **`swift-crypto`** in
   `linux/Package.swift` (JP-18), since CryptoKit does not ship with the Linux
   toolchain and the `#else` arm imports `Crypto` from that package. Treat a thumbnail as valid only when its
-  `tEXt::Thumb::MTime` matches the file's current mtime, otherwise it is stale and
-  must not be shown.
+  `tEXt::Thumb::MTime` — whole Unix seconds, per the spec — matches the file's mtime
+  **truncated to whole seconds** (`st_mtim.tv_sec`; compare a fractional `Date` and
+  nothing ever matches, which hides every thumbnail rather than some) **and**
+  `tEXt::Thumb::URI` matches the canonical URI, the spec's other validity key, since
+  the chunk is being parsed anyway. Otherwise it is stale and must not be shown.
 - **The URI must be escaped glib's way, not `URL.absoluteString`'s.** GIO hashes a
   canonical URI built by `g_file_get_uri()` → `g_filename_to_uri()` →
   `g_escape_file_uri()`, which escapes the path with GLib's `UNSAFE_PATH` set: RFC
@@ -817,7 +838,10 @@ before any tier decision.*
 - `HotkeyBinder` with four implementations selected by **probing, never by desktop
   name**: extension keybinding, GlobalShortcuts portal, compositor config + a
   `jetty-cli` verb, GSettings custom-keybindings (documented, never auto-written).
-  On 24.04 the expected portal error is `UnknownMethod`. Render the portal's returned
+  Classify the portal as absent on any of `UnknownMethod`, `ServiceUnknown` or
+  `org.freedesktop.portal.Error.NotSupported` — an unimplemented interface and a
+  daemon with no GlobalShortcuts backend fail differently, so matching one literal
+  name misreads the other. On 24.04 the error is `UnknownMethod`. Render the portal's returned
   `trigger_description` rather than Jetty's own `displayString`. Note **Hyprland is
   the exception** in the wlroots family: `xdg-desktop-portal-hyprland` implements
   GlobalShortcuts over its own protocol, while `xdg-desktop-portal-wlr` ships none
@@ -883,7 +907,10 @@ before any tier decision.*
   ordinary thing users do, and a one-shot registrant loses its icon until relaunch.
   Re-apply icon, tooltip, status and menu each time.
 - Launch at login: an XDG autostart `.desktop` in `~/.config/autostart/`, written at
-  runtime by the toggle, not shipped by the package.
+  runtime by the toggle, not shipped by the package — with `Exec=` pointing at the
+  same `LD_PRELOAD`-carrying launcher JP-24 ships, as must JP-34's packaged desktop
+  file. Exec the bare binary and the shim never loads, so the dock dies at login on
+  its primary launch path.
 - Single-instance via D-Bus name ownership (replacing the `NSRunningApplication`
   guard), and a clean shutdown that restores whatever JP-33 stood down.
 - **Acceptance**: SNI registers and shows a menu on a real GNOME/KDE session
@@ -929,9 +956,13 @@ CI action that builds gtk4-layer-shell from source on noble.*
   environment**, because Jetty is an app launcher and children inherit it: the shim
   would otherwise be injected into every browser, terminal and game the dock starts,
   where any gtk4-layer-shell/libwayland skew becomes a crash in software Jetty does
-  not own and cannot debug from a bug report. Unset it on the launch path, and keep it
-  out of the D-Bus activation environment so bus-activated apps don't inherit it
-  either. Test that a launched child's environment has no `LD_PRELOAD`.
+  not own and cannot debug from a bug report. Remove **only the shim's own token**
+  from the list rather than unsetting the variable, or Jetty silently discards
+  preloads the user set for themselves — MangoHud, capture layers, distro
+  workarounds. Same filtered value on the launch path, and keep the shim out of the
+  D-Bus activation environment so bus-activated apps don't inherit it either. Test
+  that a launched child's `LD_PRELOAD` still carries a sentinel entry and no longer
+  carries the shim — not that the variable is empty.
 - **Stand up a headless compositor job here**, and let every later frontend item
   inherit it. The adversarial pass found that a GitHub runner ships no compositor
   *preinstalled* but is one apt install away: **sway under
@@ -1034,7 +1065,9 @@ CI action that builds gtk4-layer-shell from source on noble.*
   contract, and it is deciding a data-loss question on the Trash tile; noble ships
   4.14.x while JP-34 accepts on 26.04.
 - Drop on the sliver reveals then pins (the `DragRevealSensorView` analogue); drop on
-  a folder tile moves; drop on Trash calls `gio trash`; reorder within the strip
+  a folder tile moves — **performed by Jetty through GIO, finishing the drop with
+  COPY** like every other target, never by reporting MOVE and asking the source to do
+  it; drop on Trash calls `gio trash`; reorder within the strip
   reuses JP-06's `DockDragPolicy`.
 - **Acceptance**: target-resolution tests reusing the pure drag policy; a real
   Nautilus drop verified manually and recorded.
@@ -1150,6 +1183,11 @@ CI action that builds gtk4-layer-shell from source on noble.*
   `/usr/share/jetty/`, which GNOME Shell never scans, so nothing would appear in the
   Extensions app for JP-33's first-run flow to deep-link to.
   `lintian --fail-on error`.
+- Declare `session-modes` and conservative `shell-version` ranges in the extension's
+  `metadata.json`. GNOME Shell disables extensions whose declared range stops
+  matching, so a routine distro upgrade would make the dock vanish and land JP-33's
+  deep link on an "incompatible" row; treat Shell version bumps as release-blocking
+  for this package.
 - Dependencies resolve via `dpkg-shlibdeps`; add `libglib2.0-bin`,
   `dbus-user-session`, `hicolor-icon-theme`, `adwaita-icon-theme`,
   `shared-mime-info`, `desktop-file-utils`; `upower`, `xdg-desktop-portal-gnome |
@@ -1176,8 +1214,9 @@ CI action that builds gtk4-layer-shell from source on noble.*
   session helper behind it, and fall back to `xdg-open` on the `.deb`**, because Ubuntu desktop images ship App
   Center over snapd and may carry no PackageKit at all. Add `packagekit` to JP-34's
   Recommends. Without the probe this is another "the call succeeds and nothing
-  happens" on exactly the population the `.deb` is for. Verify a release-key signature over the
-  artifact before the hand-off and surface a failure in the UI — a local `.deb`
+  happens" on exactly the population the `.deb` is for. Verify a release-key signature over the artifact before **either** hand-off — the
+  `xdg-open` fallback installs the same local `.deb` with the same root consequence,
+  and it is the path that actually runs on a PackageKit-less image — and surface a failure in the UI — a local `.deb`
   install bypasses apt's repository signing, so that check is the only thing between a
   tampered download and a root-level install. When the AppImage tier does land it
   keeps the `.bak` rotation, corrupt-quarantine and newer-version-refusal semantics

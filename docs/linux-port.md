@@ -349,8 +349,9 @@ silently routes a new watch's events to the old path.
 - **Hotkeys**: one `HotkeyBinder` protocol, four implementations, chosen by
   *probing* not by desktop name — extension keybinding (works on every GNOME
   including 24.04, no dialog), GlobalShortcuts portal (only where the backend
-  implements it — `xdg-desktop-portal-kde` does, `xdg-desktop-portal-gnome` does not,
-  which is why the expected GNOME error below is `UnknownMethod`), compositor config + a `jetty-cli` verb (sway), GSettings
+  implements it — `xdg-desktop-portal-kde` does, and `xdg-desktop-portal-gnome` does
+  not on 24.04, which is why the expected error there is `UnknownMethod`; it does from
+  Ubuntu 25.10, as the capability table says), compositor config + a `jetty-cli` verb (sway), GSettings
   custom-keybindings (documented, never auto-written). On 24.04 the portal's
   expected error is `UnknownMethod` — probe by calling.
 - **Migration**: migrate off `keyLabel`, not `keyCode`. A pure
@@ -394,7 +395,7 @@ silently routes a new watch's events to the old path.
   the new-file checklist and let Linux CI fail on anything under `Jetty/` it omits.
 - **Combine**: take Top Drawer's merged `ObservationCompat` shim, not a migration.
   Jetty's Combine surface is 96 `@Published` / 15 `ObservableObject` but only **6**
-  `.sink` chains; converting all 16 types would be a large macOS-visible diff for zero
+  `.sink` chains; converting all 15 would be a large macOS-visible diff for zero
   Linux benefit.
 - **`.deb`**: static-link the Swift runtime (`--static-swift-stdlib`) — do not bundle
   `.so`s and do not depend on Ubuntu's `swiftlang` (wrong version, wrong ABI story).
@@ -561,8 +562,11 @@ items in [`linux-port-plan.md`](linux-port-plan.md). The ones that changed a dec
     for F-keys — plus an honest needs-re-record path (JP-22).
 23. **REFUTED — SwiftPM silently ignores unlisted sources.** Reproduced here: it
     prints `warning: found 87 file(s) which are unhandled` and names every one. Loud,
-    but still not a gate — so `exclude:` until that list is empty and grep the build
-    log for `which are unhandled`. Not `-Xswiftc -warnings-as-errors`, which an
+    but still not a gate — so add each unhandled file to `sources:`, reserving
+    `exclude:` for files that must never build on Linux, until the list is empty, and
+    grep the build log for `which are unhandled`. Mass-excluding to get green is the
+    one way to satisfy the gate while reintroducing the silent omission it exists to
+    catch. Not `-Xswiftc -warnings-as-errors`, which an
     earlier draft said: SwiftPM emits that warning during target planning, so no
     compiler flag can promote it, and a package with an unlisted file builds and
     exits 0 under it (JP-01).

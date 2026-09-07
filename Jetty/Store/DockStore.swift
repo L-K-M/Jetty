@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Combine)
 import Combine
+#endif
 
 /// Loads and saves the `DockDocument` (pinned items + per-display anchors) as JSON
 /// in Application Support. Writes are **atomic** and **debounced**, keeping one
@@ -121,10 +123,21 @@ final class DockStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Reorders via SwiftUI list offsets, for `ItemsView`'s `.onMove`.
+    ///
+    /// macOS-only, and deliberately not ported: `move(fromOffsets:toOffset:)` is
+    /// SwiftUI's, not the standard library's, so it does not exist on Linux. The
+    /// portable move is to hand `setItems` an explicit order, which is what
+    /// `DockController.reorder(to:)` — the dock's own drag-to-reorder — already does,
+    /// and what a Linux settings UI would do too. Re-implementing Apple's offset
+    /// semantics here would buy nothing for that caller while risking a silent change
+    /// to shipped drag behaviour that no test covers.
+    #if canImport(SwiftUI)
     func moveItem(fromOffsets source: IndexSet, toOffset destination: Int) {
         document.items.move(fromOffsets: source, toOffset: destination)
         scheduleSave()
     }
+    #endif
 
     func setAnchor(_ anchor: DockAnchor, forDisplayUUID uuid: String) {
         document.anchorsByDisplayUUID[uuid] = anchor
@@ -230,10 +243,25 @@ final class DockStore: ObservableObject {
         return (try? JSONDecoder().decode(DockDocument.self, from: data)) != nil
     }
 
+    /// `~/Library/Application Support/Jetty/dock.json` on macOS, and
+    /// `$XDG_DATA_HOME/Jetty/dock.json` (default `~/.local/share`) on Linux — with no
+    /// branch needed for the common path, because swift-corelibs-foundation already
+    /// maps `.applicationSupportDirectory` onto XDG. Measured on the pinned toolchain.
+    ///
+    /// Only the fallback, for when that lookup throws, has to know where it is: the
+    /// hardcoded `Library/Application Support` would put a Linux dock file in a
+    /// macOS-shaped path that nothing else would ever look in.
     static var defaultURL: URL {
+        #if canImport(Darwin)
+        let fallback = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support")
+        #else
+        let fallback = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".local/share")
+        #endif
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                  appropriateFor: nil, create: true))
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+            ?? fallback
         return base.appendingPathComponent("Jetty", isDirectory: true).appendingPathComponent("dock.json")
     }
 }

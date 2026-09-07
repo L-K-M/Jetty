@@ -82,8 +82,11 @@ GUI session.
 Mirrors `PLAN.md §11`:
 
 - `Model/` — Codable model (`DockDocument`, `DockItem`, `DockAnchor`, `DockEdge`/
-  `DockAlignment`, `AppearancePreset`), `Preferences`, `ColorHex`, the UI enums.
-- `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`.
+  `DockAlignment`, `AppearancePreset`), `Preferences`, the UI enums, and the colour
+  pair: pure `RGBA8` (the `#RRGGBB[AA]` storage format) plus `ColorHex`'s thin
+  `NSColor`/`Color` bridge over it.
+- `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`
+  (bookmarks are Darwin-only; it falls back to the stored absolute path elsewhere).
 - `Screens/` — `DisplayRegistry` (UUID mapping), the pure `DockLayout` math, and
   `LayerShellPlacement` (that math expressed as Wayland layer-shell anchors/margins;
   unused on macOS, see `docs/linux-port-plan.md` §JP-03).

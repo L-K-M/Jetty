@@ -311,23 +311,68 @@ move half stays reviewable as a move.*
   Codable half + `dedupKey` (separated from its three classifier factories).
   `clampOffset`/`clampInset` are **not** listed here: they are static members of
   `DockAnchor` in `Model/DockAnchor.swift`, which JP-03 already moves whole.
+  *(Correction, JP-04: nothing to move. `DockDocument.swift` and `DockItem.swift`
+  were both already in JP-01's curated set — `DockItem`'s classifier factories were
+  separated there, by the `#if canImport(AppKit)` that ends above `fromLink`. This is
+  the third plan bullet to describe work an earlier step had already done; the pattern
+  is that Part 0's curated set was drawn wider than the per-step bullets assumed.)*
 - Generalise `DockStore`'s engine into `DocumentStore<T: Codable>`: load → decode →
   `.bak` fallback → newer-version read-only gate → debounced atomic save. **Preserve
   the semantics exactly** — they are tested and load-bearing, and a debounced
   autosave that loses the gate can destroy a user document.
+  *(Deferred to JP-05, deliberately. The generalisation buys **no** portability:
+  `DockStore` ported without touching its engine at all — `replaceItemAt`, `NSLog`,
+  `CocoaError(.fileReadCorruptFile)` and `DispatchQueue.main.asyncAfter` all exist in
+  swift-corelibs-foundation, measured on the pinned toolchain. So it is a refactor,
+  and this bullet's own warning is the argument for not bundling it with a port: the
+  semantics it says must be preserved exactly are the ones a reviewer would have to
+  re-verify through an unrelated diff. It also has exactly one customer today, and a
+  generic written against one customer is a guess; JP-05's `Preferences` is the second
+  one, which is where the shape gets decided against something real.)*
 - Extract `RGBA8` (`init?(hex:)` / `hexString`, ~45 LOC of pure arithmetic) out of
   the `NSColor` extension in `ColorHex.swift`, keeping the `+` rejection and the
   `#`-prefix rules; `NSColor` keeps a thin macOS-only bridge.
-- **Acceptance**: `CodableModelTests`, `StoreBackupTests`, `StoreVersionTests`,
-  `ColorHexTests` green on both platforms.
+- **Acceptance**: `StoreBackupTests` and `StoreVersionTests` green on both platforms
+  in full; `CodableModelTests` and `ColorHexTests` green on both with a macOS-only
+  section each.
+  *(Correction, JP-04, the same over-claim as JP-02's and JP-03's: neither of those
+  two can run whole on Linux yet. 12 of `CodableModelTests`' 21 cases are
+  `AppearancePreset` and `Preferences`, which land in JP-05/JP-06; every one of
+  `ColorHexTests`' cases went through `NSColor`. Rather than exclude both files, each
+  now guards the part that needs a framework — which made `ColorHexTests` a better
+  suite, because the hex rules are a **storage contract** and belonged against
+  `RGBA8`, not against a colour object. 9 + 10 cases now run on Linux.)*
 - **Pitfalls**: `BookmarkResolver` is Darwin-only — guard its two functions with
   `#if os(macOS)` around the Darwin bodies **plus an `#else` branch returning `nil`**
   — the guard alone deletes the functions on Linux and breaks every call site; every
   read path already falls back to
-  the sibling absolute path.
+  the sibling absolute path. *(Confirmed: `URL.bookmarkData` and
+  `URL(resolvingBookmarkData:)` are both absent from swift-corelibs-foundation.
+  `canImport(Darwin)` is the guard used, matching the rest of the port.)*
+- **Three findings this step turned up that the plan did not predict:**
+  - `Array.move(fromOffsets:toOffset:)` is **SwiftUI's**, not the standard library's,
+    so `DockStore.moveItem` does not compile on Linux. It is left macOS-only rather
+    than reimplemented: its only caller is `ItemsView`'s `.onMove`, the portable way
+    to reorder is to hand `setItems` an explicit order (which
+    `DockController.reorder(to:)` already does), and copying Apple's offset semantics
+    by hand would risk a silent change to drag behaviour that no test covers.
+  - `.applicationSupportDirectory` needs **no** platform branch:
+    swift-corelibs-foundation already maps it onto `$XDG_DATA_HOME` (default
+    `~/.local/share`), so `dock.json` lands in the right place on both platforms from
+    the same line. Only the throw-fallback beneath it was macOS-shaped and is now
+    guarded.
+  - The `RGBA8` split is worth more than the LOC suggests. The hex format is read by
+    three apps across separate release cadences, and its rules — the `+` rejection,
+    the shorthand expansion, the H19 clamp — were only ever exercised through
+    `NSColor`, i.e. only on macOS. They are now pure, and tested as a format.
 
 ### JP-05 · Jetty · Preferences split
 **Branch** `claude/jp-05-preferences` · **Size** M
+
+*Also carries JP-04's deferred `DocumentStore<T: Codable>` generalisation, which
+belongs here: `PreferencesModel` is its second customer, and a generic settled against
+two real consumers is a design rather than a guess. Do it as its own commit, so the
+store's tested semantics stay reviewable as a refactor.*
 
 - `Preferences.Default` and `Preferences.Key` are nested inside the
   `ObservableObject` class; lift them out **first**, then introduce

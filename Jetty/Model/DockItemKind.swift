@@ -33,8 +33,8 @@ extension DockItemKind {
     /// The tile's along-edge width as a multiple of the base icon size. Wide info
     /// widgets read like the clock; everything else is a square. Separators are a
     /// fixed thin gap and are special-cased by the callers, so their factor is
-    /// unused. **Keep `DockLayout.tileExtent` and `DockTileView.tileWidth` driven by
-    /// this so panel sizing and rendering never disagree.**
+    /// unused. **Callers go through `DockTileGeometry.frameWidth`, which applies this
+    /// factor — one shared rule so panel sizing and rendering never disagree.**
     var tileWidthFactor: CGFloat {
         switch self {
         case .nowPlaying: return 2.4

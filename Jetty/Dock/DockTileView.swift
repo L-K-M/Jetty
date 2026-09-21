@@ -113,13 +113,8 @@ struct DockTileView: View {
     /// Padding added on the edge-facing side only, turning the gap between the icon and
     /// the screen edge into hittable tap area (Fitts' law).
     private var edgeInsets: EdgeInsets {
-        let p = DockView.padding
-        switch edge {
-        case .bottom: return EdgeInsets(top: 0, leading: 0, bottom: p, trailing: 0)
-        case .top:    return EdgeInsets(top: p, leading: 0, bottom: 0, trailing: 0)
-        case .left:   return EdgeInsets(top: 0, leading: p, bottom: 0, trailing: 0)
-        case .right:  return EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: p)
-        }
+        let p = DockTileGeometry.edgePadding(edge: edge, padding: DockView.padding)
+        return EdgeInsets(top: p.top, leading: p.leading, bottom: p.bottom, trailing: p.trailing)
     }
 
     /// VoiceOver label per tile kind (BUG-9).
@@ -363,19 +358,16 @@ struct DockTileView: View {
     // MARK: Geometry
 
     private var tileWidth: CGFloat {
-        switch tile.kind {
-        case .separator: return edge.isHorizontal ? DockLayout.separatorExtent : baseSize
-        case .clock where edge.isHorizontal:
-            // Widens with a zoomed watch face — keep in sync with
-            // `DockLayout.tileExtent` so panel sizing and rendering agree. In the
-            // overflow-scroll state the face renders unzoomed (`allowsClockZoom`
-            // is false), so the tile keeps its resting width too instead of
-            // holding a zoom-wide slab of empty glass around a 1× face.
-            return baseSize * DockLayout.clockTileWidthFactor(
+        // One rule, shared with `DockLayout.tileExtent`, so panel sizing and rendering
+        // cannot drift. All this half decides is *which* clock factor to hand it: the
+        // zoomed one normally, but the resting one while overflow-scrolling, where the
+        // face renders unzoomed (`allowsClockZoom` is false) and a zoom-wide tile would
+        // be a slab of empty glass around a 1× face.
+        DockTileGeometry.frameWidth(
+            kind: tile.kind, baseSize: baseSize, edge: edge,
+            clockWidthFactor: DockLayout.clockTileWidthFactor(
                 zoom: allowsClockZoom ? CGFloat(preferences.effectiveClockZoom) : 1,
-                face: preferences.clockFace)
-        default: return baseSize * tile.kind.tileWidthFactor
-        }
+                face: preferences.clockFace))
     }
 
     private var scaleAnchor: UnitPoint {

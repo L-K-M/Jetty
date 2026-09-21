@@ -328,7 +328,7 @@ struct DockView: View {
                 hoveredTileID = inside ? tile.id : (hoveredTileID == tile.id ? nil : hoveredTileID)
                 // Running apps peek their windows; folders peek their contents.
                 if (tile.kind == .application && tile.isRunning) || tile.kind == .folder {
-                    model.onHoverTile?(tile, inside)
+                    model.onHoverTile?(anchor.displayUUID, tile, inside)
                 }
             },
             onDropURLs: { urls in model.onDropFiles?(tile, urls) },

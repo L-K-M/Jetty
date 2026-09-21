@@ -379,9 +379,12 @@ toggled off, and avoid unexplained Boolean snapback.
 `DockView.swift`, `Jetty/Stacks/FolderStackController.swift`,
 `Jetty/Windows/WindowPeekController.swift`, `Jetty/Menu/JettyMenuView.swift`
 
-PR #48 keeps the dock revealed while a stack/peek popover is open. Remaining: keep it
-revealed while an alert or drag interaction is active, and add a hover corridor between
-dock and child panel. Render drag-out as an
+PR #48 keeps the dock revealed while a stack/peek popover is open; the popover side is
+now symmetric — a dock hide or close dismisses its popover, and neither preview can be
+presented while its dock is hidden (a hover-exit isn't guaranteed once the panel goes
+click-through, so the dwell timer and held popover both needed a hide-side teardown).
+Remaining: keep it revealed while an alert or drag interaction is active, and add a
+hover corridor between dock and child panel. Render drag-out as an
 unclipped outward-only ghost with a Remove cue and Undo. Device-test reorder versus
 overflow scrolling and use long-press or explicit move actions if gestures conflict. A
 subtle glass stem or glow can visually tether an open child panel to its source tile.

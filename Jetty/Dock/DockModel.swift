@@ -82,8 +82,10 @@ final class DockModel: ObservableObject {
     /// pin them as new items.
     var onAddDroppedItems: (([URL]) -> Void)?
     /// Hover entered/left a tile that shows a preview on hover — a running app (window
-    /// peek) or a folder (contents stack). Drives the matching popover.
-    var onHoverTile: ((DockTile, Bool) -> Void)?
+    /// peek) or a folder (contents stack). Drives the matching popover. First argument
+    /// is the display UUID of the dock that reported it, so the controller can
+    /// attribute the hover to a panel even if the exit event is lost on hide.
+    var onHoverTile: ((String, DockTile, Bool) -> Void)?
 
     /// Count of pinned tiles (those with a backing item). Pinned tiles precede
     /// running-only ones in `tiles`. Kept for tests / sizing.

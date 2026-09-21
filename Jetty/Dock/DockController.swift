@@ -372,6 +372,7 @@ final class DockController {
                 // The Trash can must never be staler than the user's last look at
                 // the dock (throttled inside) — TRASH.md.
                 panel.onReveal = { [weak self] in self?.refreshTrashState(throttle: true) }
+                panel.onHidden = { [weak self] in self?.handlePanelHidden(displayUUID: uuid) }
                 panels[uuid] = panel
                 panel.showInitial()
                 // The pointer may already be resting in the new panel's reveal zone
@@ -436,6 +437,23 @@ final class DockController {
         guard let uuid = previewHeldPanelUUID else { return }
         previewHeldPanelUUID = nil
         panels[uuid]?.setInteractionHeld(false)
+    }
+
+    /// A dock hid or closed: hover previews belong to a *visible* dock. Dismiss any
+    /// popover it was holding up, and drop pending hover state when the pointer is on
+    /// that display — its tiles are no longer hoverable there, and a SwiftUI
+    /// hover-exit is not guaranteed once the panel goes click-through or orders out.
+    private func handlePanelHidden(displayUUID: String) {
+        if previewHeldPanelUUID == displayUUID {
+            windowPeek.hide()
+            folderStack.close()
+            releasePreviewDock()   // the popovers' onOpenChange also releases it
+        }
+        let screen = panels[displayUUID]?.screen ?? registry.screen(forUUID: displayUUID)
+        if let screen, NSMouseInRect(NSEvent.mouseLocation, screen.frame, false) {
+            peekWork?.cancel(); peekWork = nil
+            hoveredPreviewTile = nil
+        }
     }
 
     /// The tile the pointer is currently over that offers a hover preview (nil → none),
@@ -509,8 +527,12 @@ final class DockController {
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let uuid = registry.key(for: screen)
+        // The popover belongs to a *visible* dock: a stale hover (the exit event can
+        // be lost when the panel goes click-through on hide) must not open it over a
+        // hidden dock — or over a display with no dock at all.
+        guard let panel = panels[uuid], panel.isRevealed else { return }
         let edge = effectiveAnchor(forUUID: uuid).edge
-        let dock = panels[uuid]?.revealedDockStripFrame ?? CGRect(origin: mouse, size: .zero)
+        let dock = panel.revealedDockStripFrame
         // Anchor to the app's icon (not the cursor) so the selector doesn't track the mouse.
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         let name = tile.displayName.isEmpty ? "Windows" : tile.displayName
@@ -678,10 +700,12 @@ final class DockController {
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let uuid = registry.key(for: screen)
+        // Same visibility rule as the window-peek: never present over a hidden dock.
+        guard let panel = panels[uuid], panel.isRevealed else { return }
         let edge = effectiveAnchor(forUUID: uuid).edge
         // Place the popover clear of the dock strip, anchored to the folder's icon (like
         // the window-peek) so it sits above the tile rather than tracking the cursor.
-        let dock = panels[uuid]?.revealedDockStripFrame ?? CGRect(origin: mouse, size: .zero)
+        let dock = panel.revealedDockStripFrame
         let anchor = tileAnchor(for: tile, edge: edge, dock: dock) ?? mouse
         folderStack.show(folder: url, style: tile.folderDisplay ?? .grid,
                          near: anchor, dock: dock, screen: screen, edge: edge)

@@ -155,6 +155,7 @@ final class DockPanelController {
         revealWork?.cancel(); hideWork?.cancel()
         sensorPanel?.orderOut(nil); sensorPanel = nil
         panel.orderOut(nil)
+        onHidden?()
     }
 
     // MARK: Reveal / hide
@@ -163,6 +164,11 @@ final class DockPanelController {
     /// user's last look at the dock (the Trash fullness resolution — TRASH.md) can
     /// refresh on the one moment it matters.
     var onReveal: (() -> Void)?
+
+    /// Fired after the dock transitions to hidden — including on `close()` — so hover
+    /// previews anchored to it (window peek, folder stack) can be torn down: they must
+    /// never be visible while their dock is not.
+    var onHidden: (() -> Void)?
 
     func reveal(animated: Bool = true) {
         hideWork?.cancel(); hideWork = nil
@@ -212,6 +218,7 @@ final class DockPanelController {
         guard isRevealed else { return }
         isRevealed = false
         applyRevealState(animated: animated)
+        onHidden?()
     }
 
     /// Pointer moved (global coordinates) — decide whether to reveal or hide.

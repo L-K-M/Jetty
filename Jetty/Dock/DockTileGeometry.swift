@@ -19,7 +19,7 @@ enum DockTileGeometry {
     static let separatorExtent: CGFloat = 12
 
     /// A tile's frame width for `edge`: a horizontal separator is a thin gap, the clock
-    /// is `clockWidthFactor` wide on horizontal docks only (on a vertical dock it
+    /// is `baseSize × clockWidthFactor` wide on horizontal docks only (on a vertical dock it
     /// falls through to `baseSize × clock.tileWidthFactor`, ignoring the parameter),
     /// everything else is `baseSize × kind.tileWidthFactor`. Height is always `baseSize`, so the caller
     /// that needs an along/across split (`DockLayout.tileExtent`) derives it from this.

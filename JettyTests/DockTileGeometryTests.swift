@@ -63,6 +63,8 @@ final class DockTileGeometryTests: XCTestCase {
     /// uses a kind whose width factor isn't 1, so along and across are distinguishable
     /// — with .separator both would be baseSize and a dropped swap would still pass.
     func testTileExtentSwapsTheAxesByEdge() {
+        XCTAssertNotEqual(DockItemKind.clock.tileWidthFactor, 1,
+                          "the vertical case below can't detect a dropped axis swap if this is 1")
         let horizontal = DockLayout.tileExtent(kind: .separator, baseSize: 64, edge: .bottom)
         XCTAssertEqual(horizontal.along, DockLayout.separatorExtent)
         XCTAssertEqual(horizontal.across, 64)

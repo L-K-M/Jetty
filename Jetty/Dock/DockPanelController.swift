@@ -155,6 +155,7 @@ final class DockPanelController {
         revealWork?.cancel(); hideWork?.cancel()
         sensorPanel?.orderOut(nil); sensorPanel = nil
         panel.orderOut(nil)
+        isRevealed = false
         onHidden?()
     }
 

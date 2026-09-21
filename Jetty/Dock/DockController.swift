@@ -411,7 +411,9 @@ final class DockController {
         model.onReorder = { [weak self] orderedIDs in self?.reorder(to: orderedIDs) }
         model.onDragOutRemove = { [weak self] id in self?.removeItemWithPoof(id) }
         model.onAddDroppedItems = { [weak self] urls in self?.pinDroppedURLs(urls) }
-        model.onHoverTile = { [weak self] tile, entered in self?.handleTileHover(tile, entered: entered) }
+        model.onHoverTile = { [weak self] uuid, tile, entered in
+            self?.handleTileHover(tile, entered: entered, displayUUID: uuid)
+        }
         // A popover close can bypass the hover path entirely (outside click, Escape,
         // selection) — always release the dock hold from the popover's own callback.
         windowPeek.onOpenChange = { [weak self] open in if !open { self?.releasePreviewDock() } }
@@ -440,19 +442,24 @@ final class DockController {
     }
 
     /// A dock hid or closed: hover previews belong to a *visible* dock. Dismiss any
-    /// popover it was holding up, and drop pending hover state when the pointer is on
-    /// that display — its tiles are no longer hoverable there, and a SwiftUI
-    /// hover-exit is not guaranteed once the panel goes click-through or orders out.
+    /// popover it was holding up, and drop pending hover state that belongs to it —
+    /// a SwiftUI hover-exit is not guaranteed once the panel goes click-through or
+    /// orders out, so the tile's display is tracked alongside the hover itself.
     private func handlePanelHidden(displayUUID: String) {
         if previewHeldPanelUUID == displayUUID {
             windowPeek.hide()
             folderStack.close()
             releasePreviewDock()   // the popovers' onOpenChange also releases it
         }
-        let screen = panels[displayUUID]?.screen ?? registry.screen(forUUID: displayUUID)
-        if let screen, NSMouseInRect(NSEvent.mouseLocation, screen.frame, false) {
+        // Drop pending hover state when it belongs to this dock (by attribution, or
+        // by the pointer sitting on its display when attribution isn't known — e.g.
+        // the exit event was lost as the panel went click-through or ordered out).
+        let pointerHere = (panels[displayUUID]?.screen ?? registry.screen(forUUID: displayUUID))
+            .map { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? false
+        if pointerHere || hoveredPreviewDisplayUUID == displayUUID {
             peekWork?.cancel(); peekWork = nil
             hoveredPreviewTile = nil
+            hoveredPreviewDisplayUUID = nil
         }
     }
 
@@ -460,6 +467,10 @@ final class DockController {
     /// coalesced so that moving between tiles — which fires an exit and an enter in either
     /// order — settles on the latest intent before we act (no flicker-close-then-reopen).
     private var hoveredPreviewTile: DockTile?
+    /// The display whose dock reported `hoveredPreviewTile` — pointer position can't
+    /// attribute a hover back to its dock once the exit event is lost, so the panel's
+    /// own identity is tracked alongside the tile.
+    private var hoveredPreviewDisplayUUID: String?
 
     /// True while a tile's context menu is up. Hover previews are suppressed for the
     /// duration so they can't appear over the menu; the presentation callback
@@ -484,12 +495,14 @@ final class DockController {
     /// folder's contents) after a short dwell. Clicking still opens the tile — a folder
     /// opens in Finder — so both are available. Mirrors the window-peek dwell/grace so
     /// moving into the popover keeps it up.
-    private func handleTileHover(_ tile: DockTile, entered: Bool) {
+    private func handleTileHover(_ tile: DockTile, entered: Bool, displayUUID: String) {
         if entered {
             guard hoverPreview(for: tile) != nil else { return }
             hoveredPreviewTile = tile
+            hoveredPreviewDisplayUUID = displayUUID
         } else if hoveredPreviewTile?.id == tile.id {
             hoveredPreviewTile = nil      // only clear when *this* tile is the one we're tracking
+            hoveredPreviewDisplayUUID = nil
         }
         scheduleApplyPreview()
     }

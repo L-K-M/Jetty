@@ -500,7 +500,7 @@ final class DockController {
             guard hoverPreview(for: tile) != nil else { return }
             hoveredPreviewTile = tile
             hoveredPreviewDisplayUUID = displayUUID
-        } else if hoveredPreviewTile?.id == tile.id {
+        } else if hoveredPreviewTile?.id == tile.id, hoveredPreviewDisplayUUID == displayUUID {
             hoveredPreviewTile = nil      // only clear when *this* tile is the one we're tracking
             hoveredPreviewDisplayUUID = nil
         }

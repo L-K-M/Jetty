@@ -26,10 +26,10 @@ enum DockLayout {
     // portable core build — is what actually holds them together. See
     // docs/linux-port-plan.md §JP-03.
 
-    /// A separator's along-edge extent on a horizontal dock, in points: a thin gap,
-    /// not a tile-sized square (on a vertical dock it spans the dock's width instead).
-    /// Read by `tileExtent` and by `DockTileView.tileWidth`.
-    static let separatorExtent: CGFloat = 12
+    /// A separator's along-edge extent on a horizontal dock — owned by
+    /// `DockTileGeometry`, the single source of tile-width truth; this alias keeps the
+    /// existing call sites and tests working.
+    static let separatorExtent = DockTileGeometry.separatorExtent
 
     /// The LCD watch face's landscape case aspect — `LCDClockFace` sizes its case
     /// `caseW = caseH * this`, and `clockTileWidthFactor` budgets the tile width from

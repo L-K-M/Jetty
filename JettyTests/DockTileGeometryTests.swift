@@ -36,10 +36,14 @@ final class DockTileGeometryTests: XCTestCase {
     }
 
     func testEveryOtherKindIsItsOwnWidthFactorOnBothAxes() {
-        for edge in [DockEdge.bottom, .top, .left, .right] {
-            XCTAssertEqual(DockTileGeometry.frameWidth(kind: .application, baseSize: 64, edge: edge,
-                                                       clockWidthFactor: zoomedClock),
-                           64 * DockItemKind.application.tileWidthFactor, "edge \(edge)")
+        // .application's factor is 1, which alone couldn't catch `default: return
+        // baseSize`; .nowPlaying's 2.4 pins that the multiplication actually happens.
+        for kind in [DockItemKind.application, .nowPlaying] {
+            for edge in [DockEdge.bottom, .top, .left, .right] {
+                XCTAssertEqual(DockTileGeometry.frameWidth(kind: kind, baseSize: 64, edge: edge,
+                                                           clockWidthFactor: zoomedClock),
+                               64 * kind.tileWidthFactor, "edge \(edge), kind \(kind)")
+            }
         }
     }
 
@@ -55,14 +59,16 @@ final class DockTileGeometryTests: XCTestCase {
     }
 
     /// The axis swap is `tileExtent`'s own contribution on top of `frameWidth`, and is
-    /// the part a shared implementation does *not* make automatic.
+    /// the part a shared implementation does *not* make automatic. The vertical case
+    /// uses a kind whose width factor isn't 1, so along and across are distinguishable
+    /// — with .separator both would be baseSize and a dropped swap would still pass.
     func testTileExtentSwapsTheAxesByEdge() {
         let horizontal = DockLayout.tileExtent(kind: .separator, baseSize: 64, edge: .bottom)
         XCTAssertEqual(horizontal.along, DockLayout.separatorExtent)
         XCTAssertEqual(horizontal.across, 64)
 
-        let vertical = DockLayout.tileExtent(kind: .separator, baseSize: 64, edge: .left)
+        let vertical = DockLayout.tileExtent(kind: .clock, baseSize: 64, edge: .left)
         XCTAssertEqual(vertical.along, 64, "along a vertical dock, height is the along axis")
-        XCTAssertEqual(vertical.across, 64)
+        XCTAssertEqual(vertical.across, 64 * DockItemKind.clock.tileWidthFactor)
     }
 }

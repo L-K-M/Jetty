@@ -13,6 +13,11 @@ import Foundation
 /// expressed as plain numbers the view converts, rather than as `EdgeInsets`.
 enum DockTileGeometry {
 
+    /// A separator's along-edge extent on a horizontal dock, in points: a thin gap,
+    /// not a tile-sized square (on a vertical dock it spans the dock's width instead).
+    /// `DockLayout.separatorExtent` forwards here — the width rules live in this type.
+    static let separatorExtent: CGFloat = 12
+
     /// A tile's frame width for `edge`: a horizontal separator is a thin gap, the clock
     /// is `clockWidthFactor` wide on horizontal docks only, everything else is
     /// `baseSize × kind.tileWidthFactor`. Height is always `baseSize`, so the caller
@@ -25,7 +30,7 @@ enum DockTileGeometry {
     static func frameWidth(kind: DockItemKind, baseSize: CGFloat, edge: DockEdge,
                            clockWidthFactor: CGFloat) -> CGFloat {
         switch kind {
-        case .separator: return edge.isHorizontal ? DockLayout.separatorExtent : baseSize
+        case .separator: return edge.isHorizontal ? separatorExtent : baseSize
         case .clock where edge.isHorizontal: return baseSize * clockWidthFactor
         default: return baseSize * kind.tileWidthFactor
         }

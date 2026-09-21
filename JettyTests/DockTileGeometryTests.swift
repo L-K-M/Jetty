@@ -17,7 +17,7 @@ final class DockTileGeometryTests: XCTestCase {
     func testSeparatorIsAThinGapAlongHorizontalDocksOnly() {
         XCTAssertEqual(DockTileGeometry.frameWidth(kind: .separator, baseSize: 64, edge: .bottom,
                                                    clockWidthFactor: zoomedClock),
-                       DockLayout.separatorExtent)
+                       12, "a horizontal separator is the documented 12pt gap, not a base square")
         // Vertical: the separator spans the dock's width, so it is a full base square.
         XCTAssertEqual(DockTileGeometry.frameWidth(kind: .separator, baseSize: 64, edge: .left,
                                                    clockWidthFactor: zoomedClock),
@@ -66,7 +66,7 @@ final class DockTileGeometryTests: XCTestCase {
         XCTAssertNotEqual(DockItemKind.clock.tileWidthFactor, 1,
                           "the vertical case below can't detect a dropped axis swap if this is 1")
         let horizontal = DockLayout.tileExtent(kind: .separator, baseSize: 64, edge: .bottom)
-        XCTAssertEqual(horizontal.along, DockLayout.separatorExtent)
+        XCTAssertEqual(horizontal.along, 12)
         XCTAssertEqual(horizontal.across, 64)
 
         let vertical = DockLayout.tileExtent(kind: .clock, baseSize: 64, edge: .left)

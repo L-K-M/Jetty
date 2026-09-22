@@ -1,5 +1,8 @@
 # Jetty
 
+> [!IMPORTANT]
+> LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
+
 A more feature-rich Dock for macOS.
 
 **Latest release:** v<!-- version -->1.8.0<!-- /version --> · [Download](https://github.com/L-K-M/Jetty/releases/latest)

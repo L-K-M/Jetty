@@ -18,7 +18,7 @@ import Foundation
 enum AppleScriptRunner {
 
     private static let queue = DispatchQueue(
-        label: "com.jettyapp.Jetty.AppleScript",
+        label: "ch.lkmc.Jetty.AppleScript",
         qos: .userInitiated)
 
     /// Compiles and sends `source` on the serial background queue, logging any

@@ -333,7 +333,7 @@
 				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Jetty shows live previews of an app's windows when you hover its dock tile.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Jetty uses Apple Events to run power commands like Sleep, Restart, and Shut Down.";
 				MARKETING_VERSION = 1.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jettyapp.Jetty;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.Jetty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				CLANG_ENABLE_OBJC_ARC = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -362,7 +362,7 @@
 				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Jetty shows live previews of an app's windows when you hover its dock tile.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Jetty uses Apple Events to run power commands like Sleep, Restart, and Shut Down.";
 				MARKETING_VERSION = 1.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jettyapp.Jetty;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.Jetty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				CLANG_ENABLE_OBJC_ARC = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -379,7 +379,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jettyapp.JettyTests;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.JettyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -395,7 +395,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jettyapp.JettyTests;
+				PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.JettyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;

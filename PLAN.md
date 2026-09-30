@@ -509,7 +509,7 @@ Mirrors Zap/MacDring and **Xcode 16+ file-system-synchronized groups**
 picked up with no `project.pbxproj` edits. Build settings match the siblings:
 `MACOSX_DEPLOYMENT_TARGET = 13.0`, `GENERATE_INFOPLIST_FILE = YES`,
 `INFOPLIST_KEY_LSUIElement = YES`, `ENABLE_HARDENED_RUNTIME = YES`, `SWIFT_VERSION = 5.0`,
-`PRODUCT_BUNDLE_IDENTIFIER = com.jettyapp.Jetty`.
+`PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.Jetty`.
 
 ```
 Jetty/

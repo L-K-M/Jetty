@@ -77,6 +77,13 @@ jobs:
         run: |
           APP=$(find "$RUNNER_TEMP/DerivedData/Build/Products/Release" -maxdepth 1 -name "$APP_NAME.app" -print -quit)
           [ -n "$APP" ] || { echo "::error::built $APP_NAME.app not found"; exit 1; }
+          # The bundled artwork's licenses require their notices in every copy:
+          # fail before signing and packaging if they are missing from the app.
+          NOTICES="$APP/Contents/Resources/Third-Party-Notices.txt"
+          test -s "$NOTICES" || { echo "::error::Third-Party-Notices.txt missing from $APP_NAME.app"; exit 1; }
+          for sentinel in 'Open Tracker License' 'Weather data by Open-Meteo.com'; do
+            grep -qF "$sentinel" "$NOTICES" || { echo "::error::Third-Party-Notices.txt in $APP_NAME.app lacks '$sentinel'"; exit 1; }
+          done
           # Ad-hoc sign (identity "-"): no certificate, keychain, or API key required,
           # but it IS required for the app to launch on Apple Silicon. This is not a
           # Developer ID signature and the app is not notarized — Gatekeeper still warns.
@@ -102,6 +109,39 @@ jobs:
           hdiutil verify "$DMG" || { echo "::error::DMG failed hdiutil verification — the image is corrupt or truncated"; exit 1; }
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "DMG=$DMG" >> "$GITHUB_ENV"
+
+      # Check what users and the in-app updater download, not only the staged app,
+      # with the same sentinels as the staged-app check above.
+      - name: Verify notices in the zip and DMG
+        run: |
+          check_notices() {  # <extracted notices file> <artifact name>
+            test -s "$1" || { echo "::error::Third-Party-Notices.txt missing from $2"; exit 1; }
+            for sentinel in 'Open Tracker License' 'Weather data by Open-Meteo.com'; do
+              grep -qF "$sentinel" "$1" || { echo "::error::Third-Party-Notices.txt in $2 lacks '$sentinel'"; exit 1; }
+            done
+          }
+
+          FROM_ZIP=$(mktemp)
+          # unzip exits 11 when no member matches and another non-zero status
+          # when the archive itself is bad; annotate the two cases separately.
+          status=0
+          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" || status=$?
+          if [ "$status" -eq 11 ]; then
+            echo "::error::Third-Party-Notices.txt is missing from $(basename "$ZIP")"; exit 1
+          elif [ "$status" -ne 0 ]; then
+            echo "::error::could not extract Third-Party-Notices.txt from $(basename "$ZIP") (unzip exit $status, archive may be corrupt)"; exit 1
+          fi
+          check_notices "$FROM_ZIP" "$(basename "$ZIP")"
+
+          FROM_DMG=$(mktemp)
+          MNT=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null \
+            || { echo "::error::could not mount $(basename "$DMG")"; exit 1; }
+          # Search rather than assume where create-dmg put the app in the volume.
+          found=$(find "$MNT" -maxdepth 4 -path '*/Contents/Resources/Third-Party-Notices.txt' -print -quit)
+          [ -z "$found" ] || cp "$found" "$FROM_DMG"
+          hdiutil detach "$MNT" >/dev/null
+          check_notices "$FROM_DMG" "$(basename "$DMG")"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

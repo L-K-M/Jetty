@@ -1,0 +1,141 @@
+Third-party notices for Jetty
+
+Jetty.app bundles the library and artwork listed below. Each keeps its own
+license; the texts and credits they require follow. The weather tile shows
+data that Jetty fetches from Open-Meteo at run time; its credit is included.
+The Swift runtime and the system frameworks Jetty links ship with macOS and
+are not bundled.
+
+Components:
+  Haiku Tracker trash icons (LicenseRef-Open-Tracker-License)
+  KARSIORI STUDIO Free Pixel Art Trash Pack - Animated (CC0-1.0)
+  Open-Meteo weather data (CC-BY-4.0)
+  PictKit (Unlicense)
+  Tango icon theme trash icons (LicenseRef-Public-Domain)
+
+This file is maintained by hand (Jetty/Resources/Third-Party-Notices.txt in
+the repository). ICON-CREDITS.md there records where each Trash style comes
+from.
+
+==============================================================================
+Haiku Tracker trash icons
+Version: haiku/haiku f8c5cdace0d2cbf628fe170524b83fded4562337
+License: LicenseRef-Open-Tracker-License
+Source: https://github.com/haiku/haiku/blob/f8c5cdace0d2cbf628fe170524b83fded4562337/src/kits/tracker/TrackerIcons.rdef
+Used for: the Haiku Trash style (resources R_TrashIcon and R_TrashFullIcon,
+rendered from HVIF to PNG)
+
+--- Open Tracker License (header of TrackerIcons.rdef) ---
+
+Open Tracker License
+
+Terms and Conditions
+
+Copyright (c) 1991-2000, Be Incorporated. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice applies to all licensees
+and shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF TITLE, MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+BE INCORPORATED BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of Be Incorporated shall not be
+used in advertising or otherwise to promote the sale, use or other dealings in
+this Software without prior written authorization from Be Incorporated.
+
+Tracker(TM), Be(R), BeOS(R), and BeIA(TM) are trademarks or registered trademarks
+of Be Incorporated in the United States and other countries. Other brand product
+names are registered trademarks or trademarks of their respective holders.
+All rights reserved.
+
+--- Note ---
+
+"Haiku" and related marks are trademarks of Haiku, Inc.; the style name is
+used descriptively to identify the artwork's origin.
+
+==============================================================================
+KARSIORI STUDIO Free Pixel Art Trash Pack - Animated
+Version: not versioned (itch.io download)
+License: CC0-1.0
+Source: https://karsiori.itch.io/free-pixel-art-trash-pack-animated
+Used for: the Pixel Trash style (composited from the pack's dumpster sprites and
+trash pile)
+
+--- Terms stated on the pack's page ---
+
+CC0 - Public Domain. "You can use this asset pack however you want, in both
+commercial and non-commercial projects, with no restrictions."
+
+Credit is not required; given gladly to KARSIORI STUDIO.
+
+==============================================================================
+Open-Meteo weather data
+Version: fetched at run time, not bundled
+License: CC-BY-4.0
+Source: https://open-meteo.com/
+Used for: the weather tile (current conditions)
+
+--- Attribution ---
+
+Weather data by Open-Meteo.com (https://open-meteo.com/), licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+Open-Meteo's terms: https://open-meteo.com/en/licence
+
+==============================================================================
+PictKit
+Version: branch main; the revision is pinned in Package.resolved
+License: Unlicense
+Source: https://github.com/L-K-M/Pict
+Used for: the shared icon store and icon resolution (SwiftPM package, statically
+linked)
+
+--- LICENSE ---
+
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>
+
+==============================================================================
+Tango icon theme trash icons
+Version: stephenc/tango-icon-theme 41b8f6abd7ebb9d5c35e563c8cd8c410c88f114a
+License: LicenseRef-Public-Domain
+Source: https://github.com/stephenc/tango-icon-theme
+Used for: the Tango Trash style (user-trash.svg and user-trash-full.svg,
+converted to vector PDF)
+
+--- COPYING ---
+
+The icons in this repository are herefore released into the Public Domain.

@@ -110,20 +110,29 @@ jobs:
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "DMG=$DMG" >> "$GITHUB_ENV"
 
-      # Check what users and the in-app updater download, not only the staged app.
+      # Check what users and the in-app updater download, not only the staged app,
+      # with the same sentinels as the staged-app check above.
       - name: Verify notices in the zip and DMG
         run: |
-          NOTICES="$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt"
-          unzip -p "$ZIP" "$NOTICES" | grep -qF 'Open Tracker License' \
-            || { echo "::error::$NOTICES missing from $(basename "$ZIP")"; exit 1; }
+          check_notices() {  # <extracted notices file> <artifact name>
+            test -s "$1" || { echo "::error::Third-Party-Notices.txt missing from $2"; exit 1; }
+            for sentinel in 'Open Tracker License' 'Weather data by Open-Meteo.com'; do
+              grep -qF "$sentinel" "$1" || { echo "::error::Third-Party-Notices.txt in $2 lacks '$sentinel'"; exit 1; }
+            done
+          }
+
+          FROM_ZIP=$(mktemp)
+          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" || true
+          check_notices "$FROM_ZIP" "$(basename "$ZIP")"
+
+          FROM_DMG=$(mktemp)
           MNT=$(mktemp -d)
           hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null
           # Search rather than assume where create-dmg put the app in the volume.
           found=$(find "$MNT" -maxdepth 4 -path '*/Contents/Resources/Third-Party-Notices.txt' -print -quit)
-          ok=0
-          [ -n "$found" ] && grep -qF 'Open Tracker License' "$found" && ok=1
+          [ -z "$found" ] || cp "$found" "$FROM_DMG"
           hdiutil detach "$MNT" >/dev/null
-          [ "$ok" -eq 1 ] || { echo "::error::Third-Party-Notices.txt missing from $(basename "$DMG")"; exit 1; }
+          check_notices "$FROM_DMG" "$(basename "$DMG")"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

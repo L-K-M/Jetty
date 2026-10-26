@@ -46,6 +46,16 @@ final class WeatherService: ObservableObject {
     /// strand the offline glyph for 15 minutes (FAB-B19).
     static let failureRetryInterval: TimeInterval = 60
 
+    // MARK: Attribution
+
+    /// Open-Meteo's API data are licensed CC BY 4.0, and its terms ask for a linked
+    /// credit next to every place the data appear (https://open-meteo.com/en/licence).
+    /// The tile's tooltip and context menu, the Weather settings and About show it.
+    static let attribution = "Weather data by Open-Meteo.com"
+    static let attributionURL = URL(string: "https://open-meteo.com/")!
+    static let dataLicense = "CC BY 4.0"
+    static let dataLicenseURL = URL(string: "https://creativecommons.org/licenses/by/4.0/")!
+
     static func key(latitude: Double, longitude: Double, celsius: Bool) -> String {
         "\(latitude),\(longitude),\(celsius)"
     }

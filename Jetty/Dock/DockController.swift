@@ -841,6 +841,10 @@ final class DockController {
             actions.append(DockContextAction(title: "Open Activity Monitor") { [weak self] in self?.openActivityMonitor() })
         case .weather:
             actions.append(DockContextAction(title: "Open Weather") { [weak self] in self?.openWeatherApp() })
+            // Open-Meteo's CC BY 4.0 terms ask for a linked credit next to its data.
+            actions.append(DockContextAction(title: WeatherService.attribution) {
+                NSWorkspace.shared.open(WeatherService.attributionURL)
+            })
         case .nowPlaying:
             actions.append(DockContextAction(title: "Open Music") { [weak self] in self?.openMusicApp() })
         case .pomodoro:

@@ -33,13 +33,16 @@ struct WeatherWidgetView: View {
 
     /// One computed tooltip — nesting a second `.help` on the offline glyph inside the
     /// outer one left the winner undefined (FAB-B19). Matches the tap behavior in
-    /// `DockController`: while unavailable, a tap retries the fetch.
+    /// `DockController`: while unavailable, a tap retries the fetch. The second line is
+    /// the Open-Meteo credit its CC BY 4.0 terms ask for next to the data; the tile's
+    /// context menu carries the link.
     private var helpText: String {
-        service.isUnavailable(latitude: preferences.weatherLatitude,
-                              longitude: preferences.weatherLongitude,
-                              celsius: preferences.weatherUseCelsius)
+        let status = service.isUnavailable(latitude: preferences.weatherLatitude,
+                                           longitude: preferences.weatherLongitude,
+                                           celsius: preferences.weatherUseCelsius)
             ? "Weather unavailable — tap to retry"
             : "Weather"
+        return "\(status)\n\(WeatherService.attribution) (\(WeatherService.dataLicense))"
     }
 
     @ViewBuilder

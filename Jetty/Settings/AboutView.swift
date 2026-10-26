@@ -1,10 +1,15 @@
 import SwiftUI
+import AppKit
 
-/// About + updates pane. Shows the version and wires the GitHub self-updater.
+/// About + updates pane. Shows the version, wires the GitHub self-updater, and links
+/// the bundled third-party notices.
 struct AboutView: View {
     @ObservedObject var updateChecker: UpdateChecker
 
     private var version: String { Bundle.main.shortVersionString }
+
+    /// `Third-Party-Notices.txt`, copied from `Jetty/Resources` into the bundle.
+    private var noticesURL: URL? { Bundle.main.url(forResource: "Third-Party-Notices", withExtension: "txt") }
 
     var body: some View {
         Form {
@@ -34,6 +39,16 @@ struct AboutView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            Section("Acknowledgements") {
+                Button("Third-Party Notices") {
+                    if let noticesURL { NSWorkspace.shared.open(noticesURL) }
+                }
+                .disabled(noticesURL == nil)
+                Text("Jetty bundles artwork and a library from other projects, which keep their own licenses.")
+                    .font(.caption).foregroundStyle(.secondary)
+                WeatherAttributionLinks()
             }
 
             Section {

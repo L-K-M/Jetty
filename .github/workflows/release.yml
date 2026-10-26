@@ -122,12 +122,16 @@ jobs:
           }
 
           FROM_ZIP=$(mktemp)
-          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" || true
+          # Report extraction failure separately, so a corrupt zip is not
+          # misannotated as a missing notices file.
+          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" \
+            || { echo "::error::could not extract Third-Party-Notices.txt from $(basename "$ZIP") (see unzip output above)"; exit 1; }
           check_notices "$FROM_ZIP" "$(basename "$ZIP")"
 
           FROM_DMG=$(mktemp)
           MNT=$(mktemp -d)
-          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null \
+            || { echo "::error::could not mount $(basename "$DMG")"; exit 1; }
           # Search rather than assume where create-dmg put the app in the volume.
           found=$(find "$MNT" -maxdepth 4 -path '*/Contents/Resources/Third-Party-Notices.txt' -print -quit)
           [ -z "$found" ] || cp "$found" "$FROM_DMG"

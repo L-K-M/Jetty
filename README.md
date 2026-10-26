@@ -98,3 +98,15 @@ Responding badges; Force Quit itself needs no permission. Jetty works fully with
 Developer ID-signed + notarized, non-sandboxed (no Mac App Store — the sandbox can't
 grant the access the window features need). CI publishes an **unsigned** build for each
 tag; Gatekeeper will warn on first launch (`xattr -dr com.apple.quarantine /Applications/Jetty.app`).
+
+## License
+
+Jetty.app bundles the [PictKit](https://github.com/L-K-M/Pict) library
+(Unlicense) and trash icon artwork from other projects: the Haiku icons (Open
+Tracker License), the Tango icons (public domain) and the KARSIORI Pixel pack
+(CC0). These keep their own licenses. Their notices ship in
+`Jetty.app/Contents/Resources` as `Third-Party-Notices.txt`, which
+**Settings → About → Third-Party Notices** opens.
+[`ICON-CREDITS.md`](ICON-CREDITS.md) records where each trash style comes from.
+The weather tile shows data from [Open-Meteo.com](https://open-meteo.com/),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

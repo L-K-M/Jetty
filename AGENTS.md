@@ -153,6 +153,22 @@ Icon precedence in `DockModel.icon(for:)`, top rung first:
 Rung 1 staying on top is what makes this invisible on upgrade, and it is also a
 feature: two tiles pointing at one app are allowed to differ.
 
+## Licensing
+
+- This repository has no LICENSE yet; do not add license claims for the
+  project's own code (README, `NSHumanReadableCopyright`, About pane).
+- Before adding a dependency or a bundled asset (icons, fonts, images, data),
+  confirm its license allows redistribution in Jetty.app.
+- `Jetty/Resources/Third-Party-Notices.txt` is maintained by hand and ships in
+  `Contents/Resources`. Give every SwiftPM pin and bundled third-party asset an
+  entry with its verbatim license text and a `Source:` line, and keep it in step
+  with `ICON-CREDITS.md`. CI fails when a `Package.resolved` pin has no
+  `Source:` line there, and CI and the release fail when the file is missing
+  from the built app.
+- Open-Meteo's CC BY 4.0 terms ask for a linked credit next to the weather
+  data: keep `WeatherService.attribution` in the tile's tooltip and context
+  menu, the Weather settings and the About pane.
+
 ## Critical Constraints
 
 - **No scary permissions for the core dock.** Apps/launch/icons use `NSWorkspace`;

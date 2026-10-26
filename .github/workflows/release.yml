@@ -122,10 +122,15 @@ jobs:
           }
 
           FROM_ZIP=$(mktemp)
-          # Report extraction failure separately, so a corrupt zip is not
-          # misannotated as a missing notices file.
-          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" \
-            || { echo "::error::could not extract Third-Party-Notices.txt from $(basename "$ZIP") (see unzip output above)"; exit 1; }
+          # unzip exits 11 when no member matches and another non-zero status
+          # when the archive itself is bad; annotate the two cases separately.
+          status=0
+          unzip -p "$ZIP" "$APP_NAME.app/Contents/Resources/Third-Party-Notices.txt" > "$FROM_ZIP" || status=$?
+          if [ "$status" -eq 11 ]; then
+            echo "::error::Third-Party-Notices.txt is missing from $(basename "$ZIP")"; exit 1
+          elif [ "$status" -ne 0 ]; then
+            echo "::error::could not extract Third-Party-Notices.txt from $(basename "$ZIP") (unzip exit $status, archive may be corrupt)"; exit 1
+          fi
           check_notices "$FROM_ZIP" "$(basename "$ZIP")"
 
           FROM_DMG=$(mktemp)

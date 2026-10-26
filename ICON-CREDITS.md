@@ -6,6 +6,10 @@ This file records where every piece of bundled artwork came from and under what
 terms it is redistributed. Styles not listed here (Seven, Eight, Star, White,
 Dark, Cheetah) use artwork provided directly by the project owner.
 
+The notices below also ship inside the app as
+`Jetty.app/Contents/Resources/Third-Party-Notices.txt`, from
+`Jetty/Resources/Third-Party-Notices.txt`. Keep the two files in step.
+
 ## Haiku
 
 The genuine BeOS-lineage Trash icons from the [Haiku](https://www.haiku-os.org)

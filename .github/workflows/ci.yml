@@ -40,12 +40,26 @@ jobs:
           persist-credentials: false   # nothing here runs git after checkout
 
       # The Haiku trash icons come from Haiku's TrackerIcons.rdef, whose header is
-      # the Open Tracker License (Be Incorporated). The credits must quote that
-      # notice, not a substitute license.
+      # the Open Tracker License (Be Incorporated). The credits and the notices the
+      # app bundles must quote that notice, not a substitute license. The notices
+      # are maintained by hand, so also fail when a SwiftPM pin has no entry there.
       - name: Check license notices
         run: |
-          grep -q 'Copyright (c) 1991-2000, Be Incorporated' ICON-CREDITS.md \
-            || { echo "::error::ICON-CREDITS.md lacks the Open Tracker License notice for the Haiku icons"; exit 1; }
+          for f in ICON-CREDITS.md Jetty/Resources/Third-Party-Notices.txt; do
+            grep -q 'Copyright (c) 1991-2000, Be Incorporated' "$f" \
+              || { echo "::error::$f lacks the Open Tracker License notice for the Haiku icons"; exit 1; }
+          done
+          python3 -I - <<'EOF'
+          import json, sys
+          resolved = "Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          notices = "Jetty/Resources/Third-Party-Notices.txt"
+          lines = open(notices, encoding="utf-8").read().splitlines()
+          missing = [pin["location"] for pin in json.load(open(resolved))["pins"]
+                     if f"Source: {pin['location']}" not in lines]
+          for location in missing:
+              print(f"::error::{location} is pinned in Package.resolved but has no Source: line in {notices}")
+          sys.exit(1 if missing else 0)
+          EOF
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
@@ -63,8 +77,19 @@ jobs:
             -scheme "$SCHEME" \
             -destination 'platform=macOS' \
             -resultBundlePath TestResults.xcresult \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             clean test | xcbeautify
+
+      # Third-Party-Notices.txt reaches Contents/Resources through the synchronized
+      # Jetty/ group; check the test host app the build just produced.
+      - name: Check notices in the built app
+        run: |
+          NOTICES="$RUNNER_TEMP/DerivedData/Build/Products/Debug/Jetty.app/Contents/Resources/Third-Party-Notices.txt"
+          test -s "$NOTICES" || { echo "::error::Third-Party-Notices.txt missing from Jetty.app"; exit 1; }
+          for sentinel in 'Open Tracker License' 'Weather data by Open-Meteo.com'; do
+            grep -qF "$sentinel" "$NOTICES" || { echo "::error::Third-Party-Notices.txt in Jetty.app lacks '$sentinel'"; exit 1; }
+          done
 
       - name: Upload test results on failure
         if: failure()

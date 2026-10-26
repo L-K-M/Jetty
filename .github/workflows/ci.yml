@@ -39,6 +39,14 @@ jobs:
         with:
           persist-credentials: false   # nothing here runs git after checkout
 
+      # The Haiku trash icons come from Haiku's TrackerIcons.rdef, whose header is
+      # the Open Tracker License (Be Incorporated). The credits must quote that
+      # notice, not a substitute license.
+      - name: Check license notices
+        run: |
+          grep -q 'Copyright (c) 1991-2000, Be Incorporated' ICON-CREDITS.md \
+            || { echo "::error::ICON-CREDITS.md lacks the Open Tracker License notice for the Haiku icons"; exit 1; }
+
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:

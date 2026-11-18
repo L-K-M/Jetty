@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(LiveryKit)
+import LiveryKit
+#else
+import LiveryCore
+#endif
 
 /// A shareable bundle of Jetty's visual settings — exported/imported as a small
 /// `.json` file and applied with one click, plus a set of built-in themes. Mirrors

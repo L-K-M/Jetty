@@ -1,4 +1,5 @@
 import SwiftUI
+import KeycapKit
 
 /// General settings: launch at login, system-Dock management, positioning, and the
 /// auto-hide / reveal behavior. Positioning (edge × alignment × offset × inset) is
@@ -85,7 +86,7 @@ struct GeneralView: View {
             Section("Shortcuts") {
                 hotkeyRow("Toggle the dock", binding: $preferences.toggleHotkey)
                 hotkeyRow("Open the Jetty Menu", binding: $preferences.menuHotkey)
-                Text("Global shortcuts work anywhere and need no permission. Turn one off with its switch, or click its button and press a new combination (with at least one modifier).")
+                Text("Global shortcuts work anywhere and need no permission. Turn one off with its switch, or click its button and press a new combination: it needs ⌘, ⌥ or ⌃ (a function key works alone), and shortcuts macOS reserves, such as ⌘Q or ⇧⌘4, are refused.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -94,11 +95,43 @@ struct GeneralView: View {
 
     @ViewBuilder
     private func hotkeyRow(_ title: String, binding: Binding<HotkeyBinding>) -> some View {
+        hotkeyControls(title, binding: binding)
+        // A shortcut saved by an older Jetty may be one the current rule refuses
+        // (Shift-only, or reserved by macOS). It is not registered, so say so
+        // rather than leave a switch that looks on but does nothing.
+        if binding.wrappedValue.enabled && !binding.wrappedValue.combo.isUsableGlobalHotkey {
+            Text("\(binding.wrappedValue.displayString) can't be used as a global shortcut, so Jetty doesn't register it. Record a new one.")
+                .font(.caption).foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
+    private func hotkeyControls(_ title: String, binding: Binding<HotkeyBinding>) -> some View {
         HStack {
             Toggle(title, isOn: Binding(get: { binding.wrappedValue.enabled },
                                         set: { binding.wrappedValue.enabled = $0 }))
             Spacer(minLength: 12)
-            HotkeyRecorder(binding: binding)
+            // Keycap's recorder works in `KeyCombo`; adapt it to the persisted
+            // `HotkeyBinding`, capturing the layout-aware label at record time and
+            // keeping the switch's enabled flag. A bare ⌫/⌦ does nothing while
+            // recording (`deleteAction: .ignore`) — the switch is how a shortcut
+            // is turned off.
+            ShortcutRecorder(
+                combo: Binding(
+                    get: { binding.wrappedValue.combo },
+                    set: { newCombo in
+                        // `.ignore` means a bare ⌫/⌦ never writes nil, so a nil
+                        // here is unexpected; keep the persisted combo rather
+                        // than clearing it. The toggle is the only way to turn a
+                        // shortcut off.
+                        guard let newCombo else { return }
+                        binding.wrappedValue = HotkeyBinding(
+                            keyCode: newCombo.keyCode,
+                            modifiers: newCombo.carbonModifiers,
+                            keyLabel: KeyNames.displayName(for: newCombo.keyCode),
+                            enabled: binding.wrappedValue.enabled)
+                    }),
+                deleteAction: .ignore)
                 .frame(width: 150, height: 24)
                 .disabled(!binding.wrappedValue.enabled)
                 .opacity(binding.wrappedValue.enabled ? 1 : 0.4)

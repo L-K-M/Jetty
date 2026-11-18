@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreGraphics
+import LiveryKit
 
 /// Observable backing for the window-peek popover: lists an app's windows and captures
 /// their thumbnails off the main thread, refreshing on a timer so the previews stay
@@ -85,6 +86,9 @@ final class WindowPeekModel: ObservableObject {
 struct WindowPeekView: View {
     @ObservedObject var model: WindowPeekModel
     @ObservedObject var preferences: Preferences
+    /// Live accessibility display settings, so the peek background turns opaque
+    /// the moment the user toggles Reduce Transparency.
+    @ObservedObject private var accessibilitySettings = AccessibilityDisplaySettings.shared
     var onSelect: (AppWindow) -> Void
     var onMinimize: (AppWindow) -> Void
     var onHoverChange: (Bool) -> Void
@@ -123,12 +127,14 @@ struct WindowPeekView: View {
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            GlassBackground(material: preferences.material,
+            PanelBackground(material: preferences.material,
                             tint: preferences.tintColor,
                             gradientColor: preferences.gradientColor,
                             gradientAngle: preferences.gradientAngle,
                             opacity: max(preferences.backgroundOpacity, 0.85),
-                            cornerRadius: 16)
+                            cornerRadius: 16,
+                            reduceTransparency: accessibilitySettings.reduceTransparency,
+                            fallbackMaterial: .hudWindow)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onHover { onHoverChange($0) }

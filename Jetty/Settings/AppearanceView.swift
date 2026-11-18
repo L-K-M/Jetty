@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import LiveryKit
 
 /// Appearance settings: material (Liquid Glass / solid / gradient), tint, sizing,
 /// magnification, indicators, and shareable presets with import/export. See

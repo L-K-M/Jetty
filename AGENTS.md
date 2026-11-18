@@ -82,9 +82,9 @@ GUI session.
 Mirrors `PLAN.md §11`:
 
 - `Model/` — Codable model (`DockDocument`, `DockItem`, `DockAnchor`, `DockEdge`/
-  `DockAlignment`, `AppearancePreset`), `Preferences`, the UI enums, and the colour
-  pair: pure `RGBA8` (the `#RRGGBB[AA]` storage format) plus `ColorHex`'s thin
-  `NSColor`/`Color` bridge over it.
+  `DockAlignment`, `AppearancePreset`), `Preferences` and the UI enums. The colour
+  storage format (`RGBA8`, `#RRGGBB[AA]`) comes from LiveryCore and its
+  `NSColor`/`Color` bridge from LiveryKit.
 - `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`
   (bookmarks are Darwin-only; it falls back to the stored absolute path elsewhere).
 - `Screens/` — `DisplayRegistry` (UUID mapping), the pure `DockLayout` math, and
@@ -109,20 +109,17 @@ Mirrors `PLAN.md §11`:
 - `Menu/` — the Jetty Menu / command bar (`JettyMenuController`/`View`/`Model`,
   `AppIndex`, `RecentAppsStore`, and the pure `AppSearch`, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService`, `MenuCommand`, `PowerCommands`).
-- `Hotkeys/` — `CarbonHotkey`, `KeyCodes`, `AccessibilityAuthorizer` (for later features).
 - `Settings/` — the SwiftUI settings panes (General/Appearance/Items/Displays/Widgets/
-  Menu/Permissions/About) + window controller and `HotkeyRecorder`.
-- `Updates/` — the GitHub self-updater (reused from Zap).
+  Menu/Permissions/About) + window controller.
 - `MediaRemote/` — the isolated Objective-C MediaRemote bridge (`MediaRemoteBridge`)
   behind `Jetty-Bridging-Header.h`, used only by the opt-in now-playing tile.
 - `Windows/` — the opt-in window peek: `AppWindows` (CGWindowList listing + AX
   raise/minimize), `WindowPeek` + `WindowPeekController` (the hover popover panel).
   The default window-name mode is permission-free; live thumbnails need Screen
   Recording; raising/minimizing a specific window needs Accessibility.
-- `Common/` — `VisualEffectView`, `GlassBackground` (Liquid Glass + fallback),
-  `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent` (dominant-color glow),
-  `Poof`, and the retro decorations (`PanelDecoration`, `BoingBallDecoration`,
-  `CRTScreenOverlay`).
+- `Common/` — `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent`
+  (dominant-color glow) and `Poof`. The panel background (Liquid Glass with its
+  fallback) and the retro decorations come from LiveryKit.
 
 ## Conventions
 
@@ -134,14 +131,30 @@ Mirrors `PLAN.md §11`:
   is an injected parameter), `PowerCommand` mapping, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService` parsing, `MenuCommand.match`, `FolderStack`
   geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
-  `NowPlayingService.parse`, and `SemanticVersion`.
+  and `NowPlayingService.parse`.
 
 ## Dependencies
 
-Exactly one: [`PictKit`](https://github.com/L-K-M/Pict), a first-party SwiftPM
-package holding the shared icon store and resolution ladder that Zap, Top Drawer
-and the Pict editor also use. Jetty **reads** it and writes nothing to it — all
-editing lives in Pict, which needs no permissions and can be sandboxed.
+Four first-party SwiftPM packages, recorded in
+`Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
+
+- [`PictKit`](https://github.com/L-K-M/Pict) — the shared icon store and
+  resolution ladder that Zap, Top Drawer and the Pict editor also use. Jetty
+  **reads** it and writes nothing to it: all editing lives in Pict, which needs
+  no permissions and can be sandboxed. Tracks the `main` branch, so a package
+  resolve can pull new commits; the other three are version-pinned.
+- [`LiveryKit`](https://github.com/L-K-M/Livery) — the shared panel theming:
+  hex colour parsing, WCAG contrast, decoration styles and materials, and the
+  background, decoration, CRT, boing-ball and angle-dial views. Pinned by tag
+  (up to next minor).
+- [`KeycapKit`](https://github.com/L-K-M/Keycap) — the shared global hotkeys:
+  Carbon registration, the key-combo model and display strings, the shortcut
+  recorder and the Accessibility-permission helper. Pinned by tag (up to next
+  minor).
+- [`UpdraftKit`](https://github.com/L-K-M/Updraft) — the shared GitHub-Releases
+  update check: semantic-version parsing, the release client and downloader
+  (`UpdraftCore`), and the `UpdateChecker` that schedules checks, remembers the
+  user's choices and presents the alerts. Pinned by tag (up to next minor).
 
 Icon precedence in `DockModel.icon(for:)`, top rung first:
 
@@ -204,9 +217,8 @@ feature: two tiles pointing at one app are allowed to differ.
   `MagnificationCurve`, `ClockFormatter`, `AppSearch`, `PowerCommand` mapping,
   `ExpressionEvaluator`, `UnitConverter`, `CurrencyService`, `MenuCommand`,
   `FolderStack`, `SystemStats`/`WeatherService`, `NowPlayingService.parse`,
-  `HotkeyBinding`, `UpdateDownloader` filename sanitizing, Codable + forward-compat,
-  `Preferences` clamping, `AppearancePreset` round-trip, `SemanticVersion`,
-  `GitHubRelease`.
+  `HotkeyBinding`, Codable + forward-compat, `Preferences` clamping and the
+  `AppearancePreset` round-trip. The shared packages test their own code.
 - `AppDelegate.applicationDidFinishLaunching` is guarded by `isRunningTests`, so the
   test host doesn't spin up panels or hide the Dock.
 - Window placement, multi-monitor, reveal/auto-hide, Dock-hide, Liquid Glass,

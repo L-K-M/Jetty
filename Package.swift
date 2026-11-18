@@ -13,12 +13,13 @@ import PackageDescription
 // IMPORTANT: SwiftPM target membership is platform-unconditional, so nothing on macOS
 // may build or test this package. It would not even get as far as skipping things: on
 // macOS `canImport(SwiftUI)` is true, so `Preferences.tintColor` and
-// `DecorationStyle.colors` call `Color(hexString:)` — which lives in ColorHex.swift,
-// a file this target deliberately excludes — and the build fails on an unresolved
-// initialiser. The `sources:` lists below are the *Linux* build; macOS goes through
-// the .xcodeproj, always. They deliberately carry no hand-written file/suite count:
-// two port steps running have left one stale, and the audit step prints the real
-// total on every CI run, so trust `scripts/audit-manifest-coverage.swift` over prose.
+// `DecorationStyle.colors` call `Color(hexString:)` — which lives in LiveryKit, a
+// product this target deliberately does not link (it depends on LiveryCore only) —
+// and the build fails on an unresolved initialiser. The `sources:` lists below are
+// the *Linux* build; macOS goes through the .xcodeproj, always. They deliberately
+// carry no hand-written file/suite count: two port steps running have left one
+// stale, and the audit step prints the real total on every CI run, so trust
+// `scripts/audit-manifest-coverage.swift` over prose.
 //
 // `sources:` and `exclude:` are both load-bearing: SwiftPM reports anything under the
 // target directory that is in neither as "unhandled" and names it, and Linux CI fails
@@ -27,9 +28,19 @@ let package = Package(
     name: "Jetty",
     platforms: [.macOS(.v13)],
     products: [.library(name: "Jetty", targets: ["Jetty"])],
+    dependencies: [
+        .package(url: "https://github.com/L-K-M/Livery", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/L-K-M/Keycap", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/L-K-M/Updraft", .upToNextMinor(from: "0.1.0")),
+    ],
     targets: [
         .target(
             name: "Jetty",
+            dependencies: [
+                .product(name: "LiveryCore", package: "Livery"),
+                .product(name: "KeycapCore", package: "Keycap"),
+                .product(name: "UpdraftCore", package: "Updraft"),
+            ],
             path: "Jetty",
             exclude: [
                 "Resources",
@@ -38,9 +49,9 @@ let package = Package(
                 "AppDelegate.swift",
                 "JettyApp.swift",
                 // `Apps` is no longer excluded wholesale — `RunningAppInfo` and
-                // `TrashLocations` are portable and sit in `sources:`. As with
-                // `Hotkeys`, that means a NEW file under Apps/ is covered by neither
-                // list until someone adds it here or there.
+                // `TrashLocations` are portable and sit in `sources:`. That means a
+                // NEW file under Apps/ is covered by neither list until someone adds
+                // it here or there.
                 "Apps/AppLauncher.swift",
                 "Apps/AppResponsivenessMonitor.swift",
                 "Apps/FinderAutomation.swift",
@@ -49,15 +60,10 @@ let package = Package(
                 "Apps/TrashMonitor.swift",
                 "Apps/TrashStateResolver.swift",
                 "Common/ActivationPolicy.swift",
-                "Common/BoingBallDecoration.swift",
-                "Common/CRTScreenOverlay.swift",
-                "Common/GlassBackground.swift",
                 "Common/IconCache.swift",
                 "Common/LRUImageCache.swift",
-                "Common/PanelDecoration.swift",
                 "Common/Poof.swift",
                 "Common/TileAccent.swift",
-                "Common/VisualEffectView.swift",
                 "Dock/DockContextAction.swift",
                 "Dock/DockContextMenuPlacement.swift",
                 "Dock/DockContextMenuSource.swift",
@@ -68,11 +74,6 @@ let package = Package(
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
                 // A directory excluded wholesale also covers files added to it later.
-                // These two are named individually so `Hotkeys/KeyCodes.swift` could be
-                // ported, and that protection is gone: a new file under Hotkeys/ has to
-                // be listed or excluded by hand or it lands in neither list.
-                "Hotkeys/AccessibilityAuthorizer.swift",
-                "Hotkeys/CarbonHotkey.swift",
                 "Icons",
                 "Menu/AppIndex.swift",
                 "Menu/AppleScriptRunner.swift",
@@ -82,12 +83,10 @@ let package = Package(
                 "Menu/MenuCommand.swift",
                 "Menu/PowerCommands.swift",
                 "Menu/RecentAppsStore.swift",
-                "Model/ColorHex.swift",
                 "Screens/DisplayRegistry.swift",
                 "Settings",
                 "Stacks",
                 "SystemDock",
-                "Updates/UpdateChecker.swift",
                 "Widgets/AnalogClockFace.swift",
                 "Widgets/BatteryWidgetView.swift",
                 "Widgets/ClockWidgetView.swift",
@@ -120,9 +119,7 @@ let package = Package(
                 "Common/XDGPaths.swift",
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
-                "Model/RGBA8.swift",
                 "Model/HotkeyBinding.swift",
-                "Hotkeys/KeyCodes.swift",
                 "Model/JettyMenuGlyph.swift",
                 "Model/Preferences.swift",
                 "Model/AppearancePreset.swift",
@@ -132,8 +129,6 @@ let package = Package(
                 "Model/DockItem.swift",
                 "Model/DockItemKind.swift",
                 "Model/ClockFaceStyle.swift",
-                "Model/DecorationPosition.swift",
-                "Model/DecorationStyle.swift",
                 "Model/SystemMonitorStyle.swift",
                 "Model/TrashIconStyle.swift",
                 "Model/PreferenceEnums.swift",
@@ -145,11 +140,6 @@ let package = Package(
                 "Menu/ExpressionEvaluator.swift",
                 "Menu/UnitConverter.swift",
                 "Menu/CurrencyService.swift",
-                "Updates/SemanticVersion.swift",
-                "Updates/GitHubRelease.swift",
-                "Updates/GitHubReleaseClient.swift",
-                "Updates/UpdateDownloader.swift",
-                "Updates/UpdateVersionComparison.swift",
             ]
         ),
         .testTarget(
@@ -181,7 +171,6 @@ let package = Package(
                 "PreferencesTests.swift",
                 "HotkeyBindingTests.swift",
                 "MenuGlyphAndStoreTests.swift",
-                "ColorHexTests.swift",
                 "BookmarkResolverTests.swift",
                 "XDGDataHomeTests.swift",
                 "StoreBackupTests.swift",
@@ -194,9 +183,6 @@ let package = Package(
                 "ClockGeometrySecondsTests.swift",
                 "AppSearchTests.swift",
                 "ExpressionEvaluatorTests.swift",
-                "SemanticVersionTests.swift",
-                "GitHubReleaseTests.swift",
-                "UpdateVersionComparisonTests.swift",
                 "WeatherRetryTests.swift",
             ]
         ),

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UpdraftKit
 
 /// Hosts the SwiftUI `SettingsView` in a standard titled window, presented on
 /// demand (the agent has no SwiftUI `Settings` scene). Switches the app to

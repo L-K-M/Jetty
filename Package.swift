@@ -144,7 +144,12 @@ let package = Package(
         ),
         .testTarget(
             name: "JettyTests",
-            dependencies: ["Jetty"],
+            dependencies: [
+                "Jetty",
+                // CodableModelTests checks Jetty's exports against Livery's
+                // shared theme reader.
+                .product(name: "LiveryCore", package: "Livery"),
+            ],
             path: "JettyTests",
             exclude: [
                 "AppResponsivenessTests.swift",

@@ -523,7 +523,7 @@ Jetty/
 │   │   ├── DockItemKind.swift       # launchable targets + built-in tiles (separator/Trash/widgets)
 │   │   ├── DockAnchor.swift         # display UUID + edge + alignment + offset + inset
 │   │   ├── DockEdge.swift           # + DockAlignment
-│   │   ├── AppearancePreset.swift   # Codable theme bundle + built-ins (Zap-style; imports Zap themes)
+│   │   ├── AppearancePreset.swift   # Codable theme bundle + built-ins (Zap-style; imports Zap and Invoque themes)
 │   │   ├── PreferenceEnums.swift    # material / indicator / reveal-trigger / window-preview enums
 │   │   ├── ClockFaceStyle.swift     # clock-tile look: digital / LCD / the analog dials
 │   │   ├── SystemMonitorStyle.swift # system-monitor look: bars / graph / scope / LED / gauges

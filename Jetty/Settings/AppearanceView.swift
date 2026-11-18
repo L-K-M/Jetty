@@ -141,7 +141,7 @@ struct AppearanceView: View {
         do {
             let data = try Data(contentsOf: url)
             guard let preset = AppearancePreset.decode(from: data) else {
-                importError = "That file isn't a Jetty or Zap theme."
+                importError = "That file isn't a Jetty, Zap or Invoque theme."
                 return
             }
             preferences.apply(preset)

@@ -29,9 +29,9 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.library(name: "Jetty", targets: ["Jetty"])],
     dependencies: [
-        .package(url: "https://github.com/L-K-M/Livery", .upToNextMinor(from: "0.1.0")),
-        .package(url: "https://github.com/L-K-M/Keycap", .upToNextMinor(from: "0.1.0")),
-        .package(url: "https://github.com/L-K-M/Updraft", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/L-K-M/Livery", .upToNextMinor(from: "0.2.0")),
+        .package(url: "https://github.com/L-K-M/Keycap", .upToNextMinor(from: "0.1.1")),
+        .package(url: "https://github.com/L-K-M/Updraft", .upToNextMinor(from: "0.2.0")),
     ],
     targets: [
         .target(

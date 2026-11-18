@@ -1,4 +1,9 @@
 import XCTest
+#if canImport(LiveryKit)
+import LiveryKit
+#else
+import LiveryCore
+#endif
 @testable import Jetty
 
 final class CodableModelTests: XCTestCase {
@@ -222,5 +227,71 @@ final class CodableModelTests: XCTestCase {
         XCTAssertTrue(preset.crtEnabled)
         XCTAssertEqual(preset.indicatorHex, "#00AEEF")      // highlightColorHex → indicator
         XCTAssertEqual(preset.iconSize, 80, accuracy: 0.001)
+    }
+
+    /// Invoque's built-in "Summon" theme as Invoque exports it. Its
+    /// selection highlight becomes the indicator color (as Zap's does) and
+    /// its adaptive accent is Jetty's accent glow.
+    func testImportsInvoqueTheme() throws {
+        let json = Data(##"""
+        {"adaptiveAccent": false, "backgroundOpacity": 0.9, "cornerRadius": 16,
+         "crtEnabled": false, "crtIntensity": 0.5, "decorationOpacity": 1,
+         "decorationPosition": "topTrailing", "decorationSize": 10,
+         "decorationStyle": "none", "gradientAngle": 30, "gradientHex": "#2A1F4D",
+         "highlightCornerRadius": 10, "highlightHex": "#B18CFF", "highlightOpacity": 0.4,
+         "labelHex": "#EDE9FF", "material": "gradient", "name": "Summon",
+         "tintHex": "#17122B", "typeface": "system"}
+        """##.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        let d = Preferences.Default.self
+        XCTAssertEqual(preset.name, "Summon")
+        XCTAssertEqual(preset.material, .gradient)
+        XCTAssertEqual(preset.tintHex, "#17122B")
+        XCTAssertEqual(preset.gradientHex, "#2A1F4D")
+        XCTAssertEqual(preset.cornerRadius, 16, accuracy: 0.001)
+        XCTAssertEqual(preset.indicatorHex, "#B18CFF")
+        XCTAssertFalse(preset.accentGlow)
+        // Jetty-only settings keep Jetty's defaults.
+        XCTAssertEqual(preset.iconSize, d.iconSize, accuracy: 0.001)
+        XCTAssertEqual(preset.tileSpacing, d.tileSpacing, accuracy: 0.001)
+        XCTAssertEqual(preset.indicatorStyle, d.indicatorStyle)
+        XCTAssertEqual(preset.glyphHex, d.glyphHex)
+    }
+
+    /// One wrong-typed field in a Zap theme used to fail the whole import.
+    func testZapThemeWithAWrongTypedFieldStillImports() throws {
+        let json = Data(##"{"name": "Bits", "backgroundColorHex": "#202020", "gradientAngle": "45", "useGradientBackground": true}"##.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        XCTAssertEqual(preset.tintHex, "#202020")
+        XCTAssertEqual(preset.material, .gradient)
+        XCTAssertEqual(preset.gradientAngle, Preferences.Default.gradientAngle, accuracy: 0.001)
+    }
+
+    /// Zap themes holding only keys Jetty's old sniffing ignored
+    /// (`gradientColorHex`, `labelColorHex`, `contentPadding`) are themes too.
+    func testZapThemeWithLessCommonKeysIsRecognised() throws {
+        let json = Data(##"{"gradientColorHex": "#1A1140", "contentPadding": 12}"##.utf8)
+        let preset = try XCTUnwrap(AppearancePreset.decode(from: json))
+        XCTAssertEqual(preset.gradientHex, "#1A1140")
+        XCTAssertEqual(preset.name, "Imported (Zap)")
+    }
+
+    /// Jetty's exports must stay readable by the shared reader the siblings use.
+    func testJettyExportsAreReadableByTheSharedReader() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        for preset in AppearancePreset.builtIns {
+            let theme = try XCTUnwrap(ThemeSnapshot(themeData: try encoder.encode(preset)), preset.name)
+            XCTAssertEqual(theme.format, .jetty, preset.name)
+            XCTAssertEqual(theme.name, preset.name)
+            XCTAssertEqual(theme.material, preset.material, preset.name)
+            XCTAssertEqual(theme.tintHex, preset.tintHex, preset.name)
+            XCTAssertEqual(theme.gradientHex, preset.gradientHex, preset.name)
+            XCTAssertEqual(theme.iconSize, preset.iconSize, preset.name)
+            XCTAssertEqual(theme.showsLabels, preset.showLabels, preset.name)
+            XCTAssertEqual(theme.adaptiveAccent, preset.accentGlow, preset.name)
+            XCTAssertEqual(theme.decorationStyle?.rawValue, preset.decorationStyle, preset.name)
+            XCTAssertEqual(theme.crtIntensity, preset.crtIntensity, preset.name)
+        }
     }
 }

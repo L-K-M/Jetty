@@ -7,8 +7,8 @@ import LiveryCore
 
 /// A shareable bundle of Jetty's visual settings — exported/imported as a small
 /// `.json` file and applied with one click, plus a set of built-in themes. Mirrors
-/// Zap's preset model and can also **import a Zap theme** (see `decode(from:)`), so
-/// looks can be shared across the two apps. See PLAN.md §9.
+/// Zap's preset model and can also **import Zap and Invoque themes** (see
+/// `decode(from:)`), so looks can be shared across the apps. See PLAN.md §9.
 struct AppearancePreset: Codable, Equatable, Identifiable {
     var name: String
     var material: DockMaterial
@@ -150,29 +150,54 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
         case clockFace, clockFaceZoom, systemMonitorStyle, systemMonitorShowNetwork
     }
 
-    // MARK: Import (Jetty or Zap format)
+    // MARK: Import (Jetty, Zap or Invoque format)
 
-    /// Decodes a theme from JSON, accepting both Jetty's own format and a **Zap**
-    /// theme file (its field names differ — `backgroundColorHex`, `useGradientBackground`,
-    /// `highlightColorHex`, `showAppName`, …). Since Jetty's own decoder is fully
-    /// tolerant (it never fails — defaults fill any gap), we sniff the raw keys to
-    /// tell the two formats apart and only fall back to Jetty otherwise.
+    /// Decodes a theme from JSON: Jetty's own format, or a **Zap** or
+    /// **Invoque** theme file, recognised and read by Livery's shared
+    /// `ThemeSnapshot`. Jetty's own decoder is fully tolerant (it never
+    /// fails; defaults fill any gap), so the snapshot's format decides which
+    /// reader runs. JSON the snapshot does not recognise as a theme is
+    /// rejected rather than imported as an all-defaults preset, so importing
+    /// the wrong file surfaces an error instead of a silent swap (M27).
     static func decode(from data: Data) -> AppearancePreset? {
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let hasJettyKeys = obj["material"] != nil || obj["tintHex"] != nil
-                || obj["indicatorStyle"] != nil || obj["clockFace"] != nil
-                || obj["clockFaceZoom"] != nil || obj["systemMonitorStyle"] != nil
-                || obj["systemMonitorShowNetwork"] != nil
-            let hasZapKeys = obj["backgroundColorHex"] != nil || obj["useGradientBackground"] != nil || obj["showAppName"] != nil
-            if !hasJettyKeys, hasZapKeys, let zap = try? JSONDecoder().decode(ZapTheme.self, from: data) {
-                return zap.asJettyPreset
-            }
-            // A JSON object with none of the recognized keys isn't a theme — reject it
-            // rather than let the fully-tolerant decoder return an all-defaults preset,
-            // so importing a wrong file surfaces an error instead of a silent swap (M27).
-            guard hasJettyKeys else { return nil }
+        guard let theme = ThemeSnapshot(themeData: data) else { return nil }
+        if theme.format == .jetty {
+            return try? JSONDecoder().decode(AppearancePreset.self, from: data)
         }
-        return try? JSONDecoder().decode(AppearancePreset.self, from: data)
+        return AppearancePreset(importing: theme)
+    }
+
+    /// Maps a sibling's theme onto Jetty's settings, with Jetty's defaults
+    /// for the dock layout, magnification, indicator style and widgets it
+    /// does not have. The sibling's selection highlight becomes the
+    /// running-app indicator color, as Jetty's Zap import always did.
+    /// Values are validated and clamped later, when the preset is applied.
+    init(importing theme: ThemeSnapshot) {
+        let d = Preferences.Default.self
+        let fallbackName = theme.format == .zap ? "Imported (Zap)" : "Imported (Invoque)"
+        self.init(
+            name: theme.name ?? fallbackName,
+            material: theme.material ?? d.material,
+            tintHex: theme.tintHex ?? d.tintHex,
+            gradientHex: theme.gradientHex ?? d.gradientHex,
+            gradientAngle: theme.gradientAngle ?? d.gradientAngle,
+            backgroundOpacity: theme.backgroundOpacity ?? d.backgroundOpacity,
+            iconSize: theme.iconSize ?? d.iconSize,
+            tileSpacing: d.tileSpacing,
+            cornerRadius: theme.cornerRadius ?? d.cornerRadius,
+            magnificationEnabled: d.magnificationEnabled,
+            magnification: d.magnification,
+            indicatorStyle: d.indicatorStyle,
+            indicatorHex: theme.highlightHex ?? d.indicatorHex,
+            showLabels: theme.showsLabels ?? d.showLabels,
+            accentGlow: theme.adaptiveAccent ?? d.accentGlow,
+            glyphHex: d.glyphHex,
+            decorationStyle: (theme.decorationStyle ?? d.decorationStyle).rawValue,
+            decorationPosition: (theme.decorationPosition ?? d.decorationPosition).rawValue,
+            decorationOpacity: theme.decorationOpacity ?? d.decorationOpacity,
+            decorationSize: theme.decorationSize ?? d.decorationSize,
+            crtEnabled: theme.crtEnabled ?? d.crtEnabled,
+            crtIntensity: theme.crtIntensity ?? d.crtIntensity)
     }
 
     // MARK: Built-in themes
@@ -216,51 +241,4 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
                          decorationStyle: "amigaPixel", decorationPosition: "topTrailing",
                          decorationOpacity: 0.2, decorationSize: 30, crtEnabled: true, crtIntensity: 0.7),
     ]
-}
-
-// MARK: - Zap theme interop
-
-/// The subset of a **Zap** appearance preset Jetty understands, so a `.json` theme
-/// exported from Zap can be imported here. Field names match Zap's `AppearancePreset`.
-private struct ZapTheme: Decodable {
-    var name: String?
-    var backgroundColorHex: String?
-    var useGradientBackground: Bool?
-    var gradientColorHex: String?
-    var gradientAngle: Double?
-    var decorationStyle: String?
-    var decorationPosition: String?
-    var decorationOpacity: Double?
-    var decorationSize: Double?
-    var crtEnabled: Bool?
-    var crtIntensity: Double?
-    var highlightColorHex: String?
-    var backgroundOpacity: Double?
-    var iconSize: Double?
-    var cornerRadius: Double?
-    var showAppName: Bool?
-
-    var asJettyPreset: AppearancePreset {
-        AppearancePreset(
-            name: name ?? "Imported (Zap)",
-            material: (useGradientBackground == true) ? .gradient : .solid,
-            tintHex: backgroundColorHex ?? Preferences.Default.tintHex,
-            gradientHex: gradientColorHex ?? Preferences.Default.gradientHex,
-            gradientAngle: gradientAngle ?? 0,
-            backgroundOpacity: backgroundOpacity ?? Preferences.Default.backgroundOpacity,
-            iconSize: iconSize ?? Preferences.Default.iconSize,
-            tileSpacing: Preferences.Default.tileSpacing,
-            cornerRadius: cornerRadius ?? Preferences.Default.cornerRadius,
-            magnificationEnabled: Preferences.Default.magnificationEnabled,
-            magnification: Preferences.Default.magnification,
-            indicatorStyle: Preferences.Default.indicatorStyle,
-            indicatorHex: highlightColorHex ?? Preferences.Default.indicatorHex,
-            showLabels: showAppName ?? false,
-            decorationStyle: decorationStyle ?? "none",
-            decorationPosition: decorationPosition ?? "topTrailing",
-            decorationOpacity: decorationOpacity ?? 1,
-            decorationSize: decorationSize ?? 12,
-            crtEnabled: crtEnabled ?? false,
-            crtIntensity: crtIntensity ?? 0.5)
-    }
 }

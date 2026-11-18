@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Theme import also reads Invoque themes, and reads Zap themes through Livery
+  0.2.0's shared theme reader. A Zap theme with a wrong-typed field, or one
+  carrying only less common Zap keys, now imports instead of failing. A Zap or
+  Invoque theme's selection colour becomes the indicator colour, and Invoque's
+  adaptive accent sets accent glow.
+- A hotkey press that arrives just as its shortcut is changed or turned off no
+  longer fires the old action (Keycap 0.1.1).
+- When GitHub's rate limit stops a Check for Updates, the alert says when to
+  try again instead of showing a bare HTTP 403 (Updraft 0.2.0).
 - Adopted Livery for panel theming. Stripe decorations no longer show a faint
   hairline between bands, the Memphis and Synthwave corner styles are now
   available, Reduce Transparency turns the dock and menu backgrounds opaque

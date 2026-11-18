@@ -109,9 +109,8 @@ Mirrors `PLAN.md §11`:
 - `Menu/` — the Jetty Menu / command bar (`JettyMenuController`/`View`/`Model`,
   `AppIndex`, `RecentAppsStore`, and the pure `AppSearch`, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService`, `MenuCommand`, `PowerCommands`).
-- `Hotkeys/` — `CarbonHotkey`, `KeyCodes`, `AccessibilityAuthorizer` (for later features).
 - `Settings/` — the SwiftUI settings panes (General/Appearance/Items/Displays/Widgets/
-  Menu/Permissions/About) + window controller and `HotkeyRecorder`.
+  Menu/Permissions/About) + window controller.
 - `Updates/` — the GitHub self-updater (reused from Zap).
 - `MediaRemote/` — the isolated Objective-C MediaRemote bridge (`MediaRemoteBridge`)
   behind `Jetty-Bridging-Header.h`, used only by the opt-in now-playing tile.
@@ -137,7 +136,7 @@ Mirrors `PLAN.md §11`:
 
 ## Dependencies
 
-Two first-party SwiftPM packages, both pinned in
+Three first-party SwiftPM packages, all pinned in
 `Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
 
 - [`PictKit`](https://github.com/L-K-M/Pict) — the shared icon store and
@@ -148,6 +147,10 @@ Two first-party SwiftPM packages, both pinned in
   hex colour parsing, WCAG contrast, decoration styles and materials, and the
   background, decoration, CRT, boing-ball and angle-dial views. Pinned by tag
   (up to next minor).
+- [`KeycapKit`](https://github.com/L-K-M/Keycap) — the shared global hotkeys:
+  Carbon registration, the key-combo model and display strings, the shortcut
+  recorder and the Accessibility-permission helper. Pinned by tag (up to next
+  minor).
 
 Icon precedence in `DockModel.icon(for:)`, top rung first:
 

@@ -101,8 +101,9 @@ tag; Gatekeeper will warn on first launch (`xattr -dr com.apple.quarantine /Appl
 
 ## License
 
-Jetty.app bundles the [PictKit](https://github.com/L-K-M/Pict) and
-[LiveryKit](https://github.com/L-K-M/Livery) libraries (Unlicense) and trash
+Jetty.app bundles the [PictKit](https://github.com/L-K-M/Pict),
+[LiveryKit](https://github.com/L-K-M/Livery) and
+[KeycapKit](https://github.com/L-K-M/Keycap) libraries (Unlicense) and trash
 icon artwork from other projects: the Haiku icons (Open Tracker License), the
 Tango icons (public domain) and the KARSIORI Pixel pack (CC0). These keep their
 own licenses. Their notices ship in

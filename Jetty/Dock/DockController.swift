@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import KeycapKit
 
 /// The orchestrator: merges pinned + running apps into the shared `DockModel`,
 /// resolves each target display's anchor into a `DockPanelController`, forwards
@@ -20,8 +21,12 @@ final class DockController {
     private var panels: [String: DockPanelController] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    private let toggleHotkey = CarbonHotkey(identifier: 1)
-    private let menuHotkey = CarbonHotkey(identifier: 2)
+    /// Jetty's four-character Carbon hotkey signature, `'JETY'`. Keycap takes it
+    /// as a parameter so the wire format is unchanged.
+    private static let hotkeySignature: OSType = 0x4A45_5459
+
+    private let toggleHotkey = CarbonHotkey(identifier: 1, signature: DockController.hotkeySignature)
+    private let menuHotkey = CarbonHotkey(identifier: 2, signature: DockController.hotkeySignature)
 
     /// Token for the block-based wake observer, so `teardown()` can remove it (otherwise
     /// every start/teardown cycle stacks another live observer) — H24.
@@ -975,7 +980,7 @@ final class DockController {
         let toggle = preferences.toggleHotkey
         if toggle.isValid {
             toggleHotkey.onPressed = { [weak self] in self?.toggleAllDocks() }
-            toggleHotkey.register(keyCode: toggle.keyCode, modifiers: toggle.modifiers)
+            toggleHotkey.register(toggle.combo)
         } else {
             toggleHotkey.unregister()
         }
@@ -983,7 +988,7 @@ final class DockController {
         let menu = preferences.menuHotkey
         if menu.isValid {
             menuHotkey.onPressed = { [weak self] in self?.openJettyMenu() }
-            menuHotkey.register(keyCode: menu.keyCode, modifiers: menu.modifiers)
+            menuHotkey.register(menu.combo)
         } else {
             menuHotkey.unregister()
         }

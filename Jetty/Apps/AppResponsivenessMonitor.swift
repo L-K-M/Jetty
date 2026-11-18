@@ -1,5 +1,6 @@
 import ApplicationServices
 import Foundation
+import KeycapKit
 
 /// Best-effort app responsiveness checks using Accessibility only when the user has
 /// already granted it. The monitor never prompts and never guesses from process state.

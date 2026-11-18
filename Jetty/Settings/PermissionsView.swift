@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import CoreGraphics
 import Combine
+import KeycapKit
 
 /// Reports the optional permissions used by Jetty's *later* power features. The core
 /// dock needs none of these — this pane exists so the window-peeking / live-preview

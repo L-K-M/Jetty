@@ -1,22 +1,21 @@
 // Foundation is unconditional: the persistence half below needs it on every platform,
 // and `JSONEncoder`/`JSONDecoder` are top-level names, so file-scoped lookup really
 // does require it here — without this import they are not in scope (measured).
-// Importing it only as Carbon's `#else` left macOS resolving them through AppKit's
-// re-export, so reshuffling the AppKit guard would have broken the Mac build.
 import Foundation
 #if canImport(AppKit)
 import AppKit
-#endif
-// Still genuinely needed where it exists: `label(for:)` maps recorded keys with `kVK_`.
-#if canImport(Carbon)
-import Carbon.HIToolbox
+// KeycapKit re-exports KeycapCore, so one import covers the chord model and the
+// record-time `NSEvent` helpers below.
+import KeycapKit
+#else
+import KeycapCore
 #endif
 
 /// A user-configurable global hotkey: a virtual key code plus Carbon modifier
 /// flags, an on/off switch, and a human label captured at record time (so the
 /// display respects the user's keyboard layout without a keycode→name table).
-/// Persisted as JSON in `UserDefaults`; registered via `CarbonHotkey` (which needs
-/// no permission). See MF-6 / PLAN.md §8.2.
+/// Persisted as JSON in `UserDefaults`; registered via Keycap's `CarbonHotkey`
+/// (which needs no permission). See MF-6 / PLAN.md §8.2.
 struct HotkeyBinding: Codable, Equatable {
     var keyCode: UInt32
     /// Carbon modifier-flag bits (`cmdKey | optionKey | …`).
@@ -25,75 +24,22 @@ struct HotkeyBinding: Codable, Equatable {
     var keyLabel: String
     var enabled: Bool
 
-    /// Registerable only when enabled and carrying at least one modifier — a bare
-    /// key would steal that key system-wide.
-    var isValid: Bool { enabled && modifiers != 0 }
+    /// The Keycap chord this binding persists. Keycap owns the key-code and
+    /// modifier literals; the four stored fields above stay the storage format.
+    var combo: KeyCombo {
+        KeyCombo(keyCode: keyCode, modifiers: HotkeyModifiers(carbonFlags: modifiers))
+    }
+
+    /// Registerable only when enabled and a usable global hotkey: not
+    /// system-reserved, and either carrying ⌘/⌃/⌥ or a bare function key.
+    /// Shift alone is not enough — it only changes the typed character.
+    var isValid: Bool { enabled && combo.isUsableGlobalHotkey }
 
     /// The modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
-    var modifierSymbols: String {
-        var s = ""
-        if modifiers & KeyCode.Modifier.control != 0 { s += "⌃" }
-        if modifiers & KeyCode.Modifier.option  != 0 { s += "⌥" }
-        if modifiers & KeyCode.Modifier.shift   != 0 { s += "⇧" }
-        if modifiers & KeyCode.Modifier.command != 0 { s += "⌘" }
-        return s
-    }
+    var modifierSymbols: String { combo.modifiers.symbols }
 
     /// The full shortcut, e.g. `"⌃⌥⌘D"`.
-    var displayString: String { modifierSymbols + keyLabel }
-
-    // MARK: Capture
-
-    // Recording a hotkey means reading an `NSEvent`, so this half is Darwin's. The
-    // stored form above, and the encode/decode below it, are not.
-    #if canImport(AppKit)
-
-    /// Builds a binding from a recorded key event (preserving the current `enabled`).
-    func updated(from event: NSEvent) -> HotkeyBinding {
-        HotkeyBinding(keyCode: UInt32(event.keyCode),
-                      modifiers: Self.carbonModifiers(from: event.modifierFlags),
-                      keyLabel: Self.label(for: event),
-                      enabled: enabled)
-    }
-
-    /// Maps Cocoa modifier flags to Carbon's `RegisterEventHotKey` bits.
-    static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
-        var carbon: UInt32 = 0
-        if flags.contains(.command) { carbon |= KeyCode.Modifier.command }
-        if flags.contains(.option)  { carbon |= KeyCode.Modifier.option }
-        if flags.contains(.control) { carbon |= KeyCode.Modifier.control }
-        if flags.contains(.shift)   { carbon |= KeyCode.Modifier.shift }
-        return carbon
-    }
-
-    /// A short label for a recorded key, using the layout-aware character when the
-    /// key isn't one of the named special keys.
-    static func label(for event: NSEvent) -> String {
-        switch Int(event.keyCode) {
-        case kVK_Space:       return "Space"
-        case kVK_Return, kVK_ANSI_KeypadEnter: return "↩"
-        case kVK_Tab:         return "⇥"
-        case kVK_Delete:      return "⌫"
-        case kVK_ForwardDelete: return "⌦"
-        case kVK_Escape:      return "⎋"
-        case kVK_LeftArrow:   return "←"
-        case kVK_RightArrow:  return "→"
-        case kVK_UpArrow:     return "↑"
-        case kVK_DownArrow:   return "↓"
-        case kVK_Home:        return "↖"
-        case kVK_End:         return "↘"
-        case kVK_PageUp:      return "⇞"
-        case kVK_PageDown:    return "⇟"
-        default:
-            if let chars = event.charactersIgnoringModifiers, !chars.isEmpty,
-               chars.first.map({ !$0.isWhitespace }) == true {
-                return chars.uppercased()
-            }
-            return "Key \(event.keyCode)"
-        }
-    }
-
-    #endif
+    var displayString: String { combo.displayString(keyName: keyLabel) }
 
     // MARK: Persistence
 
@@ -111,8 +57,8 @@ struct HotkeyBinding: Codable, Equatable {
 
     // MARK: Defaults
 
-    private static let defaultModifiers =
-        KeyCode.Modifier.control | KeyCode.Modifier.option | KeyCode.Modifier.command
+    private static let defaultModifiers: UInt32 =
+        HotkeyModifiers.control.rawValue | HotkeyModifiers.option.rawValue | HotkeyModifiers.command.rawValue
 
     static let defaultToggle = HotkeyBinding(keyCode: KeyCode.d, modifiers: defaultModifiers,
                                              keyLabel: "D", enabled: true)

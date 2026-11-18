@@ -30,12 +30,14 @@ let package = Package(
     products: [.library(name: "Jetty", targets: ["Jetty"])],
     dependencies: [
         .package(url: "https://github.com/L-K-M/Livery", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/L-K-M/Keycap", .upToNextMinor(from: "0.1.0")),
     ],
     targets: [
         .target(
             name: "Jetty",
             dependencies: [
                 .product(name: "LiveryCore", package: "Livery"),
+                .product(name: "KeycapCore", package: "Keycap"),
             ],
             path: "Jetty",
             exclude: [
@@ -45,9 +47,9 @@ let package = Package(
                 "AppDelegate.swift",
                 "JettyApp.swift",
                 // `Apps` is no longer excluded wholesale — `RunningAppInfo` and
-                // `TrashLocations` are portable and sit in `sources:`. As with
-                // `Hotkeys`, that means a NEW file under Apps/ is covered by neither
-                // list until someone adds it here or there.
+                // `TrashLocations` are portable and sit in `sources:`. That means a
+                // NEW file under Apps/ is covered by neither list until someone adds
+                // it here or there.
                 "Apps/AppLauncher.swift",
                 "Apps/AppResponsivenessMonitor.swift",
                 "Apps/FinderAutomation.swift",
@@ -70,11 +72,6 @@ let package = Package(
                 "Dock/DockView.swift",
                 "Dock/EdgeHoverMonitor.swift",
                 // A directory excluded wholesale also covers files added to it later.
-                // These two are named individually so `Hotkeys/KeyCodes.swift` could be
-                // ported, and that protection is gone: a new file under Hotkeys/ has to
-                // be listed or excluded by hand or it lands in neither list.
-                "Hotkeys/AccessibilityAuthorizer.swift",
-                "Hotkeys/CarbonHotkey.swift",
                 "Icons",
                 "Menu/AppIndex.swift",
                 "Menu/AppleScriptRunner.swift",
@@ -122,7 +119,6 @@ let package = Package(
                 "Model/DockEdge.swift",
                 "Model/DockAnchor.swift",
                 "Model/HotkeyBinding.swift",
-                "Hotkeys/KeyCodes.swift",
                 "Model/JettyMenuGlyph.swift",
                 "Model/Preferences.swift",
                 "Model/AppearancePreset.swift",

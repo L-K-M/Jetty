@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import LiveryKit
 
 /// The Windows-Start-style launcher panel: a search field over installed apps, a
 /// results list, and a power-command row. Liquid Glass background to match the dock.
@@ -7,6 +8,9 @@ import AppKit
 struct JettyMenuView: View {
     @ObservedObject var model: JettyMenuModel
     @ObservedObject var preferences: Preferences
+    /// Live accessibility display settings, so the menu background turns opaque
+    /// the moment the user toggles Reduce Transparency.
+    @ObservedObject private var accessibilitySettings = AccessibilityDisplaySettings.shared
     @FocusState private var searchFocused: Bool
     /// Set when a hover changes the selection so the results list doesn't auto-scroll
     /// under the cursor — only keyboard navigation scrolls (M11).
@@ -56,12 +60,14 @@ struct JettyMenuView: View {
         }
         .frame(width: 420, height: 460)
         .background(
-            GlassBackground(material: preferences.material,
+            PanelBackground(material: preferences.material,
                             tint: preferences.tintColor,
                             gradientColor: preferences.gradientColor,
                             gradientAngle: preferences.gradientAngle,
                             opacity: max(preferences.backgroundOpacity, 0.7),
-                            cornerRadius: 20)
+                            cornerRadius: 20,
+                            reduceTransparency: accessibilitySettings.reduceTransparency,
+                            fallbackMaterial: .hudWindow)
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }

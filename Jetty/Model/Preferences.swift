@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(LiveryKit)
+import LiveryKit
+#else
+import LiveryCore
+#endif
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
@@ -338,7 +343,7 @@ final class Preferences: ObservableObject {
     // MARK: Derived
 
     // The hex strings are the stored form and are portable; turning one into a live
-    // `Color` is the part that needs SwiftUI. See `RGBA8` / `ColorHex` (JP-04).
+    // `Color` is the part that needs SwiftUI. See `RGBA8` in LiveryCore (JP-04).
     #if canImport(SwiftUI)
     var tintColor: Color { Color(hexString: tintHex) }
     var gradientColor: Color { Color(hexString: gradientHex) }

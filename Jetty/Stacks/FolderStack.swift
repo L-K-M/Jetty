@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import LiveryKit
 
 /// One entry in a folder stack popover.
 struct FolderEntry: Identifiable {
@@ -176,6 +177,9 @@ final class FolderStackModel: ObservableObject {
 struct FolderStackView: View {
     @ObservedObject var model: FolderStackModel
     @ObservedObject var preferences: Preferences
+    /// Live accessibility display settings, so the stack background turns opaque
+    /// the moment the user toggles Reduce Transparency.
+    @ObservedObject private var accessibilitySettings = AccessibilityDisplaySettings.shared
     var onSelect: (FolderEntry) -> Void
     var onBack: () -> Void
     var onOpenInFinder: () -> Void
@@ -201,12 +205,14 @@ struct FolderStackView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            GlassBackground(material: preferences.material,
+            PanelBackground(material: preferences.material,
                             tint: preferences.tintColor,
                             gradientColor: preferences.gradientColor,
                             gradientAngle: preferences.gradientAngle,
                             opacity: max(preferences.backgroundOpacity, 0.85),
-                            cornerRadius: 16)
+                            cornerRadius: 16,
+                            reduceTransparency: accessibilitySettings.reduceTransparency,
+                            fallbackMaterial: .hudWindow)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onHover { onHoverChange?($0) }

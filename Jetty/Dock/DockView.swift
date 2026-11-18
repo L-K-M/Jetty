@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import LiveryKit
 
 /// The dock's SwiftUI content: a row (or column) of **slots** on a Liquid Glass
 /// strip, with continuous pointer-tracking magnification and live drag-to-reorder.
@@ -10,6 +11,9 @@ import UniformTypeIdentifiers
 struct DockView: View {
     @ObservedObject var model: DockModel
     @ObservedObject var preferences: Preferences
+    /// Live accessibility display settings, so the dock background turns opaque
+    /// the moment the user toggles Reduce Transparency.
+    @ObservedObject private var accessibilitySettings = AccessibilityDisplaySettings.shared
     /// This panel's resolved anchor (per-display). The content lays out along
     /// `anchor.edge` — not the global `preferences.edge` — so each display's dock can
     /// use a different edge (BUG-4 / MF-1).
@@ -159,12 +163,14 @@ struct DockView: View {
     @ViewBuilder
     private func glassStrip(edge: DockEdge, thickness: CGFloat, overflows: Bool) -> some View {
         let radius = CGFloat(preferences.cornerRadius)
-        let bg = GlassBackground(material: preferences.material,
+        let bg = PanelBackground(material: preferences.material,
                                  tint: preferences.tintColor,
                                  gradientColor: preferences.gradientColor,
                                  gradientAngle: preferences.gradientAngle,
                                  opacity: preferences.backgroundOpacity,
-                                 cornerRadius: radius)
+                                 cornerRadius: radius,
+                                 reduceTransparency: accessibilitySettings.reduceTransparency,
+                                 fallbackMaterial: .hudWindow)
         let sized = Group {
             if edge.isHorizontal {
                 bg.frame(maxWidth: .infinity).frame(height: thickness)

@@ -82,9 +82,9 @@ GUI session.
 Mirrors `PLAN.md §11`:
 
 - `Model/` — Codable model (`DockDocument`, `DockItem`, `DockAnchor`, `DockEdge`/
-  `DockAlignment`, `AppearancePreset`), `Preferences`, the UI enums, and the colour
-  pair: pure `RGBA8` (the `#RRGGBB[AA]` storage format) plus `ColorHex`'s thin
-  `NSColor`/`Color` bridge over it.
+  `DockAlignment`, `AppearancePreset`), `Preferences` and the UI enums. The colour
+  storage format (`RGBA8`, `#RRGGBB[AA]`) comes from LiveryCore and its
+  `NSColor`/`Color` bridge from LiveryKit.
 - `Store/` — `DockStore` (JSON load/save, atomic/debounced, `.bak`), `BookmarkResolver`
   (bookmarks are Darwin-only; it falls back to the stored absolute path elsewhere).
 - `Screens/` — `DisplayRegistry` (UUID mapping), the pure `DockLayout` math, and
@@ -119,10 +119,9 @@ Mirrors `PLAN.md §11`:
   raise/minimize), `WindowPeek` + `WindowPeekController` (the hover popover panel).
   The default window-name mode is permission-free; live thumbnails need Screen
   Recording; raising/minimizing a specific window needs Accessibility.
-- `Common/` — `VisualEffectView`, `GlassBackground` (Liquid Glass + fallback),
-  `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent` (dominant-color glow),
-  `Poof`, and the retro decorations (`PanelDecoration`, `BoingBallDecoration`,
-  `CRTScreenOverlay`).
+- `Common/` — `ActivationPolicy`, `LRUImageCache`/`IconCache`, `TileAccent`
+  (dominant-color glow) and `Poof`. The panel background (Liquid Glass with its
+  fallback) and the retro decorations come from LiveryKit.
 
 ## Conventions
 
@@ -138,10 +137,17 @@ Mirrors `PLAN.md §11`:
 
 ## Dependencies
 
-Exactly one: [`PictKit`](https://github.com/L-K-M/Pict), a first-party SwiftPM
-package holding the shared icon store and resolution ladder that Zap, Top Drawer
-and the Pict editor also use. Jetty **reads** it and writes nothing to it — all
-editing lives in Pict, which needs no permissions and can be sandboxed.
+Two first-party SwiftPM packages, both pinned in
+`Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
+
+- [`PictKit`](https://github.com/L-K-M/Pict) — the shared icon store and
+  resolution ladder that Zap, Top Drawer and the Pict editor also use. Jetty
+  **reads** it and writes nothing to it: all editing lives in Pict, which needs
+  no permissions and can be sandboxed. Pinned to its `main` branch.
+- [`LiveryKit`](https://github.com/L-K-M/Livery) — the shared panel theming:
+  hex colour parsing, WCAG contrast, decoration styles and materials, and the
+  background, decoration, CRT, boing-ball and angle-dial views. Pinned by tag
+  (up to next minor).
 
 Icon precedence in `DockModel.icon(for:)`, top rung first:
 

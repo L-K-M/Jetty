@@ -31,6 +31,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/L-K-M/Livery", .upToNextMinor(from: "0.1.0")),
         .package(url: "https://github.com/L-K-M/Keycap", .upToNextMinor(from: "0.1.0")),
+        .package(url: "https://github.com/L-K-M/Updraft", .upToNextMinor(from: "0.1.0")),
     ],
     targets: [
         .target(
@@ -38,6 +39,7 @@ let package = Package(
             dependencies: [
                 .product(name: "LiveryCore", package: "Livery"),
                 .product(name: "KeycapCore", package: "Keycap"),
+                .product(name: "UpdraftCore", package: "Updraft"),
             ],
             path: "Jetty",
             exclude: [
@@ -85,7 +87,6 @@ let package = Package(
                 "Settings",
                 "Stacks",
                 "SystemDock",
-                "Updates/UpdateChecker.swift",
                 "Widgets/AnalogClockFace.swift",
                 "Widgets/BatteryWidgetView.swift",
                 "Widgets/ClockWidgetView.swift",
@@ -139,11 +140,6 @@ let package = Package(
                 "Menu/ExpressionEvaluator.swift",
                 "Menu/UnitConverter.swift",
                 "Menu/CurrencyService.swift",
-                "Updates/SemanticVersion.swift",
-                "Updates/GitHubRelease.swift",
-                "Updates/GitHubReleaseClient.swift",
-                "Updates/UpdateDownloader.swift",
-                "Updates/UpdateVersionComparison.swift",
             ]
         ),
         .testTarget(
@@ -187,9 +183,6 @@ let package = Package(
                 "ClockGeometrySecondsTests.swift",
                 "AppSearchTests.swift",
                 "ExpressionEvaluatorTests.swift",
-                "SemanticVersionTests.swift",
-                "GitHubReleaseTests.swift",
-                "UpdateVersionComparisonTests.swift",
                 "WeatherRetryTests.swift",
             ]
         ),

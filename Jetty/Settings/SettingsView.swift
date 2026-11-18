@@ -1,5 +1,6 @@
 import SwiftUI
 import LiveryKit
+import UpdraftKit
 
 /// The Settings window content: one tab per pane. Mirrors Zap/MacDring.
 struct SettingsView: View {

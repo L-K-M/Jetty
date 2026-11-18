@@ -111,7 +111,6 @@ Mirrors `PLAN.md §11`:
   `UnitConverter`, `CurrencyService`, `MenuCommand`, `PowerCommands`).
 - `Settings/` — the SwiftUI settings panes (General/Appearance/Items/Displays/Widgets/
   Menu/Permissions/About) + window controller.
-- `Updates/` — the GitHub self-updater (reused from Zap).
 - `MediaRemote/` — the isolated Objective-C MediaRemote bridge (`MediaRemoteBridge`)
   behind `Jetty-Bridging-Header.h`, used only by the opt-in now-playing tile.
 - `Windows/` — the opt-in window peek: `AppWindows` (CGWindowList listing + AX
@@ -132,11 +131,11 @@ Mirrors `PLAN.md §11`:
   is an injected parameter), `PowerCommand` mapping, `ExpressionEvaluator`,
   `UnitConverter`, `CurrencyService` parsing, `MenuCommand.match`, `FolderStack`
   geometry/ordering, `SystemStats`/`WeatherService` formatting, `HotkeyBinding`,
-  `NowPlayingService.parse`, and `SemanticVersion`.
+  and `NowPlayingService.parse`.
 
 ## Dependencies
 
-Three first-party SwiftPM packages, all pinned in
+Four first-party SwiftPM packages, all pinned in
 `Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
 
 - [`PictKit`](https://github.com/L-K-M/Pict) — the shared icon store and
@@ -151,6 +150,10 @@ Three first-party SwiftPM packages, all pinned in
   Carbon registration, the key-combo model and display strings, the shortcut
   recorder and the Accessibility-permission helper. Pinned by tag (up to next
   minor).
+- [`UpdraftKit`](https://github.com/L-K-M/Updraft) — the shared GitHub-Releases
+  update check: semantic-version parsing, the release client and downloader
+  (`UpdraftCore`), and the `UpdateChecker` that schedules checks, remembers the
+  user's choices and presents the alerts. Pinned by tag (up to next minor).
 
 Icon precedence in `DockModel.icon(for:)`, top rung first:
 
@@ -213,9 +216,8 @@ feature: two tiles pointing at one app are allowed to differ.
   `MagnificationCurve`, `ClockFormatter`, `AppSearch`, `PowerCommand` mapping,
   `ExpressionEvaluator`, `UnitConverter`, `CurrencyService`, `MenuCommand`,
   `FolderStack`, `SystemStats`/`WeatherService`, `NowPlayingService.parse`,
-  `HotkeyBinding`, `UpdateDownloader` filename sanitizing, Codable + forward-compat,
-  `Preferences` clamping, `AppearancePreset` round-trip, `SemanticVersion`,
-  `GitHubRelease`.
+  `HotkeyBinding`, Codable + forward-compat, `Preferences` clamping and the
+  `AppearancePreset` round-trip. The shared packages test their own code.
 - `AppDelegate.applicationDidFinishLaunching` is guarded by `isRunningTests`, so the
   test host doesn't spin up panels or hide the Dock.
 - Window placement, multi-monitor, reveal/auto-hide, Dock-hide, Liquid Glass,

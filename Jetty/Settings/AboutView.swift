@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UpdraftKit
 
 /// About + updates pane. Shows the version, wires the GitHub self-updater, and links
 /// the bundled third-party notices.

@@ -1,4 +1,5 @@
 import AppKit
+import UpdraftKit
 
 /// Boots the app: wires the store, registry, running-apps model, dock controller,
 /// and system-Dock manager; builds the menu-bar item; and starts the updater.
@@ -13,7 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                  registry: registry, runningApps: runningApps,
                                                  systemDock: systemDock)
     private let updateChecker = UpdateChecker(
-        configuration: .init(owner: "L-K-M", repo: "Jetty", appName: "Jetty")
+        configuration: .init(
+            owner: "L-K-M", repo: "Jetty", appName: "Jetty",
+            // The Jetty Menu is a `popUpMenu`-level panel; an update alert must
+            // clear it or the panel can swallow the modal (965aa82).
+            alertWindowLevel: NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
+        )
     )
     private lazy var settingsWindow = SettingsWindowController(
         preferences: preferences, store: store, systemDock: systemDock, registry: registry, updateChecker: updateChecker)

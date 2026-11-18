@@ -3,9 +3,8 @@
 // does require it here — without this import they are not in scope (measured).
 import Foundation
 #if canImport(AppKit)
-import AppKit
-// KeycapKit re-exports KeycapCore, so one import covers the chord model and the
-// record-time `NSEvent` helpers below.
+// KeycapKit re-exports KeycapCore, so one import covers the chord model used
+// below; Keycap's `NSEvent`-based recorder helpers live in Keycap itself.
 import KeycapKit
 #else
 import KeycapCore

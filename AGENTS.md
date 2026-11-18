@@ -135,13 +135,14 @@ Mirrors `PLAN.md §11`:
 
 ## Dependencies
 
-Four first-party SwiftPM packages, all pinned in
+Four first-party SwiftPM packages, recorded in
 `Jetty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`:
 
 - [`PictKit`](https://github.com/L-K-M/Pict) — the shared icon store and
   resolution ladder that Zap, Top Drawer and the Pict editor also use. Jetty
   **reads** it and writes nothing to it: all editing lives in Pict, which needs
-  no permissions and can be sandboxed. Pinned to its `main` branch.
+  no permissions and can be sandboxed. Tracks the `main` branch, so a package
+  resolve can pull new commits; the other three are version-pinned.
 - [`LiveryKit`](https://github.com/L-K-M/Livery) — the shared panel theming:
   hex colour parsing, WCAG contrast, decoration styles and materials, and the
   background, decoration, CRT, boing-ball and angle-dial views. Pinned by tag

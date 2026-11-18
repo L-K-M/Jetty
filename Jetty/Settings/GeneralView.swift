@@ -120,6 +120,10 @@ struct GeneralView: View {
                 combo: Binding(
                     get: { binding.wrappedValue.combo },
                     set: { newCombo in
+                        // `.ignore` means a bare ⌫/⌦ never writes nil, so a nil
+                        // here is unexpected; keep the persisted combo rather
+                        // than clearing it. The toggle is the only way to turn a
+                        // shortcut off.
                         guard let newCombo else { return }
                         binding.wrappedValue = HotkeyBinding(
                             keyCode: newCombo.keyCode,

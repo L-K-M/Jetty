@@ -171,6 +171,7 @@ struct AppearancePreset: Codable, Equatable, Identifiable {
     /// for the dock layout, magnification, indicator style and widgets it
     /// does not have. The sibling's selection highlight becomes the
     /// running-app indicator color, as Jetty's Zap import always did.
+    /// Jetty has no setting for the sibling's label color.
     /// Values are validated and clamped later, when the preset is applied.
     init(importing theme: ThemeSnapshot) {
         let d = Preferences.Default.self

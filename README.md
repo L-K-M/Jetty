@@ -1,7 +1,10 @@
-# Jetty
+# Jetty Prime
 
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
+
+> [!IMPORTANT]
+> This is not [Jetty Pro](https://hypercritical.co/jetty-pro/).
 
 A more feature-rich Dock for macOS.
 

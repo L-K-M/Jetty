@@ -9,9 +9,6 @@ A more feature-rich Dock for macOS.
 
 ![screenshot.png](screenshot.png)
 
-> [!IMPORTANT]
-> LLM Disclosure: Jetty was built with substantial help from large language models.
-
 If you like this, also look at **[Zap](https://github.com/L-K-M/Zap)**
 (a ⌘-Tab switcher) and **[Top Drawer](https://github.com/L-K-M/TopDrawer)** (an edge-tab
 launcher). Set an app's icon once in **[Pict](https://github.com/L-K-M/Pict)** and Jetty,
